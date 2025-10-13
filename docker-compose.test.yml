@@ -1,0 +1,72 @@
+services:
+  # Core Biological Intelligence Service
+  bio-core:
+    build: .
+    container_name: biological-intelligence-core
+    ports:
+      - "8000:8000"
+    volumes:
+      - bio-data:/app/biological_workspace
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "biological_service.py", "--api", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - bio-network
+
+  # Training Service
+  bio-trainer:
+    build: .
+    container_name: biological-trainer
+    depends_on:
+      bio-core:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CORE_URL=http://bio-core:8000
+    command: ["python", "distributed_trainer.py", "--core-url", "http://bio-core:8000", "--progressive-all"]
+    networks:
+      - bio-network
+
+  # Query Client 1
+  bio-client-1:
+    build: .
+    container_name: biological-client-1
+    depends_on:
+      bio-core:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CORE_URL=http://bio-core:8000
+    command: ["python", "distributed_client.py", "--core-url", "http://bio-core:8000", "--status"]
+    networks:
+      - bio-network
+
+  # Query Client 2 - Interactive mode (for manual testing)
+  bio-client-interactive:
+    build: .
+    container_name: biological-client-interactive
+    depends_on:
+      bio-core:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CORE_URL=http://bio-core:8000
+    stdin_open: true
+    tty: true
+    command: ["python", "distributed_client.py", "--core-url", "http://bio-core:8000", "--interactive"]
+    networks:
+      - bio-network
+
+volumes:
+  bio-data:
+    driver: local
+
+networks:
+  bio-network:
+    driver: bridge

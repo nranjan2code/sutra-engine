@@ -121,7 +121,9 @@ class StructuralLearningAgent(SwarmLearningAgent):
         
         # List structures
         if '\n-' in text or '\n•' in text or '\n*' in text:
-            structures.append(f"LIST_STRUCTURE: {len(re.findall(r'\n[-•*]', text))} items")
+            list_pattern = r'\n[-•*]'
+            item_count = len(re.findall(list_pattern, text))
+            structures.append(f"LIST_STRUCTURE: {item_count} items")
         
         return structures
 
@@ -470,7 +472,8 @@ class TemporalLearningAgent(SwarmLearningAgent):
         
         for seq_pattern in sequence_patterns:
             if re.search(seq_pattern, text.lower()):
-                patterns.append(f"SEQUENCE: {seq_pattern.strip('[,\\s]')}")
+                clean_pattern = seq_pattern.strip('[,\\s]')
+                patterns.append(f"SEQUENCE: {clean_pattern}")
         
         # Duration patterns
         duration_words = ['during', 'while', 'for', 'since', 'until']

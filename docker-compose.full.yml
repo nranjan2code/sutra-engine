@@ -1,0 +1,94 @@
+services:
+  core-service:
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile.core
+    container_name: biological-core
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - WORKSPACE_PATH=/app/biological_workspace
+    volumes:
+      - ./biological_workspace:/app/biological_workspace
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - biological-network
+
+  distributed-trainer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.trainer
+    container_name: biological-trainer
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      - PYTHONPATH=/app
+      - CORE_SERVICE_URL=http://core-service:8000
+    volumes:
+      - ./logs:/app/logs
+      - ./enhanced_english_curriculum:/app/enhanced_english_curriculum
+    command: ["python", "distributed_trainer.py", "--core-url", "http://core-service:8000", "--progressive-all"]
+    restart: unless-stopped
+    networks:
+      - biological-network
+
+  distributed-client:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.client
+    container_name: biological-client
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      - PYTHONPATH=/app
+      - CORE_SERVICE_URL=http://core-service:8000
+    volumes:
+      - ./logs:/app/logs
+    stdin_open: true
+    tty: true
+    command: ["python", "distributed_client.py", "--core-url", "http://core-service:8000", "--monitor-consciousness"]
+    restart: unless-stopped
+    networks:
+      - biological-network
+
+  observer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.core
+    container_name: biological-observer
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      - PYTHONPATH=/app
+      - WORKSPACE_PATH=/app/biological_workspace
+    volumes:
+      - ./biological_workspace:/app/biological_workspace
+      - ./logs:/app/logs
+    command: ["python", "biological_observer.py", "--workspace", "/app/biological_workspace"]
+    restart: unless-stopped
+    networks:
+      - biological-network
+
+networks:
+  biological-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  biological-workspace:
+    driver: local
+  logs:
+    driver: local

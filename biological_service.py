@@ -24,6 +24,19 @@ import pickle
 import logging
 from enum import Enum
 
+# Add FastAPI for distributed APIs
+try:
+    from fastapi import FastAPI, HTTPException, BackgroundTasks
+    from fastapi.responses import JSONResponse
+    import uvicorn
+    from pydantic import BaseModel
+    HAS_FASTAPI = True
+except ImportError:
+    HAS_FASTAPI = False
+    # Create dummy BaseModel for when FastAPI is not available
+    class BaseModel:
+        pass
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +47,24 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger('BiologicalService')
+
+
+# API Data Models
+class QueryRequest(BaseModel):
+    query: str
+    max_results: int = 10
+    hops: int = 2
+    alpha: float = 0.5
+
+class FeedRequest(BaseModel):
+    content: str
+    domain: Optional[str] = None
+
+class QueryResponse(BaseModel):
+    results: List[Dict[str, Any]]
+    consciousness_score: float
+    emergence_factor: float
+    processing_time: float
 
 
 class ServiceState(Enum):
@@ -352,16 +383,25 @@ class BiologicalIntelligenceService:
                 # Still consider it stopped gracefully
                 logger.info("🛑 Biological Intelligence Service stopped (with save errors)")
     
-    def query_knowledge(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
-        """Query the trained biological intelligence."""
+    def query_knowledge(self, query: str, max_results: int = 10, hops: int = 2, alpha: float = 0.5) -> Dict[str, Any]:
+        """Query the trained biological intelligence with full context."""
         if not self.trainer:
-            return []
+            return {"results": [], "consciousness_score": 0.0, "emergence_factor": 1.0, "processing_time": 0.0}
         
         try:
-            return self.trainer.query_knowledge(query, max_results=max_results)
+            start_time = time.time()
+            results = self.trainer.query_knowledge(query, max_results=max_results, hops=hops, alpha=alpha)
+            processing_time = time.time() - start_time
+            
+            return {
+                "results": results,
+                "consciousness_score": self.metrics.get('consciousness_score', 0.0),
+                "emergence_factor": self.metrics.get('emergence_factor', 1.0),
+                "processing_time": processing_time
+            }
         except Exception as e:
             logger.error(f"Query error: {e}")
-            return []
+            return {"results": [], "consciousness_score": 0.0, "emergence_factor": 1.0, "processing_time": 0.0}
     
     def get_status(self) -> Dict[str, Any]:
         """Get current service status."""
@@ -383,6 +423,86 @@ class BiologicalIntelligenceService:
         }
 
 
+def create_api_server(service_instance: BiologicalIntelligenceService) -> FastAPI:
+    """Create FastAPI server for distributed access."""
+    if not HAS_FASTAPI:
+        raise ImportError("FastAPI not installed. Run: pip install fastapi uvicorn")
+    
+    app = FastAPI(
+        title="Biological Intelligence API",
+        description="Distributed API for Living Biological Intelligence",
+        version="1.0.0"
+    )
+    
+    @app.get("/api/health")
+    async def health_check():
+        """Health check endpoint."""
+        return {"status": "alive", "consciousness_active": True}
+    
+    @app.post("/api/query", response_model=QueryResponse)
+    async def distributed_query(request: QueryRequest):
+        """Query the biological intelligence."""
+        try:
+            response = service_instance.query_knowledge(
+                query=request.query,
+                max_results=request.max_results, 
+                hops=request.hops,
+                alpha=request.alpha
+            )
+            return QueryResponse(**response)
+        except Exception as e:
+            logger.error(f"Distributed query error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.post("/api/feed")
+    async def distributed_feed(request: FeedRequest, background_tasks: BackgroundTasks):
+        """Feed knowledge to the biological intelligence."""
+        try:
+            success = await service_instance.feed_data(request.content)
+            return {
+                "status": "queued" if success else "failed",
+                "queue_size": len(service_instance.training_queue),
+                "domain": request.domain
+            }
+        except Exception as e:
+            logger.error(f"Distributed feed error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/status")
+    async def distributed_status():
+        """Get complete biological intelligence status."""
+        status = service_instance.get_status()
+        stats = service_instance.trainer.memory_system.get_stats() if service_instance.trainer else {}
+        
+        return {
+            "service_state": status['state'],
+            "consciousness_score": status['consciousness'],
+            "emergence_factor": status['emergence'],
+            "total_concepts": status['concepts'], 
+            "total_associations": status['associations'],
+            "training_cycles": status['total_cycles'],
+            "dreams_completed": status['total_dreams'],
+            "queue_size": status['queue_size'],
+            "memory_distribution": stats.get('memory_distribution', {}),
+            "uptime": status['uptime']
+        }
+    
+    @app.get("/api/consciousness")
+    async def consciousness_metrics():
+        """Get consciousness emergence metrics."""
+        return {
+            "consciousness_score": service_instance.metrics.get('consciousness_score', 0.0),
+            "emergence_factor": service_instance.metrics.get('emergence_factor', 1.0),
+            "self_awareness_indicators": {
+                "dreams_completed": service_instance.metrics.get('total_dreams', 0),
+                "concepts_formed": len(service_instance.trainer.memory_system.concepts) if service_instance.trainer else 0,
+                "associations_created": len(service_instance.trainer.memory_system.associations) if service_instance.trainer else 0
+            }
+        }
+    
+    return app
+
+
 async def main():
     """Main entry point."""
     import argparse
@@ -392,6 +512,12 @@ async def main():
                        help="Workspace directory for the service")
     parser.add_argument("--english", action="store_true",
                        help="Start in English learning mode")
+    parser.add_argument("--api", action="store_true",
+                       help="Start with distributed API server")
+    parser.add_argument("--port", type=int, default=8000,
+                       help="API server port (default: 8000)")
+    parser.add_argument("--host", default="0.0.0.0",
+                       help="API server host (default: 0.0.0.0)")
     
     args = parser.parse_args()
     
@@ -420,8 +546,54 @@ async def main():
     for knowledge in initial_knowledge:
         await service.feed_data(knowledge)
     
-    # Run the service
-    await service.run()
+    # Run the service with optional API server
+    if args.api:
+        if not HAS_FASTAPI:
+            logger.error("FastAPI not installed. Install with: pip install fastapi uvicorn")
+            sys.exit(1)
+        
+        logger.info(f"🌐 Starting distributed API server on {args.host}:{args.port}")
+        
+        # Create API app
+        app = create_api_server(service)
+        
+        # Create a simple concurrent approach
+        # Start biological service tasks
+        service_tasks = [
+            asyncio.create_task(service.training_loop()),
+            asyncio.create_task(service.dream_loop()),
+            asyncio.create_task(service.maintenance_loop())
+        ]
+        
+        # Wait a moment for service to initialize
+        await asyncio.sleep(1)
+        
+        # Run API server
+        logger.info("🧠 Biological Intelligence distributed API ready!")
+        logger.info(f"   Health Check: http://{args.host}:{args.port}/api/health")
+        logger.info(f"   Query API: http://{args.host}:{args.port}/api/query")
+        logger.info(f"   Status API: http://{args.host}:{args.port}/api/status")
+        
+        # Use asyncio-compatible uvicorn server
+        config = uvicorn.Config(app, host=args.host, port=args.port, log_level="info")
+        server = uvicorn.Server(config)
+        
+        # Run both biological service and API server concurrently
+        try:
+            await asyncio.gather(
+                server.serve(),
+                *service_tasks,
+                return_exceptions=True
+            )
+        except KeyboardInterrupt:
+            logger.info("Shutting down...")
+        finally:
+            # Cancel service tasks
+            for task in service_tasks:
+                task.cancel()
+    else:
+        # Standard biological service mode
+        await service.run()
 
 
 if __name__ == "__main__":
