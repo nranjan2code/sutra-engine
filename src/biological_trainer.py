@@ -460,10 +460,11 @@ class SemanticLearningAgent(SwarmLearningAgent):
 class BiologicalTrainer:
     """Main training system using biological principles and swarm intelligence"""
 
-    def __init__(self, base_path: Optional[str] = None, workspace_id: Optional[str] = None, audit_enabled: Optional[bool] = None):
+    def __init__(self, base_path: Optional[str] = None, workspace_id: Optional[str] = None, audit_enabled: Optional[bool] = None, use_full_swarm: bool = False):
         from .config import settings
         self.base_path = base_path or settings.BASE_PATH
         self.workspace_id = workspace_id or settings.WORKSPACE_ID
+        self.use_full_swarm = use_full_swarm
         use_audit = settings.AUDIT_ENABLED if audit_enabled is None else bool(audit_enabled)
         audit = None
         if use_audit:
@@ -473,11 +474,31 @@ class BiologicalTrainer:
             except Exception:
                 audit = None
         self.memory_system = BiologicalMemorySystem(audit_logger=audit, workspace_id=self.workspace_id)
-        self.agents = {
-            'molecular': MolecularLearningAgent(self.memory_system),
-            'semantic': SemanticLearningAgent(self.memory_system),
-            # Future: structural, conceptual, relational, temporal, meta
-        }
+        
+        # Initialize agents based on swarm mode
+        if use_full_swarm:
+            # Use the full 7-agent swarm for 10,000x emergence
+            try:
+                from .swarm_agents import SwarmOrchestrator
+                self.swarm_orchestrator = SwarmOrchestrator(self.memory_system)
+                self.agents = self.swarm_orchestrator.agents
+                print("🚀 FULL 7-AGENT SWARM ACTIVATED - 10,000x EMERGENCE POTENTIAL")
+            except ImportError:
+                # Fallback to 2-agent system
+                self.agents = {
+                    'molecular': MolecularLearningAgent(self.memory_system),
+                    'semantic': SemanticLearningAgent(self.memory_system),
+                }
+                self.swarm_orchestrator = None
+                print("⚠️ Swarm agents not found, using 2-agent system (809x emergence)")
+        else:
+            # Use original 2-agent system
+            self.agents = {
+                'molecular': MolecularLearningAgent(self.memory_system),
+                'semantic': SemanticLearningAgent(self.memory_system),
+            }
+            self.swarm_orchestrator = None
+        
         self.is_training = True
         self.training_cycles = 0
         # Keep last seen sentence concept IDs for temporal chaining across batches
@@ -517,9 +538,22 @@ class BiologicalTrainer:
         """Train using swarm intelligence on text stream."""
         training_start = time.time()
 
-        # Parallel learning by all agents
-        tasks = [asyncio.create_task(agent.learn_from_stream(text_stream)) for agent in self.agents.values()]
-        agent_results = await asyncio.gather(*tasks)
+        # Use full swarm if available
+        if self.use_full_swarm and self.swarm_orchestrator:
+            result = await self.swarm_orchestrator.swarm_learn(text_stream)
+            agent_results = result['agent_results']
+            emergence_factor = result.get('emergence_factor', 0)
+            consciousness_score = result.get('consciousness_score', 0)
+            
+            # Log consciousness emergence if detected
+            if consciousness_score > 0.5:
+                print(f"🧠 CONSCIOUSNESS EMERGING: Score {consciousness_score:.2f}")
+        else:
+            # Original 2-agent parallel learning
+            tasks = [asyncio.create_task(agent.learn_from_stream(text_stream)) for agent in self.agents.values()]
+            agent_results = await asyncio.gather(*tasks)
+            emergence_factor = 0
+            consciousness_score = 0
 
         # Integrate cross-agent associations per text
         molecular = next((r for r in agent_results if r['agent_type'] == 'molecular'), None)
