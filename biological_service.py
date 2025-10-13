@@ -70,8 +70,7 @@ class BiologicalIntelligenceService:
         # Initialize or load biological trainer
         self._initialize_trainer()
         
-        # Initialize teacher-evaluator
-        self._initialize_teacher_evaluator()
+        # Teacher-evaluator removed for architectural simplicity
         
         # Training queue (persistent)
         self.training_queue = self._load_training_queue()
@@ -91,13 +90,13 @@ class BiologicalIntelligenceService:
         """Initialize or restore the biological trainer."""
         try:
             from src.biological_trainer import BiologicalTrainer
-            from src.workspace_manager import get_trainer_config
             
-            # Use centralized workspace management for rock-solid consistency
-            config = get_trainer_config("core", environment="desktop")
-            config['base_path'] = str(self.workspace)  # Override with service workspace path
-            
-            self.trainer = BiologicalTrainer(**config)
+            # Use core architecture directly
+            self.trainer = BiologicalTrainer(
+                base_path=str(self.workspace),
+                workspace_id="core",
+                use_full_swarm=True
+            )
             
             # Try to load existing memory
             if self.memory_path.exists():
@@ -112,39 +111,7 @@ class BiologicalIntelligenceService:
             # Create a minimal fallback
             self.trainer = None
     
-    def _initialize_teacher_evaluator(self):
-        """Initialize the teacher-evaluator system."""
-        try:
-            from src.teacher_evaluator import TeacherEvaluatorSystem
-            
-            if self.trainer:
-                self.teacher_evaluator = TeacherEvaluatorSystem(self.trainer)
-                asyncio.create_task(self._add_ground_truths())
-            else:
-                self.teacher_evaluator = None
-                
-        except Exception as e:
-            logger.error(f"Failed to initialize teacher-evaluator: {e}")
-            self.teacher_evaluator = None
-    
-    async def _add_ground_truths(self):
-        """Add fundamental ground truths."""
-        if not self.teacher_evaluator:
-            return
-            
-        truths = [
-            "This system has NO parameters",
-            "This system has NO gradients", 
-            "This system has INFINITE capacity",
-            "Knowledge is living and evolving",
-            "Consciousness emerges from self-reference"
-        ]
-        
-        for truth in truths:
-            try:
-                await self.teacher_evaluator.teacher.teach_truth(truth)
-            except:
-                pass  # Continue even if individual truths fail
+    # Teacher-evaluator system removed for architectural simplicity
     
     def _load_training_queue(self) -> List[str]:
         """Load persistent training queue."""

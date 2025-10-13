@@ -6,8 +6,27 @@ from __future__ import annotations
 
 from typing import Dict
 from dataclasses import dataclass, field
+from enum import Enum
 
-from .biological_trainer import MemoryType, AssociationType  # enums for type-safe maps
+
+class MemoryType(Enum):
+    """Different types of biological memory with varying retention characteristics"""
+    EPHEMERAL = "ephemeral"
+    SHORT_TERM = "short_term"
+    MEDIUM_TERM = "medium_term"
+    LONG_TERM = "long_term"
+    CORE_KNOWLEDGE = "core_knowledge"
+
+
+class AssociationType(Enum):
+    """Types of associations between knowledge concepts"""
+    SEMANTIC = "semantic"
+    TEMPORAL = "temporal"
+    CAUSAL = "causal"
+    ANALOGICAL = "analogical"
+    HIERARCHICAL = "hierarchical"
+    CONTRADICTORY = "contradictory"
+    CONTEXTUAL = "contextual"
 
 
 @dataclass

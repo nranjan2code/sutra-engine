@@ -73,20 +73,24 @@ class PiBiologicalService(BiologicalIntelligenceService):
         """Initialize trainer with Pi-optimized settings."""
         try:
             from src.biological_trainer import BiologicalTrainer
-            from src.workspace_manager import get_trainer_config
+            # Use core architecture directly
             
             if PI_MODE:
-                # Use centralized workspace management for Pi
-                config = get_trainer_config("pi_core", environment="pi")
-                config['base_path'] = str(self.workspace)  # Override with service workspace path
-                self.trainer = BiologicalTrainer(**config)
-                logger.info("🥧 Using Pi-optimized biological trainer with centralized workspace management")
+                # Use core architecture with Pi-specific workspace
+                self.trainer = BiologicalTrainer(
+                    base_path=str(self.workspace),
+                    workspace_id="pi_core",
+                    use_full_swarm=True
+                )
+                logger.info("🥧 Using Pi-optimized biological trainer with core architecture")
             else:
-                # Fall back to standard configuration
-                config = get_trainer_config("core", environment="desktop")
-                config['base_path'] = str(self.workspace)  # Override with service workspace path
-                self.trainer = BiologicalTrainer(**config)
-                logger.info("🖥️ Using standard biological trainer with centralized workspace management")
+                # Fall back to standard core configuration
+                self.trainer = BiologicalTrainer(
+                    base_path=str(self.workspace),
+                    workspace_id="core",
+                    use_full_swarm=True
+                )
+                logger.info("🖥️ Using standard biological trainer with core architecture")
             
             # Try to load existing memory
             if self.memory_path.exists():

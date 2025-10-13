@@ -69,11 +69,12 @@ class AssociativeMemoryPersistence:
     # --------- Load ---------
     def load(self) -> BiologicalMemorySystem:
         nodes = self.storage.list_all_nodes()
-        # Filter by workspace if present
+        # Simple workspace filtering - only exact matches or no workspace_id
         filtered = []
         for node in nodes:
             md = node.get("metadata", {})
             ws = md.get("workspace_id")
+            # Only include exact matches or nodes without workspace_id
             if ws is None or ws == self.workspace_id:
                 filtered.append(node)
         nodes = filtered

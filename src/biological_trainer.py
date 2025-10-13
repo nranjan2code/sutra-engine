@@ -20,29 +20,10 @@ import time
 import math
 from typing import Dict, List, Any, Optional, Tuple, Set
 from dataclasses import dataclass
-from enum import Enum
 import numpy as np
 from collections import deque
 
-
-class MemoryType(Enum):
-    """Different types of biological memory with varying retention characteristics"""
-    EPHEMERAL = "ephemeral"
-    SHORT_TERM = "short_term"
-    MEDIUM_TERM = "medium_term"
-    LONG_TERM = "long_term"
-    CORE_KNOWLEDGE = "core_knowledge"
-
-
-class AssociationType(Enum):
-    """Types of associations between knowledge concepts"""
-    SEMANTIC = "semantic"
-    TEMPORAL = "temporal"
-    CAUSAL = "causal"
-    ANALOGICAL = "analogical"
-    HIERARCHICAL = "hierarchical"
-    CONTRADICTORY = "contradictory"
-    CONTEXTUAL = "contextual"
+from .config import MemoryType, AssociationType
 
 
 @dataclass
@@ -522,8 +503,8 @@ class BiologicalTrainer:
 
     def __init__(self, base_path: Optional[str] = None, workspace_id: Optional[str] = None, audit_enabled: Optional[bool] = None, use_full_swarm: bool = False):
         from .config import settings
-        # CRITICAL FIX: Use provided base_path directly, don't fall back to settings
-        self.base_path = base_path if base_path is not None else settings.BASE_PATH
+        # Use provided parameters or fall back to core config
+        self.base_path = base_path or settings.BASE_PATH
         self.workspace_id = workspace_id or settings.WORKSPACE_ID
         self.use_full_swarm = use_full_swarm
         use_audit = settings.AUDIT_ENABLED if audit_enabled is None else bool(audit_enabled)
