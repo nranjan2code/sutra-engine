@@ -28,7 +28,6 @@
         display: block;
     }
     
-    
     /* Button Controls */
     .button-group {
         display: flex;
@@ -231,7 +230,7 @@
                 </div>
             </div>
             
-            <!-- Other Settings Sections (Placeholder) -->
+            <!-- Intelligence Settings -->
             <div class="settings-section" id="intelligence-section">
                 <div class="md3-page-header">
                     <h2 class="md3-page-title">Intelligence Configuration</h2>
@@ -240,18 +239,98 @@
                 
                 <div class="md3-list">
                     <div class="md3-list-header">
-                        <h3 class="md3-list-title">Settings Coming Soon</h3>
+                        <h3 class="md3-list-title">Learning Parameters</h3>
                     </div>
+                    
                     <div class="md3-list-item">
                         <div class="md3-list-item-content">
-                            <div class="md3-list-item-title">Intelligence settings will be added here</div>
-                            <div class="md3-list-item-subtitle">Consciousness thresholds, dream frequency, memory decay rates, etc.</div>
+                            <div class="md3-list-item-title">Consciousness Threshold</div>
+                            <div class="md3-list-item-subtitle">Minimum consciousness level required for complex reasoning tasks.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-text-field">
+                                <input type="number" value="5.0" step="0.1" min="0" max="30" 
+                                       onchange="updateSetting('consciousness_threshold', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Dream Frequency</div>
+                            <div class="md3-list-item-subtitle">How often the system consolidates memories during dream cycles.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-select">
+                                <select onchange="updateSetting('dream_frequency', this.value)">
+                                    <option value="every_10_min">Every 10 minutes</option>
+                                    <option value="every_30_min" selected>Every 30 minutes</option>
+                                    <option value="hourly">Hourly</option>
+                                    <option value="daily">Daily</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Memory Decay Rate</div>
+                            <div class="md3-list-item-subtitle">How quickly unused knowledge fades from memory (0.1 = slow, 0.9 = fast).</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-text-field">
+                                <input type="number" value="0.5" step="0.1" min="0.1" max="0.9" 
+                                       onchange="updateSetting('memory_decay_rate', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="md3-list">
+                    <div class="md3-list-header">
+                        <h3 class="md3-list-title">Processing Options</h3>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Duplicate Detection</div>
+                            <div class="md3-list-item-subtitle">Automatically detect and prevent duplicate content from being processed.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch active" onclick="toggleSetting(this, 'duplicate_detection')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Quality Validation</div>
+                            <div class="md3-list-item-subtitle">Validate content quality before adding to the knowledge base.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch active" onclick="toggleSetting(this, 'quality_validation')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Max Query Results</div>
+                            <div class="md3-list-item-subtitle">Maximum number of results to return for intelligence queries.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-text-field">
+                                <input type="number" value="10" min="1" max="50" 
+                                       onchange="updateSetting('max_query_results', this.value)">
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Add similar placeholder structures for other sections -->
+            <!-- Interface Settings -->
             <div class="settings-section" id="interface-section">
                 <div class="md3-page-header">
                     <h2 class="md3-page-title">Interface Preferences</h2>
@@ -260,8 +339,9 @@
                 
                 <div class="md3-list">
                     <div class="md3-list-header">
-                        <h3 class="md3-list-title">Theme Selection</h3>
+                        <h3 class="md3-list-title">Appearance</h3>
                     </div>
+                    
                     <div class="md3-list-item">
                         <div class="md3-list-item-content">
                             <div class="md3-list-item-title">Theme</div>
@@ -277,438 +357,285 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Primary Color</div>
+                            <div class="md3-list-item-subtitle">Choose the primary accent color for the interface.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <input type="color" class="color-picker" value="#6750A4" 
+                                   onchange="updatePrimaryColor(this.value)">
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Compact Mode</div>
+                            <div class="md3-list-item-subtitle">Use a more compact layout with smaller cards and spacing.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch" onclick="toggleSetting(this, 'compact_mode')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="md3-list">
+                    <div class="md3-list-header">
+                        <h3 class="md3-list-title">Dashboard</h3>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Show Agent Details</div>
+                            <div class="md3-list-item-subtitle">Display detailed information about each processing agent.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch active" onclick="toggleSetting(this, 'show_agent_details')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Real-time Updates</div>
+                            <div class="md3-list-item-subtitle">Enable real-time updates of metrics and status information.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch active" onclick="toggleSetting(this, 'realtime_updates')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <!-- API, Security, and Advanced sections with similar structure -->
+            <!-- API Settings -->
             <div class="settings-section" id="api-section">
                 <div class="md3-page-header">
                     <h2 class="md3-page-title">API Configuration</h2>
                     <p class="md3-page-subtitle">Configure API endpoints and integration settings.</p>
                 </div>
+                
+                <div class="md3-list">
+                    <div class="md3-list-header">
+                        <h3 class="md3-list-title">Connection</h3>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Core Service URL</div>
+                            <div class="md3-list-item-subtitle">URL endpoint for the biological intelligence core service.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-text-field">
+                                <input type="url" value="http://localhost:8000" 
+                                       onchange="updateSetting('core_service_url', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">API Timeout</div>
+                            <div class="md3-list-item-subtitle">Request timeout for API calls (in seconds).</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-text-field">
+                                <input type="number" value="30" min="5" max="120" 
+                                       onchange="updateSetting('api_timeout', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">WebSocket Connection</div>
+                            <div class="md3-list-item-subtitle">Enable WebSocket connection for real-time updates.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch active" onclick="toggleSetting(this, 'websocket_enabled')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="md3-list">
+                    <div class="md3-list-header">
+                        <h3 class="md3-list-title">Rate Limiting</h3>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Max Requests per Minute</div>
+                            <div class="md3-list-item-subtitle">Maximum number of API requests allowed per minute.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-text-field">
+                                <input type="number" value="60" min="10" max="1000" 
+                                       onchange="updateSetting('rate_limit', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Batch Processing</div>
+                            <div class="md3-list-item-subtitle">Enable batching of knowledge feeding requests for better performance.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch" onclick="toggleSetting(this, 'batch_processing')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
+            <!-- Security Settings -->
             <div class="settings-section" id="security-section">
                 <div class="md3-page-header">
                     <h2 class="md3-page-title">Security Settings</h2>
                     <p class="md3-page-subtitle">Configure security and access control settings.</p>
                 </div>
+                
+                <div class="md3-list">
+                    <div class="md3-list-header">
+                        <h3 class="md3-list-title">Access Control</h3>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Authentication Required</div>
+                            <div class="md3-list-item-subtitle">Require authentication to access the web interface.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch" onclick="toggleSetting(this, 'auth_required')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Session Timeout</div>
+                            <div class="md3-list-item-subtitle">How long user sessions remain active (in minutes).</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-text-field">
+                                <input type="number" value="60" min="5" max="1440" 
+                                       onchange="updateSetting('session_timeout', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="md3-list">
+                    <div class="md3-list-header">
+                        <h3 class="md3-list-title">Data Privacy</h3>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Log User Queries</div>
+                            <div class="md3-list-item-subtitle">Store user queries for system improvement and debugging.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch active" onclick="toggleSetting(this, 'log_queries')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Anonymize Logs</div>
+                            <div class="md3-list-item-subtitle">Remove personally identifiable information from system logs.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <div class="md3-switch active" onclick="toggleSetting(this, 'anonymize_logs')">
+                                <div class="md3-switch-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
+            <!-- Advanced Settings -->
             <div class="settings-section" id="advanced-section">
                 <div class="md3-page-header">
                     <h2 class="md3-page-title">Advanced Configuration</h2>
                     <p class="md3-page-subtitle">Advanced settings for system administrators and developers.</p>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-                    
-                    <div class="settings-group">
-                        <h3 class="group-title">Learning Parameters</h3>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Consciousness Threshold</div>
-                                <div class="setting-description">Minimum consciousness level required for complex reasoning tasks.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="input-control">
-                                    <input type="number" class="text-input" value="5.0" step="0.1" min="0" max="30" 
-                                           onchange="updateSetting('consciousness_threshold', this.value)">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Dream Frequency</div>
-                                <div class="setting-description">How often the system consolidates memories during dream cycles.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="select-control">
-                                    <select class="select-input" onchange="updateSetting('dream_frequency', this.value)">
-                                        <option value="every_10_min">Every 10 minutes</option>
-                                        <option value="every_30_min" selected>Every 30 minutes</option>
-                                        <option value="hourly">Hourly</option>
-                                        <option value="daily">Daily</option>
-                                    </select>
-                                    <span class="material-icons select-icon">expand_more</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Memory Decay Rate</div>
-                                <div class="setting-description">How quickly unused knowledge fades from memory (0.1 = slow, 0.9 = fast).</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="input-control">
-                                    <input type="number" class="text-input" value="0.5" step="0.1" min="0.1" max="0.9" 
-                                           onchange="updateSetting('memory_decay_rate', this.value)">
-                                </div>
-                            </div>
-                        </div>
+                
+                <div class="md3-list">
+                    <div class="md3-list-header">
+                        <h3 class="md3-list-title">System Management</h3>
                     </div>
                     
-                    <div class="settings-group">
-                        <h3 class="group-title">Processing Options</h3>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Duplicate Detection</div>
-                                <div class="setting-description">Automatically detect and prevent duplicate content from being processed.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch active" onclick="toggleSetting(this, 'duplicate_detection')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Export Configuration</div>
+                            <div class="md3-list-item-subtitle">Download current system configuration as JSON.</div>
                         </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Quality Validation</div>
-                                <div class="setting-description">Validate content quality before adding to the knowledge base.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch active" onclick="toggleSetting(this, 'quality_validation')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Max Query Results</div>
-                                <div class="setting-description">Maximum number of results to return for intelligence queries.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="input-control">
-                                    <input type="number" class="text-input" value="10" min="1" max="50" 
-                                           onchange="updateSetting('max_query_results', this.value)">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Interface Settings -->
-        <div class="settings-section" id="interface-section">
-            <div class="md3-card" style="padding: 32px; border-radius: 24px; background: var(--md-sys-color-surface-container-lowest); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div class="card-content">
-                    <div class="section-header">
-                        <h2 class="section-title">Interface Preferences</h2>
-                        <p class="section-description">Customize the appearance and behavior of the web interface.</p>
-                    </div>
-                    
-                    <div class="settings-group">
-                        <h3 class="group-title">Appearance</h3>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Theme</div>
-                                <div class="setting-description">Choose between light and dark themes.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="select-control">
-                                    <select class="select-input" onchange="updateTheme(this.value)">
-                                        <option value="dark" selected>Dark Theme</option>
-                                        <option value="light">Light Theme</option>
-                                        <option value="auto">System Default</option>
-                                    </select>
-                                    <span class="material-icons select-icon">expand_more</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Primary Color</div>
-                                <div class="setting-description">Choose the primary accent color for the interface.</div>
-                            </div>
-                            <div class="setting-control">
-                                <input type="color" class="color-picker" value="#6750A4" 
-                                       onchange="updatePrimaryColor(this.value)">
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Compact Mode</div>
-                                <div class="setting-description">Use a more compact layout with smaller cards and spacing.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch" onclick="toggleSetting(this, 'compact_mode')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-group">
-                        <h3 class="group-title">Dashboard</h3>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Show Agent Details</div>
-                                <div class="setting-description">Display detailed information about each processing agent.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch active" onclick="toggleSetting(this, 'show_agent_details')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Real-time Updates</div>
-                                <div class="setting-description">Enable real-time updates of metrics and status information.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch active" onclick="toggleSetting(this, 'realtime_updates')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- API Settings -->
-        <div class="settings-section" id="api-section">
-            <div class="md3-card" style="padding: 32px; border-radius: 24px; background: var(--md-sys-color-surface-container-lowest); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div class="card-content">
-                    <div class="section-header">
-                        <h2 class="section-title">API Configuration</h2>
-                        <p class="section-description">Configure API endpoints and integration settings.</p>
-                    </div>
-                    
-                    <div class="settings-group">
-                        <h3 class="group-title">Connection</h3>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Core Service URL</div>
-                                <div class="setting-description">URL endpoint for the biological intelligence core service.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="input-control">
-                                    <input type="url" class="text-input" value="http://localhost:8000" 
-                                           onchange="updateSetting('core_service_url', this.value)">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">API Timeout</div>
-                                <div class="setting-description">Request timeout for API calls (in seconds).</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="input-control">
-                                    <input type="number" class="text-input" value="30" min="5" max="120" 
-                                           onchange="updateSetting('api_timeout', this.value)">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">WebSocket Connection</div>
-                                <div class="setting-description">Enable WebSocket connection for real-time updates.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch active" onclick="toggleSetting(this, 'websocket_enabled')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-group">
-                        <h3 class="group-title">Rate Limiting</h3>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Max Requests per Minute</div>
-                                <div class="setting-description">Maximum number of API requests allowed per minute.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="input-control">
-                                    <input type="number" class="text-input" value="60" min="10" max="1000" 
-                                           onchange="updateSetting('rate_limit', this.value)">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Batch Processing</div>
-                                <div class="setting-description">Enable batching of knowledge feeding requests for better performance.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch" onclick="toggleSetting(this, 'batch_processing')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Security Settings -->
-        <div class="settings-section" id="security-section">
-            <div class="md3-card" style="padding: 32px; border-radius: 24px; background: var(--md-sys-color-surface-container-lowest); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div class="card-content">
-                    <div class="section-header">
-                        <h2 class="section-title">Security Settings</h2>
-                        <p class="section-description">Configure security and access control settings.</p>
-                    </div>
-                    
-                    <div class="settings-group">
-                        <h3 class="group-title">Access Control</h3>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Authentication Required</div>
-                                <div class="setting-description">Require authentication to access the web interface.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch" onclick="toggleSetting(this, 'auth_required')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Session Timeout</div>
-                                <div class="setting-description">How long user sessions remain active (in minutes).</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="input-control">
-                                    <input type="number" class="text-input" value="60" min="5" max="1440" 
-                                           onchange="updateSetting('session_timeout', this.value)">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-group">
-                        <h3 class="group-title">Data Privacy</h3>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Log User Queries</div>
-                                <div class="setting-description">Store user queries for system improvement and debugging.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch active" onclick="toggleSetting(this, 'log_queries')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Anonymize Logs</div>
-                                <div class="setting-description">Remove personally identifiable information from system logs.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="toggle-switch active" onclick="toggleSetting(this, 'anonymize_logs')">
-                                    <div class="toggle-handle"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Advanced Settings -->
-        <div class="settings-section" id="advanced-section">
-            <div class="md3-card" style="padding: 32px; border-radius: 24px; background: var(--md-sys-color-surface-container-lowest); border: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <div class="card-content">
-                    <div class="section-header">
-                        <h2 class="section-title">Advanced Configuration</h2>
-                        <p class="section-description">Advanced settings for system administrators and developers.</p>
-                    </div>
-                    
-                    <div class="settings-group">
-                        <h3 class="group-title">System Management</h3>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Export Configuration</div>
-                                <div class="setting-description">Download current system configuration as JSON.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="button-group">
-                                    <button class="md3-button button-outlined btn-small" onclick="exportConfig()">
-                                        <span class="material-icons">download</span>
-                                        Export
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Import Configuration</div>
-                                <div class="setting-description">Upload and apply a configuration file.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="button-group">
-                                    <input type="file" id="config-upload" style="display: none;" accept=".json" onchange="importConfig(this)">
-                                    <button class="md3-button button-outlined btn-small" onclick="document.getElementById('config-upload').click()">
-                                        <span class="material-icons">upload</span>
-                                        Import
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-label">Reset to Defaults</div>
-                                <div class="setting-description">Reset all settings to their default values.</div>
-                            </div>
-                            <div class="setting-control">
-                                <div class="button-group">
-                                    <button class="md3-button button-outlined btn-small" onclick="resetToDefaults()">
-                                        <span class="material-icons">restore</span>
-                                        Reset
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-group">
-                        <h3 class="group-title">Danger Zone</h3>
-                        
-                        <div class="danger-zone">
-                            <div class="danger-title">
-                                <span class="material-icons">warning</span>
-                                Clear All Data
-                            </div>
-                            <div class="danger-description">
-                                This will permanently delete all knowledge, concepts, associations, and learned patterns. 
-                                This action cannot be undone.
-                            </div>
-                            <button class="md3-button btn-danger btn-small" onclick="confirmClearData()">
-                                <span class="material-icons">delete_forever</span>
-                                Clear All Data
+                        <div class="md3-list-item-action">
+                            <button class="md3-button button-outlined btn-small" onclick="exportConfig()">
+                                <span class="material-icons">download</span>
+                                Export
                             </button>
                         </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Import Configuration</div>
+                            <div class="md3-list-item-subtitle">Upload and apply a configuration file.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <input type="file" id="config-upload" style="display: none;" accept=".json" onchange="importConfig(this)">
+                            <button class="md3-button button-outlined btn-small" onclick="document.getElementById('config-upload').click()">
+                                <span class="material-icons">upload</span>
+                                Import
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="md3-list-item">
+                        <div class="md3-list-item-content">
+                            <div class="md3-list-item-title">Reset to Defaults</div>
+                            <div class="md3-list-item-subtitle">Reset all settings to their default values.</div>
+                        </div>
+                        <div class="md3-list-item-action">
+                            <button class="md3-button button-outlined btn-small" onclick="resetToDefaults()">
+                                <span class="material-icons">restore</span>
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="md3-list">
+                    <div class="md3-list-header">
+                        <h3 class="md3-list-title">Danger Zone</h3>
+                    </div>
+                    
+                    <div class="danger-zone">
+                        <div class="danger-title">
+                            <span class="material-icons">warning</span>
+                            Clear All Data
+                        </div>
+                        <div class="danger-description">
+                            This will permanently delete all knowledge, concepts, associations, and learned patterns. 
+                            This action cannot be undone.
+                        </div>
+                        <button class="md3-button btn-danger btn-small" onclick="confirmClearData()">
+                            <span class="material-icons">delete_forever</span>
+                            Clear All Data
+                        </button>
                     </div>
                 </div>
             </div>

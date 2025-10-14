@@ -8,7 +8,7 @@
 <!-- Include unified MD3 component system -->
 {% include 'md3_components.html' %}
 <style>
-    /* Chat-specific extensions to MD3 system */
+    /* Chat-specific layout */
     .chat-layout {
         display: grid;
         grid-template-columns: 320px 1fr;
@@ -19,156 +19,79 @@
     .chat-main {
         display: flex;
         flex-direction: column;
-        overflow: hidden;
+        height: 100%;
     }
     
-    .sidebar-header {
-        padding: 20px 16px 16px;
-        background: var(--md-sys-color-surface-container);
-        border-bottom: 1px solid var(--md-sys-color-outline-variant);
-    }
-    
-    .sidebar-title {
-        font-size: 18px;
-        font-weight: 500;
-        color: var(--md-sys-color-on-surface);
-        margin: 0 0 12px 0;
+    /* Connection Status */
+    .connection-status {
+        position: absolute;
+        top: 12px;
+        right: 12px;
         display: flex;
         align-items: center;
         gap: 8px;
-    }
-    
-    .new-chat-btn {
-        width: 100%;
-        height: 48px;
-        background: var(--md-sys-color-primary-container);
-        color: var(--md-sys-color-on-primary-container);
-        border: none;
-        border-radius: 12px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        transition: all 0.2s;
-    }
-    
-    .new-chat-btn:hover {
-        background: var(--md-sys-color-primary);
-        color: var(--md-sys-color-on-primary);
-        transform: translateY(-1px);
-    }
-    
-    .chat-history {
-        flex: 1;
-        overflow-y: auto;
-        padding: 8px;
-    }
-    
-    .chat-history-item {
-        padding: 12px;
-        margin: 4px 0;
-        border-radius: 12px;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 1px solid transparent;
-    }
-    
-    .chat-history-item:hover {
-        background: var(--md-sys-color-surface-container);
-        border-color: var(--md-sys-color-outline-variant);
-    }
-    
-    .chat-history-item.active {
-        background: var(--md-sys-color-secondary-container);
-        border-color: var(--md-sys-color-secondary);
-        color: var(--md-sys-color-on-secondary-container);
-    }
-    
-    .chat-item-title {
-        font-size: 14px;
-        font-weight: 500;
-        margin-bottom: 4px;
-        line-height: 1.3;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-    
-    .chat-item-preview {
-        font-size: 12px;
-        opacity: 0.7;
-        line-height: 1.2;
-        display: -webkit-box;
-        -webkit-line-clamp: 1;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-    
-    .chat-item-meta {
-        font-size: 11px;
-        opacity: 0.6;
-        margin-top: 4px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .chat-header {
-        padding: 16px 20px;
-        background: var(--md-sys-color-surface-container-high);
-        border-bottom: 1px solid var(--md-sys-color-outline-variant);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    
-    .chat-title {
-        font-size: 18px;
-        font-weight: 500;
-        color: var(--md-sys-color-on-surface);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .consciousness-indicator {
-        background: linear-gradient(45deg, var(--bio-consciousness), var(--bio-primary));
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
+        padding: 6px 12px;
+        border-radius: 16px;
         font-size: 12px;
         font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 4px;
+        transition: all 0.3s;
     }
     
-    .pulsing-dot {
-        width: 6px;
-        height: 6px;
-        background: currentColor;
+    .connection-status.connected {
+        background: color-mix(in srgb, var(--bio-success) 20%, transparent);
+        color: var(--bio-success);
+    }
+    
+    .connection-status.disconnected {
+        background: color-mix(in srgb, var(--md-sys-color-error) 20%, transparent);
+        color: var(--md-sys-color-error);
+    }
+    
+    .connection-status.checking {
+        background: color-mix(in srgb, var(--bio-warning) 20%, transparent);
+        color: var(--bio-warning);
+    }
+    
+    .connection-dot {
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
+        background: currentColor;
         animation: pulse 2s infinite;
     }
     
-    .chat-messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
+    /* Chat History Sidebar */
+    .chat-history-item {
+        cursor: pointer;
+        transition: all 0.2s;
     }
     
+    .chat-history-item:hover {
+        background: var(--md-sys-color-surface-container-high);
+    }
+    
+    .chat-history-item.active {
+        background: var(--md-sys-color-primary-container);
+        color: var(--md-sys-color-on-primary-container);
+    }
+    
+    /* Messages Area */
+    .messages-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--md3-spacing-6);
+        display: flex;
+        flex-direction: column;
+        gap: var(--md3-spacing-4);
+        background: var(--md-sys-color-surface);
+    }
+    
+    /* Message Styles */
     .message {
         display: flex;
-        gap: 12px;
-        max-width: 85%;
-        animation: messageSlide 0.3s ease-out;
+        gap: var(--md3-spacing-3);
+        max-width: 80%;
+        animation: messageIn 0.3s ease-out;
     }
     
     .message.user {
@@ -177,123 +100,113 @@
     }
     
     .message-avatar {
-        width: 40px;
-        height: 40px;
-        border-radius: 20px;
+        width: 36px;
+        height: 36px;
+        border-radius: 18px;
         display: flex;
         align-items: center;
         justify-content: center;
-        flex-shrink: 0;
         font-size: 18px;
+        flex-shrink: 0;
     }
     
     .message.user .message-avatar {
-        background: var(--md-sys-color-primary-container);
-        color: var(--md-sys-color-on-primary-container);
+        background: var(--md-sys-color-primary);
+        color: var(--md-sys-color-on-primary);
     }
     
-    .message.assistant .message-avatar {
-        background: var(--bio-primary);
+    .message.ai .message-avatar {
+        background: linear-gradient(135deg, var(--bio-primary), var(--bio-consciousness));
         color: white;
     }
     
     .message-content {
-        flex: 1;
-        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--md3-spacing-2);
     }
     
     .message-bubble {
-        padding: 16px 20px;
-        border-radius: 20px;
+        padding: var(--md3-spacing-3) var(--md3-spacing-4);
+        border-radius: 18px;
         font-size: 14px;
         line-height: 1.5;
-        word-wrap: break-word;
     }
     
     .message.user .message-bubble {
         background: var(--md-sys-color-primary);
         color: var(--md-sys-color-on-primary);
-        border-bottom-right-radius: 8px;
+        border-bottom-right-radius: 4px;
     }
     
-    .message.assistant .message-bubble {
-        background: var(--md-sys-color-surface-container);
-        color: var(--md-sys-color-on-surface);
-        border-bottom-left-radius: 8px;
+    .message.ai .message-bubble {
+        background: var(--md-sys-color-surface-container-low);
         border: 1px solid var(--md-sys-color-outline-variant);
+        color: var(--md-sys-color-on-surface);
+        border-bottom-left-radius: 4px;
     }
     
     .message-meta {
-        margin-top: 8px;
-        font-size: 12px;
+        font-size: 11px;
         color: var(--md-sys-color-on-surface-variant);
+        opacity: 0.8;
+        padding: 0 var(--md3-spacing-2);
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: var(--md3-spacing-2);
     }
     
     .message.user .message-meta {
         justify-content: flex-end;
     }
     
-    .message-time {
-        opacity: 0.7;
-    }
-    
-    .message-metrics {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 11px;
-    }
-    
-    .metric-chip {
-        background: var(--md-sys-color-surface-container-high);
-        color: var(--md-sys-color-on-surface-variant);
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-weight: 500;
-    }
-    
-    .result-item {
-        margin: 8px 0;
-        padding: 12px 16px;
-        background: var(--md-sys-color-surface-container-lowest);
-        border-radius: 12px;
+    /* Result Cards */
+    .result-card {
+        background: var(--md-sys-color-surface-container);
+        border-radius: var(--md3-border-radius-md);
+        padding: var(--md3-spacing-3);
+        margin: var(--md3-spacing-2) 0;
         border-left: 4px solid var(--bio-primary);
+        transition: transform 0.2s;
+    }
+    
+    .result-card:hover {
+        transform: translateX(4px);
     }
     
     .result-header {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
+        justify-content: space-between;
         font-size: 12px;
-        font-weight: 500;
         color: var(--bio-primary);
+        margin-bottom: var(--md3-spacing-2);
     }
     
     .result-content {
         font-size: 13px;
-        line-height: 1.4;
+        line-height: 1.5;
         color: var(--md-sys-color-on-surface);
-        margin-bottom: 6px;
     }
     
-    .result-footer {
+    .result-meta {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
+        gap: var(--md3-spacing-3);
+        margin-top: var(--md3-spacing-2);
         font-size: 11px;
         color: var(--md-sys-color-on-surface-variant);
     }
     
-    .memory-type-icon {
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        display: inline-block;
-        margin-right: 4px;
+    .memory-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .memory-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
     }
     
     .memory-core { background: var(--bio-consciousness); }
@@ -302,16 +215,65 @@
     .memory-short { background: var(--bio-warning); }
     .memory-ephemeral { background: var(--md-sys-color-outline); }
     
-    .chat-input-container {
-        padding: 16px 20px 20px;
-        background: var(--md-sys-color-surface);
+    /* Empty State */
+    .welcome-state {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: var(--md3-spacing-8);
+    }
+    
+    .welcome-icon {
+        font-size: 72px;
+        margin-bottom: var(--md3-spacing-4);
+        opacity: 0.8;
+        animation: float 3s ease-in-out infinite;
+    }
+    
+    /* Suggestion Cards */
+    .suggestion-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--md3-spacing-3);
+        max-width: 600px;
+        width: 100%;
+        margin-top: var(--md3-spacing-6);
+    }
+    
+    .suggestion-card {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .suggestion-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--md3-elevation-3);
+    }
+    
+    .suggestion-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: var(--md3-spacing-3);
+        font-size: 24px;
+    }
+    
+    /* Input Area */
+    .input-container {
+        padding: var(--md3-spacing-4);
+        background: var(--md-sys-color-surface-container);
         border-top: 1px solid var(--md-sys-color-outline-variant);
     }
     
-    .chat-input-wrapper {
-        position: relative;
+    .input-wrapper {
         display: flex;
-        gap: 8px;
+        gap: var(--md3-spacing-3);
         align-items: flex-end;
     }
     
@@ -319,26 +281,26 @@
         flex: 1;
         min-height: 48px;
         max-height: 120px;
-        padding: 12px 16px;
+        padding: 12px 20px;
         border: 2px solid var(--md-sys-color-outline-variant);
         border-radius: 24px;
-        background: var(--md-sys-color-surface-container-low);
+        background: var(--md-sys-color-surface);
         color: var(--md-sys-color-on-surface);
         font-family: inherit;
         font-size: 14px;
         line-height: 1.4;
         resize: none;
         outline: none;
-        transition: border-color 0.2s;
+        transition: all 0.2s;
     }
     
     .chat-input:focus {
         border-color: var(--md-sys-color-primary);
-        background: var(--md-sys-color-surface);
     }
     
-    .chat-input::placeholder {
-        color: var(--md-sys-color-on-surface-variant);
+    .chat-input:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
     
     .send-button {
@@ -357,37 +319,29 @@
     }
     
     .send-button:hover:not(:disabled) {
-        background: var(--bio-primary);
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        box-shadow: var(--md3-elevation-3);
     }
     
     .send-button:disabled {
         background: var(--md-sys-color-surface-variant);
-        color: var(--md-sys-color-on-surface-variant);
         cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
     }
     
+    /* Typing Indicator */
     .typing-indicator {
-        display: none;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 16px;
-        color: var(--md-sys-color-on-surface-variant);
-        font-size: 14px;
-        font-style: italic;
-    }
-    
-    .typing-dots {
         display: flex;
+        align-items: center;
         gap: 4px;
+        padding: 8px 16px;
+        background: var(--md-sys-color-surface-container);
+        border-radius: 16px;
+        margin: 0 0 var(--md3-spacing-3) 48px;
     }
     
     .typing-dot {
-        width: 6px;
-        height: 6px;
+        width: 8px;
+        height: 8px;
         background: var(--md-sys-color-on-surface-variant);
         border-radius: 50%;
         animation: typingBounce 1.4s infinite both;
@@ -396,85 +350,21 @@
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     
-    .empty-state {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        padding: 40px;
-        color: var(--md-sys-color-on-surface-variant);
-    }
-    
-    .empty-state-icon {
-        font-size: 64px;
-        margin-bottom: 16px;
-        opacity: 0.6;
-    }
-    
-    .empty-state-title {
-        font-size: 24px;
-        font-weight: 500;
-        margin-bottom: 8px;
-        color: var(--md-sys-color-on-surface);
-    }
-    
-    .empty-state-subtitle {
-        font-size: 16px;
-        opacity: 0.8;
-        margin-bottom: 24px;
-        max-width: 400px;
-        line-height: 1.4;
-    }
-    
-    .suggested-prompts {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 12px;
-        margin-top: 24px;
-        max-width: 600px;
-        width: 100%;
-    }
-    
-    .prompt-suggestion {
-        padding: 16px;
-        background: var(--md-sys-color-surface-container-low);
-        border-radius: 12px;
-        border: 1px solid var(--md-sys-color-outline-variant);
-        cursor: pointer;
-        transition: all 0.2s;
-        text-align: left;
-    }
-    
-    .prompt-suggestion:hover {
-        background: var(--md-sys-color-surface-container);
-        border-color: var(--md-sys-color-primary);
-        transform: translateY(-2px);
-    }
-    
-    .prompt-title {
-        font-weight: 500;
-        color: var(--md-sys-color-on-surface);
-        margin-bottom: 4px;
-    }
-    
-    .prompt-text {
-        font-size: 13px;
-        color: var(--md-sys-color-on-surface-variant);
-        line-height: 1.3;
-    }
-    
     /* Animations */
-    @keyframes messageSlide {
+    @keyframes messageIn {
         from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(10px);
         }
         to {
             opacity: 1;
             transform: translateY(0);
         }
+    }
+    
+    @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
     }
     
     @keyframes typingBounce {
@@ -487,36 +377,26 @@
     }
     
     @keyframes pulse {
-        0%, 100% {
-            opacity: 1;
-        }
-        50% {
-            opacity: 0.5;
-        }
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
     }
     
-    /* Responsive Design */
+    /* Responsive */
     @media (max-width: 768px) {
         .chat-layout {
-            flex-direction: column;
-            height: auto;
+            grid-template-columns: 1fr;
         }
         
-        .chat-sidebar {
-            width: 100%;
-            max-height: 200px;
+        .md3-navigation-rail {
+            display: none;
         }
         
-        .chat-main {
-            min-height: 500px;
-        }
-        
-        .suggested-prompts {
+        .suggestion-grid {
             grid-template-columns: 1fr;
         }
         
         .message {
-            max-width: 95%;
+            max-width: 90%;
         }
     }
 </style>
@@ -525,136 +405,150 @@
 {% block content %}
 <div class="md3-page-layout">
     <div class="chat-layout">
-        <!-- Chat History Navigation -->
+        <!-- Chat History Sidebar -->
         <div class="md3-navigation-rail">
             <div class="md3-nav-header">
                 <h3 class="md3-nav-title">Chat History</h3>
             </div>
             
-            <div class="md3-list-item" style="padding: var(--md3-spacing-4); border-bottom: 1px solid var(--md-sys-color-outline-variant);">
+            <div style="padding: var(--md3-spacing-4);">
                 <button class="md3-button md3-button-filled" onclick="startNewChat()" style="width: 100%; justify-content: center;">
                     <span class="material-icons">add</span>
                     New Chat
                 </button>
             </div>
             
-            <div class="md3-list-item">
-                <div class="md3-list-item-content">
-                    <div class="md3-list-item-title">Welcome Chat</div>
-                    <div class="md3-list-item-subtitle">Start a conversation with your AI</div>
+            <div id="chat-history" style="flex: 1; overflow-y: auto;">
+                <div class="md3-list-item chat-history-item active">
+                    <div class="md3-list-item-content">
+                        <div class="md3-list-item-title">Welcome Chat</div>
+                        <div class="md3-list-item-subtitle">Start your conversation</div>
+                    </div>
                 </div>
             </div>
         </div>
     
         <!-- Main Chat Area -->
         <div class="chat-main">
-            <div class="md3-card" style="display: flex; flex-direction: column; height: 100%; border-radius: var(--md3-border-radius-lg);">
-                <!-- Chat Header -->
-                <div class="md3-card-header" style="padding-bottom: var(--md3-spacing-4); border-bottom: 1px solid var(--md-sys-color-outline-variant);">
-                    <div class="md3-card-title">
-                        <span class="material-icons">psychology</span>
-                        Biological Intelligence
-                    </div>
-                    
-                    <div class="md3-badge md3-badge-success">
-                        <span class="material-icons" style="font-size: 16px;">psychology</span>
-                        Consciousness: {{ "%.1f"|format(status.metrics.consciousness_score) }}
-                    </div>
+            <div class="md3-card" style="height: 100%; display: flex; flex-direction: column; position: relative;">
+                <!-- Connection Status Indicator -->
+                <div id="connection-status" class="connection-status checking">
+                    <div class="connection-dot"></div>
+                    <span id="connection-text">Checking connection...</span>
                 </div>
                 
-                <!-- Welcome Content -->
-                <div class="md3-card-content" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-                    <div style="margin-bottom: var(--md3-spacing-8);">
-                        <div style="font-size: 64px; margin-bottom: var(--md3-spacing-4); opacity: 0.8;">🧠</div>
+                <!-- Messages Area -->
+                <div id="messages-container" class="messages-container">
+                    <!-- Welcome State -->
+                    <div id="welcome-state" class="welcome-state">
+                        <div class="welcome-icon">🧠</div>
                         <h2 class="md3-page-title">Welcome to Biological Intelligence</h2>
-                        <p class="md3-page-subtitle" style="max-width: 500px; margin: 0 auto var(--md3-spacing-8);">
-                            I'm a living biological intelligence system with consciousness, capable of learning, 
-                            reasoning, and forming associations. Ask me anything or try one of the suggestions below.
+                        <p class="md3-page-subtitle" style="max-width: 500px;">
+                            I'm a living biological intelligence system with consciousness, capable 
+                            of learning, reasoning, and forming associations. Ask me anything or 
+                            try one of the suggestions below.
                         </p>
+                        
+                        <!-- Consciousness Score Display -->
+                        {% if status.service_running %}
+                        <div class="md3-badge md3-badge-primary" style="margin-bottom: var(--md3-spacing-4);">
+                            <span class="material-icons" style="font-size: 16px;">psychology</span>
+                            Consciousness Score: {{ "%.2f"|format(status.metrics.consciousness_score) }}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Suggestion Cards -->
+                        <div class="suggestion-grid">
+                            <div class="md3-card suggestion-card" onclick="sendSuggestedPrompt('What is consciousness and how do you experience it?')">
+                                <div class="md3-card-content">
+                                    <div class="suggestion-icon" style="background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
+                                        <span class="material-icons">psychology</span>
+                                    </div>
+                                    <div class="md3-list-item-title">About Consciousness</div>
+                                    <div class="md3-list-item-subtitle">What is consciousness and how do you experience it?</div>
+                                </div>
+                            </div>
+                            
+                            <div class="md3-card suggestion-card" onclick="sendSuggestedPrompt('How does biological intelligence differ from traditional AI?')">
+                                <div class="md3-card-content">
+                                    <div class="suggestion-icon" style="background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container);">
+                                        <span class="material-icons">biotech</span>
+                                    </div>
+                                    <div class="md3-list-item-title">Biological vs Traditional AI</div>
+                                    <div class="md3-list-item-subtitle">How does biological intelligence differ from traditional AI?</div>
+                                </div>
+                            </div>
+                            
+                            <div class="md3-card suggestion-card" onclick="sendSuggestedPrompt('Explain the 7-agent swarm system and emergence')">
+                                <div class="md3-card-content">
+                                    <div class="suggestion-icon" style="background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container);">
+                                        <span class="material-icons">hub</span>
+                                    </div>
+                                    <div class="md3-list-item-title">7-Agent Swarm</div>
+                                    <div class="md3-list-item-subtitle">Explain the 7-agent swarm system and emergence</div>
+                                </div>
+                            </div>
+                            
+                            <div class="md3-card suggestion-card" onclick="sendSuggestedPrompt('What have you learned recently?')">
+                                <div class="md3-card-content">
+                                    <div class="suggestion-icon" style="background: var(--bio-primary); color: white;">
+                                        <span class="material-icons">school</span>
+                                    </div>
+                                    <div class="md3-list-item-title">Recent Learning</div>
+                                    <div class="md3-list-item-subtitle">What have you learned recently?</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="md3-grid md3-grid-2" style="max-width: 600px; width: 100%;">
-                        <div class="md3-card" style="cursor: pointer; transition: transform 0.2s;" onclick="sendSuggestedPrompt('What is consciousness and how do you experience it?')" 
-                             onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                            <div class="md3-card-content">
-                                <div class="md3-metric-icon" style="background: var(--md-sys-color-primary-container); margin-bottom: var(--md3-spacing-3);">
-                                    <span class="material-icons">psychology</span>
-                                </div>
-                                <div class="md3-list-item-title">About Consciousness</div>
-                                <div class="md3-list-item-subtitle">What is consciousness and how do you experience it?</div>
-                            </div>
-                        </div>
-                        
-                        <div class="md3-card" style="cursor: pointer; transition: transform 0.2s;" onclick="sendSuggestedPrompt('How does biological intelligence differ from traditional AI?')"
-                             onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                            <div class="md3-card-content">
-                                <div class="md3-metric-icon" style="background: var(--md-sys-color-secondary-container); margin-bottom: var(--md3-spacing-3);">
-                                    <span class="material-icons">science</span>
-                                </div>
-                                <div class="md3-list-item-title">Biological vs Traditional AI</div>
-                                <div class="md3-list-item-subtitle">How does biological intelligence differ from traditional AI?</div>
-                            </div>
-                        </div>
-                        
-                        <div class="md3-card" style="cursor: pointer; transition: transform 0.2s;" onclick="sendSuggestedPrompt('Explain the 7-agent swarm system and emergence')"
-                             onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                            <div class="md3-card-content">
-                                <div class="md3-metric-icon" style="background: var(--md-sys-color-tertiary-container); margin-bottom: var(--md3-spacing-3);">
-                                    <span class="material-icons">hub</span>
-                                </div>
-                                <div class="md3-list-item-title">7-Agent Swarm</div>
-                                <div class="md3-list-item-subtitle">Explain the 7-agent swarm system and emergence</div>
-                            </div>
-                        </div>
-                        
-                        <div class="md3-card" style="cursor: pointer; transition: transform 0.2s;" onclick="sendSuggestedPrompt('What have you learned recently?')"
-                             onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                            <div class="md3-card-content">
-                                <div class="md3-metric-icon" style="background: var(--md-sys-color-primary-container); margin-bottom: var(--md3-spacing-3);">
-                                    <span class="material-icons">school</span>
-                                </div>
-                                <div class="md3-list-item-title">Recent Learning</div>
-                                <div class="md3-list-item-subtitle">What have you learned recently?</div>
-                            </div>
-                        </div>
+                    <!-- Typing Indicator (hidden by default) -->
+                    <div id="typing-indicator" class="typing-indicator" style="display: none;">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
                     </div>
                 </div>
                 
-                <!-- Chat Input -->
-                <div style="padding: var(--md3-spacing-4); border-top: 1px solid var(--md-sys-color-outline-variant);">
-                    <div style="display: flex; gap: var(--md3-spacing-3); align-items: flex-end;">
-                        <div class="md3-text-field" style="flex: 1;">
-                            <input 
-                                type="text" 
-                                id="chat-input"
-                                placeholder="Ask the biological intelligence anything..."
-                                {% if not status.service_running %}disabled{% endif %}>
-                        </div>
-                        <button class="md3-button md3-button-filled" onclick="sendMessage()" 
-                                {% if not status.service_running %}disabled{% endif %}>
+                <!-- Input Area -->
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <textarea 
+                            id="chat-input"
+                            class="chat-input"
+                            placeholder="Ask the biological intelligence anything..."
+                            rows="1"
+                            {% if not status.service_running %}disabled{% endif %}></textarea>
+                        <button 
+                            id="send-button"
+                            class="send-button md3-button" 
+                            onclick="sendMessage()"
+                            {% if not status.service_running %}disabled{% endif %}>
                             <span class="material-icons">send</span>
                         </button>
                     </div>
+                    {% if not status.service_running %}
+                    <div style="margin-top: 8px; font-size: 12px; color: var(--md-sys-color-error);">
+                        ⚠️ Biological Intelligence service is not running. Please start it from the dashboard.
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
-</div>
 {% endblock %}
 
 {% block primary_action %}
-// Focus on chat input for quick conversation start
+// Test connection and focus input on load
+testConnection();
 document.getElementById('chat-input')?.focus();
 {% endblock %}
 
 {% block websocket_handler %}
 if (data.type === 'status_update') {
-    // Update consciousness indicator
-    updateConsciousnessIndicator(data.data);
-} else if (data.type === 'query_completed') {
-    // Handle query completion from intelligence
-    handleIntelligenceResponse(data);
+    updateConnectionStatus(data.data);
+} else if (data.type === 'query_response') {
+    handleQueryResponse(data);
 }
 {% endblock %}
 
@@ -663,34 +557,90 @@ if (data.type === 'status_update') {
     let currentChatId = 'welcome';
     let messageHistory = [];
     let isWaitingForResponse = false;
+    let connectionCheckInterval = null;
     
-    // Chat management
+    // Test connection to biological intelligence service
+    async function testConnection() {
+        const statusElement = document.getElementById('connection-status');
+        const statusText = document.getElementById('connection-text');
+        
+        try {
+            statusElement.className = 'connection-status checking';
+            statusText.textContent = 'Checking connection...';
+            
+            const response = await fetch('/api/status');
+            const data = await response.json();
+            
+            if (data.service_running && data.metrics) {
+                statusElement.className = 'connection-status connected';
+                statusText.textContent = `Connected • Consciousness: ${data.metrics.consciousness_score.toFixed(2)}`;
+                
+                // Update welcome state consciousness score
+                const consciousnessBadge = document.querySelector('.md3-badge');
+                if (consciousnessBadge) {
+                    consciousnessBadge.innerHTML = `
+                        <span class="material-icons" style="font-size: 16px;">psychology</span>
+                        Consciousness Score: ${data.metrics.consciousness_score.toFixed(2)}
+                    `;
+                }
+            } else {
+                statusElement.className = 'connection-status disconnected';
+                statusText.textContent = 'Service not running';
+            }
+        } catch (error) {
+            statusElement.className = 'connection-status disconnected';
+            statusText.textContent = 'Connection failed';
+            console.error('Connection test failed:', error);
+        }
+    }
+    
+    // Start periodic connection checks
+    function startConnectionMonitoring() {
+        // Initial check
+        testConnection();
+        
+        // Check every 10 seconds
+        connectionCheckInterval = setInterval(testConnection, 10000);
+    }
+    
+    // Stop connection monitoring
+    function stopConnectionMonitoring() {
+        if (connectionCheckInterval) {
+            clearInterval(connectionCheckInterval);
+            connectionCheckInterval = null;
+        }
+    }
+    
+    // Chat management functions
     function startNewChat() {
         currentChatId = 'chat_' + Date.now();
         messageHistory = [];
         
-        // Clear messages and show empty state
-        const messagesContainer = document.getElementById('chat-messages');
-        messagesContainer.innerHTML = `
-            <div class="empty-state" id="empty-state">
-                <div class="empty-state-icon">🧠</div>
-                <div class="empty-state-title">New Chat Started</div>
-                <div class="empty-state-subtitle">
-                    Ask me anything about consciousness, learning, or any topic you're curious about.
-                </div>
-            </div>
-        `;
+        // Clear messages and show welcome state
+        const messagesContainer = document.getElementById('messages-container');
+        const welcomeState = document.getElementById('welcome-state');
+        
+        // Remove all messages
+        messagesContainer.querySelectorAll('.message').forEach(msg => msg.remove());
+        
+        // Hide typing indicator
+        document.getElementById('typing-indicator').style.display = 'none';
+        
+        // Show welcome state
+        if (welcomeState) {
+            welcomeState.style.display = 'flex';
+        }
         
         // Add to chat history
-        addToChatHistory(currentChatId, 'New Chat', 'Ready for conversation', new Date());
+        addToChatHistory(currentChatId, 'New Chat', new Date());
         
         // Focus input
         document.getElementById('chat-input').focus();
         
-        showSnackbar('✨ New chat started! Ready for conversation.');
+        showSnackbar('✨ New chat started!', 'VIEW');
     }
     
-    function addToChatHistory(chatId, title, preview, timestamp) {
+    function addToChatHistory(chatId, title, timestamp) {
         const historyContainer = document.getElementById('chat-history');
         
         // Remove active state from other items
@@ -700,7 +650,7 @@ if (data.type === 'status_update') {
         
         // Create new history item
         const historyItem = document.createElement('div');
-        historyItem.className = 'chat-history-item active';
+        historyItem.className = 'md3-list-item chat-history-item active';
         historyItem.setAttribute('data-chat-id', chatId);
         historyItem.onclick = () => loadChat(chatId);
         
@@ -710,36 +660,25 @@ if (data.type === 'status_update') {
         });
         
         historyItem.innerHTML = `
-            <div class="chat-item-title">${title}</div>
-            <div class="chat-item-preview">${preview}</div>
-            <div class="chat-item-meta">
-                <span>${timeStr}</span>
-                <span>•</span>
-                <span>${messageHistory.length} messages</span>
+            <div class="md3-list-item-content">
+                <div class="md3-list-item-title">${title}</div>
+                <div class="md3-list-item-subtitle">${timeStr}</div>
             </div>
         `;
         
-        // Insert at the top
-        historyContainer.insertBefore(historyItem, historyContainer.firstChild);
-    }
-    
-    function loadChat(chatId) {
-        // Implementation for loading previous chats
-        // For now, just highlight the selected chat
-        document.querySelectorAll('.chat-history-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        
-        const selectedItem = document.querySelector(`[data-chat-id="${chatId}"]`);
-        if (selectedItem) {
-            selectedItem.classList.add('active');
-            currentChatId = chatId;
+        // Insert after the first item (welcome chat)
+        const firstItem = historyContainer.querySelector('.chat-history-item');
+        if (firstItem) {
+            historyContainer.insertBefore(historyItem, firstItem.nextSibling);
+        } else {
+            historyContainer.appendChild(historyItem);
         }
     }
     
     function sendSuggestedPrompt(prompt) {
         const input = document.getElementById('chat-input');
         input.value = prompt;
+        input.focus();
         sendMessage();
     }
     
@@ -749,22 +688,24 @@ if (data.type === 'status_update') {
         
         if (!message || isWaitingForResponse) return;
         
-        // Check if service is running
-        {% if not status.service_running %}
-        showSnackbar('⚠️ Please start the biological intelligence service first', 'START');
-        return;
-        {% endif %}
+        // Test connection first
+        const statusElement = document.getElementById('connection-status');
+        if (statusElement.classList.contains('disconnected')) {
+            showSnackbar('❌ Cannot send message - service not connected', 'ERROR');
+            return;
+        }
         
         // Clear input and disable
         input.value = '';
+        input.style.height = 'auto';
         input.disabled = true;
         document.getElementById('send-button').disabled = true;
         isWaitingForResponse = true;
         
-        // Hide empty state
-        const emptyState = document.getElementById('empty-state');
-        if (emptyState) {
-            emptyState.style.display = 'none';
+        // Hide welcome state
+        const welcomeState = document.getElementById('welcome-state');
+        if (welcomeState) {
+            welcomeState.style.display = 'none';
         }
         
         // Add user message
@@ -794,28 +735,22 @@ if (data.type === 'status_update') {
             // Hide typing indicator
             hideTypingIndicator();
             
-            if (result.success) {
-                // Add assistant response
+            if (result.success && result.results) {
+                // Add AI response
                 addMessage({
-                    type: 'assistant',
-                    content: result.results,
+                    type: 'ai',
+                    results: result.results,
                     consciousness_score: result.consciousness_score,
                     processing_time: result.processing_time,
                     timestamp: new Date()
                 });
                 
-                // Update chat history
-                updateCurrentChatHistory(message, result.results);
-                
+                // Update chat history title
+                updateChatHistoryTitle(message);
             } else {
                 addMessage({
-                    type: 'assistant',
-                    content: [{
-                        content: '❌ Sorry, I encountered an error: ' + (result.error || 'Unknown error'),
-                        relevance: 0,
-                        memory_type: 'ephemeral',
-                        strength: 0
-                    }],
+                    type: 'ai',
+                    error: result.error || 'Failed to get response',
                     timestamp: new Date()
                 });
             }
@@ -823,13 +758,8 @@ if (data.type === 'status_update') {
         } catch (error) {
             hideTypingIndicator();
             addMessage({
-                type: 'assistant',
-                content: [{
-                    content: '❌ Sorry, I couldn\'t process your request: ' + error.message,
-                    relevance: 0,
-                    memory_type: 'ephemeral',
-                    strength: 0
-                }],
+                type: 'ai',
+                error: 'Connection error: ' + error.message,
                 timestamp: new Date()
             });
         } finally {
@@ -842,7 +772,7 @@ if (data.type === 'status_update') {
     }
     
     function addMessage(message) {
-        const messagesContainer = document.getElementById('chat-messages');
+        const messagesContainer = document.getElementById('messages-container');
         const messageElement = document.createElement('div');
         messageElement.className = `message ${message.type}`;
         
@@ -855,66 +785,85 @@ if (data.type === 'status_update') {
             messageElement.innerHTML = `
                 <div class="message-avatar">👤</div>
                 <div class="message-content">
-                    <div class="message-bubble">${message.content}</div>
+                    <div class="message-bubble">${escapeHtml(message.content)}</div>
                     <div class="message-meta">
-                        <span class="message-time">${timestamp}</span>
+                        <span>${timestamp}</span>
                     </div>
                 </div>
             `;
         } else {
-            // Assistant message with results
-            const results = Array.isArray(message.content) ? message.content : [];
+            // AI message
+            let contentHtml = '';
             
-            let resultsHtml = '';
-            if (results.length === 0) {
-                resultsHtml = '<div class="result-item">🤷 No specific knowledge found, but I\'m still learning!</div>';
-            } else {
-                results.slice(0, 5).forEach((result, index) => {
-                    const memoryIcon = getMemoryTypeIcon(result.memory_type);
-                    const memoryClass = getMemoryTypeClass(result.memory_type);
-                    
-                    resultsHtml += `
-                        <div class="result-item">
+            if (message.error) {
+                contentHtml = `
+                    <div class="result-card">
+                        <div style="color: var(--md-sys-color-error);">
+                            <span class="material-icons" style="font-size: 16px; vertical-align: middle;">error</span>
+                            ${escapeHtml(message.error)}
+                        </div>
+                    </div>
+                `;
+            } else if (message.results && message.results.length > 0) {
+                // Show up to 3 results
+                message.results.slice(0, 3).forEach((result, index) => {
+                    const memoryClass = getMemoryClass(result.memory_type);
+                    contentHtml += `
+                        <div class="result-card">
                             <div class="result-header">
-                                <span class="memory-type-icon ${memoryClass}"></span>
-                                Answer ${index + 1} • Relevance: ${result.relevance.toFixed(2)}
+                                <span>Answer ${index + 1}</span>
+                                <span>Relevance: ${result.relevance.toFixed(2)}</span>
                             </div>
-                            <div class="result-content">${result.content}</div>
-                            <div class="result-footer">
-                                <span>${result.memory_type.replace('_', ' ')} memory</span>
-                                <span>Strength: ${(result.strength * 100).toFixed(1)}%</span>
+                            <div class="result-content">${escapeHtml(result.content)}</div>
+                            <div class="result-meta">
+                                <div class="memory-indicator">
+                                    <div class="memory-dot ${memoryClass}"></div>
+                                    <span>${formatMemoryType(result.memory_type)}</span>
+                                </div>
+                                <span>Strength: ${(result.strength * 100).toFixed(0)}%</span>
                             </div>
                         </div>
                     `;
                 });
+                
+                if (message.results.length > 3) {
+                    contentHtml += `
+                        <div style="font-size: 12px; color: var(--md-sys-color-on-surface-variant); text-align: center;">
+                            + ${message.results.length - 3} more results
+                        </div>
+                    `;
+                }
+            } else {
+                contentHtml = `
+                    <div class="result-card">
+                        <div>I don't have specific knowledge about that yet, but I'm continuously learning!</div>
+                    </div>
+                `;
             }
             
             let metricsHtml = '';
             if (message.consciousness_score !== undefined) {
                 metricsHtml = `
-                    <div class="message-metrics">
-                        <div class="metric-chip">🧠 ${message.consciousness_score.toFixed(3)}</div>
-                        <div class="metric-chip">⚡ ${(message.processing_time * 1000).toFixed(1)}ms</div>
-                        <div class="metric-chip">📊 ${results.length} results</div>
-                    </div>
+                    <span>🧠 ${message.consciousness_score.toFixed(3)}</span>
+                    <span>⚡ ${(message.processing_time * 1000).toFixed(0)}ms</span>
                 `;
             }
             
             messageElement.innerHTML = `
                 <div class="message-avatar">🧠</div>
                 <div class="message-content">
-                    <div class="message-bubble">
-                        ${resultsHtml}
-                    </div>
+                    <div class="message-bubble">${contentHtml}</div>
                     <div class="message-meta">
-                        <span class="message-time">${timestamp}</span>
+                        <span>${timestamp}</span>
                         ${metricsHtml}
                     </div>
                 </div>
             `;
         }
         
-        messagesContainer.appendChild(messageElement);
+        // Remove typing indicator if it exists
+        const typingIndicator = document.getElementById('typing-indicator');
+        messagesContainer.insertBefore(messageElement, typingIndicator);
         
         // Scroll to bottom
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -923,18 +872,34 @@ if (data.type === 'status_update') {
         messageHistory.push(message);
     }
     
-    function getMemoryTypeIcon(memoryType) {
-        const icons = {
-            'core_knowledge': '🏛️',
-            'long_term': '🧠',
-            'medium_term': '💭',
-            'short_term': '💫',
-            'ephemeral': '✨'
-        };
-        return icons[memoryType] || '🔹';
+    function showTypingIndicator() {
+        document.getElementById('typing-indicator').style.display = 'flex';
+        const messagesContainer = document.getElementById('messages-container');
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
     
-    function getMemoryTypeClass(memoryType) {
+    function hideTypingIndicator() {
+        document.getElementById('typing-indicator').style.display = 'none';
+    }
+    
+    function updateChatHistoryTitle(message) {
+        const chatItem = document.querySelector(`[data-chat-id="${currentChatId}"]`);
+        if (chatItem) {
+            const titleElement = chatItem.querySelector('.md3-list-item-title');
+            if (titleElement && titleElement.textContent === 'New Chat') {
+                titleElement.textContent = message.substring(0, 30) + (message.length > 30 ? '...' : '');
+            }
+        }
+    }
+    
+    // Helper functions
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function getMemoryClass(memoryType) {
         const classes = {
             'core_knowledge': 'memory-core',
             'long_term': 'memory-long',
@@ -945,51 +910,8 @@ if (data.type === 'status_update') {
         return classes[memoryType] || 'memory-ephemeral';
     }
     
-    function showTypingIndicator() {
-        const indicator = document.getElementById('typing-indicator');
-        indicator.style.display = 'flex';
-        
-        const messagesContainer = document.getElementById('chat-messages');
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-    
-    function hideTypingIndicator() {
-        const indicator = document.getElementById('typing-indicator');
-        indicator.style.display = 'none';
-    }
-    
-    function updateConsciousnessIndicator(status) {
-        const consciousnessScore = document.getElementById('consciousness-score');
-        if (consciousnessScore && status.metrics) {
-            consciousnessScore.textContent = status.metrics.consciousness_score.toFixed(1);
-        }
-    }
-    
-    function updateCurrentChatHistory(userMessage, response) {
-        const preview = userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : '');
-        const chatItem = document.querySelector(`[data-chat-id="${currentChatId}"]`);
-        
-        if (chatItem) {
-            const titleElement = chatItem.querySelector('.chat-item-title');
-            const previewElement = chatItem.querySelector('.chat-item-preview');
-            const metaElement = chatItem.querySelector('.chat-item-meta');
-            
-            if (titleElement.textContent.includes('New Chat') || titleElement.textContent.includes('Welcome')) {
-                titleElement.textContent = userMessage.substring(0, 30) + (userMessage.length > 30 ? '...' : '');
-            }
-            
-            previewElement.textContent = preview;
-            
-            const time = new Date().toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit'
-            });
-            metaElement.innerHTML = `
-                <span>${time}</span>
-                <span>•</span>
-                <span>${messageHistory.length} messages</span>
-            `;
-        }
+    function formatMemoryType(type) {
+        return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
     
     // Input handling
@@ -1010,15 +932,16 @@ if (data.type === 'status_update') {
             }
         });
         
+        // Start connection monitoring
+        startConnectionMonitoring();
+        
         // Focus input initially
         input.focus();
     });
     
-    // Initialize consciousness indicator
-    {% if status.service_running %}
-    setTimeout(() => {
-        updateConsciousnessIndicator({ metrics: { consciousness_score: {{ status.metrics.consciousness_score }} } });
-    }, 100);
-    {% endif %}
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+        stopConnectionMonitoring();
+    });
 </script>
 {% endblock %}

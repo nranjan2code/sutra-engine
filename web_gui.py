@@ -22,11 +22,12 @@ from typing import Dict, Any, List
 import logging
 import os
 
-from fastapi import FastAPI, WebSocket, Request, Form, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, WebSocket, Request, Form
 from fastapi.templating import Jinja2Templates
-import uvicorn
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+import logging
 
 try:
     import httpx
@@ -56,6 +57,15 @@ app = FastAPI(
 # Setup static files and templates
 app.mount("/static", StaticFiles(directory="web_static"), name="static")
 templates = Jinja2Templates(directory="web_templates")
+
+# Configure CORS for API access from browser
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 
 # Add Python builtin functions to template globals
 def format_number(num, decimals=0):
