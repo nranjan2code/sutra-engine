@@ -8,7 +8,9 @@ This module contains functions for:
 """
 
 import re
-from typing import List
+from typing import List, Tuple
+
+from ..graph.concepts import AssociationType
 
 
 def extract_words(text: str) -> List[str]:
@@ -74,7 +76,7 @@ def extract_words(text: str) -> List[str]:
     return [w for w in words if len(w) > 2 and w not in stop_words]
 
 
-def get_association_patterns():
+def get_association_patterns() -> List[Tuple[str, AssociationType]]:
     """
     Get regex patterns for association extraction.
 

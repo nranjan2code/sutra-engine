@@ -11,7 +11,7 @@ Implements sophisticated multi-path reasoning that:
 import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Counter as CounterType, Dict, List, Tuple
 
 from ..graph.concepts import ReasoningPath
 
@@ -149,7 +149,7 @@ class MultiPathAggregator:
         """Cluster reasoning paths by similar answers."""
 
         # Group paths by answer similarity
-        answer_groups = defaultdict(list)
+        answer_groups: Dict[str, List[ReasoningPath]] = defaultdict(list)
 
         for path in reasoning_paths:
             # Normalize answer for grouping
@@ -293,7 +293,7 @@ class MultiPathAggregator:
 
         # Describe reasoning approaches
         if len(primary_cluster.member_paths) > 1:
-            relation_types = Counter()
+            relation_types: CounterType[str] = Counter()
             for path in primary_cluster.member_paths:
                 for step in path.steps:
                     relation_types[step.relation] += 1

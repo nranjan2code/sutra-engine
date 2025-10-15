@@ -11,9 +11,9 @@ Transforms natural language queries into structured reasoning tasks:
 import logging
 import time
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
-from ..graph.concepts import Association, Concept
+from ..graph.concepts import Association, Concept, ReasoningPath
 from ..learning.associations import AssociationExtractor
 from ..utils.text import clean_text, extract_words
 from .mppa import ConsensusResult, MultiPathAggregator
@@ -133,10 +133,10 @@ class QueryProcessor:
 
         return enhanced_result
 
-    def _classify_query_intent(self, query: str) -> Dict[str, any]:
+    def _classify_query_intent(self, query: str) -> Dict[str, Any]:
         """Classify the intent and type of the query."""
 
-        intent = {
+        intent: Dict[str, Any] = {
             "type": "unknown",
             "confidence": 0.0,
             "focus": None,
@@ -150,7 +150,7 @@ class QueryProcessor:
                     intent["type"] = question_type
                     intent["confidence"] = 0.8
                     break
-            if intent["confidence"] > 0:
+            if float(intent["confidence"]) > 0:
                 break
 
         # Determine what the query is seeking
@@ -178,7 +178,7 @@ class QueryProcessor:
         """Find and rank concepts relevant to the query."""
 
         query_words = set(extract_words(query))
-        concept_scores = defaultdict(float)
+        concept_scores: Dict[str, float] = defaultdict(float)
 
         # Score concepts by word overlap
         for concept_id, concept in self.concepts.items():
@@ -204,7 +204,7 @@ class QueryProcessor:
         return ranked_concepts[:max_concepts]
 
     def _expand_query_context(
-        self, relevant_concepts: List[Tuple[str, float]], query_intent: Dict
+        self, relevant_concepts: List[Tuple[str, float]], query_intent: Dict[str, Any]
     ) -> List[str]:
         """Expand query context with related concepts."""
 
@@ -241,8 +241,8 @@ class QueryProcessor:
         return expanded_list
 
     def _generate_reasoning_paths(
-        self, concepts: List[str], query_intent: Dict, num_paths: int
-    ) -> List:
+        self, concepts: List[str], query_intent: Dict[str, Any], num_paths: int
+    ) -> List[Any]:
         """Generate multiple reasoning paths for the query."""
 
         if len(concepts) < 2:
@@ -284,7 +284,7 @@ class QueryProcessor:
         self,
         result: ConsensusResult,
         original_query: str,
-        query_intent: Dict,
+        query_intent: Dict[str, Any],
         start_time: float,
     ) -> ConsensusResult:
         """Enhance consensus result with query-specific information."""
@@ -311,7 +311,7 @@ class QueryProcessor:
             reasoning_explanation=enhanced_explanation,
         )
 
-    def _assess_query_complexity(self, query: str, query_intent: Dict) -> float:
+    def _assess_query_complexity(self, query: str, query_intent: Dict[str, Any]) -> float:
         """Assess query complexity and adjust confidence accordingly."""
 
         base_factor = 1.0

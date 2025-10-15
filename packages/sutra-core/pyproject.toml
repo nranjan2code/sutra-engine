@@ -24,10 +24,18 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    # Minimal core dependencies
+    # NLP and text processing
+    "spacy>=3.0.0,<4.0.0",
+    # Storage and persistence  
+    "sqlalchemy>=2.0.0,<3.0.0",
+    # Performance
+    "hnswlib>=0.7.0",
 ]
 
 [project.optional-dependencies]
+nlp = [
+    "spacy>=3.0.0,<4.0.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -35,6 +43,7 @@ dev = [
     "isort>=5.10.0",
     "flake8>=5.0.0",
     "mypy>=1.0.0",
+    "hypothesis>=6.0.0",
 ]
 
 [project.urls]

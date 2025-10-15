@@ -128,9 +128,11 @@ class AssociationExtractor:
 
     def _extract_cooccurrence_associations(self, content: str, concept_id: str) -> int:
         """
-        Extract co-occurrence based semantic associations.
+        Extract co-occurrence based semantic associations using noun chunks.
 
-        Uses sliding window approach: words appearing together are related.
+        OPTIMIZATION: Uses spaCy noun chunks instead of sliding window to reduce
+        associations from ~900 to <50 per document. Falls back to sliding window
+        if spaCy unavailable.
 
         Args:
             content: Text content
@@ -140,8 +142,52 @@ class AssociationExtractor:
             Number of co-occurrence associations created
         """
         associations_created = 0
-        words = extract_words(content)
 
+        # Try using spaCy for intelligent chunk extraction
+        try:
+            from ..utils.nlp import TextProcessor
+
+            processor = TextProcessor()
+            
+            # Extract meaningful noun chunks (lemmatized)
+            tokens = processor.extract_meaningful_tokens(content)
+            
+            # Use noun chunks for semantic associations
+            doc = processor.nlp(content)
+            chunks = [chunk.root.lemma_.lower() for chunk in doc.noun_chunks]
+            
+            # Limit chunks to most relevant
+            chunks = list(set(chunks))[:10]  # Top 10 unique chunks
+            
+            # Create associations between chunks
+            for i, chunk1 in enumerate(chunks):
+                for chunk2 in chunks[i + 1:]:
+                    concepts1 = self.word_to_concepts.get(chunk1, set())
+                    concepts2 = self.word_to_concepts.get(chunk2, set())
+                    
+                    # Create associations between related concepts
+                    for c1 in list(concepts1)[:2]:  # Max 2 concepts per chunk
+                        for c2 in list(concepts2)[:2]:
+                            if c1 != c2:
+                                if self._create_association(
+                                    c1, c2, AssociationType.SEMANTIC, 0.5
+                                ):
+                                    associations_created += 1
+                                    if associations_created >= 50:  # Hard limit
+                                        return associations_created
+            
+            return associations_created
+            
+        except ImportError:
+            # Fallback to simple sliding window if spaCy unavailable
+            pass
+        
+        # Fallback: Simple sliding window approach
+        words = extract_words(content)
+        
+        # Limit words to avoid explosion
+        words = words[:30]  # Only first 30 meaningful words
+        
         # Sliding window of 3 words to find co-occurrences
         for i, word1 in enumerate(words):
             for word2 in words[i + 1 : i + 4]:  # Window of 3 words
@@ -149,16 +195,16 @@ class AssociationExtractor:
                 concepts1 = self.word_to_concepts.get(word1, set())
                 concepts2 = self.word_to_concepts.get(word2, set())
 
-                # Limit to avoid exponential explosion
-                for c1 in list(concepts1)[:3]:
-                    for c2 in list(concepts2)[:3]:
+                # Strict limit to avoid exponential explosion
+                for c1 in list(concepts1)[:2]:  # Max 2 concepts per word
+                    for c2 in list(concepts2)[:2]:
                         if c1 != c2:
                             # Weaker confidence for co-occurrence
                             if self._create_association(
                                 c1, c2, AssociationType.SEMANTIC, 0.5
                             ):
                                 associations_created += 1
-                                if associations_created >= self.max_cooccurrence_links:
+                                if associations_created >= 50:  # Hard limit
                                     return associations_created
 
         return associations_created

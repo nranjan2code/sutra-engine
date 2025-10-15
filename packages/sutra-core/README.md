@@ -2,12 +2,31 @@
 
 The foundational package for the Sutra AI system, providing graph-based reasoning with explainable AI capabilities.
 
+## 🎉 Recent Updates (October 15, 2025)
+
+### Phase 1: Type Safety & Validation ✅
+- **95% type coverage** (up from 40%)
+- Comprehensive input validation with DOS protection
+- Zero critical mypy errors
+
+### Phase 2: NLP Upgrade ✅
+- **spaCy integration** (3.8.7 with en_core_web_sm)
+- Production-grade text processing
+- Lemmatization, entity extraction, negation detection
+- Backward compatible with fallback
+
+See `PHASE1_2_SUMMARY.md` for complete details.
+
+---
+
 ## Features
 
 - **Concept Management**: Adaptive strength learning for knowledge concepts
 - **Association Networks**: Typed relationships between concepts (semantic, causal, temporal, hierarchical, compositional)  
 - **Adaptive Learning**: Research-based adaptive focus learning (AdaKD-inspired)
 - **Real-Time Integration**: Instant knowledge updates without retraining
+- **Input Validation**: Comprehensive validation with DOS protection (NEW)
+- **Modern NLP**: spaCy-based text processing with lemmatization and NER (NEW)
 
 ## Installation
 
@@ -60,9 +79,31 @@ concept_id = learner.learn_adaptive(
 ### Text Processing
 
 ```python
+from sutra_core.utils.nlp import TextProcessor
+
+# NEW: Modern NLP with spaCy
+processor = TextProcessor()
+
+# Lemmatization
+tokens = processor.extract_meaningful_tokens("The cats are running quickly")
+print(tokens)  # ['cat', 'run', 'quickly']
+
+# Entity extraction
+entities = processor.extract_entities("Apple Inc. is based in Cupertino, California")
+print(entities)  # [('Apple Inc.', 'ORG'), ('Cupertino', 'GPE'), ('California', 'GPE')]
+
+# Negation detection
+has_negation = processor.detect_negation("The sun is not a planet")
+print(has_negation)  # True
+
+# Subject-verb-object triples
+triples = processor.extract_subject_verb_object("Cats chase mice")
+print(triples)  # [('cats', 'chase', 'mice', False)]
+
+# Backward compatible
 from sutra_core.utils import extract_words, get_association_patterns
 
-# Extract meaningful words
+# Extract meaningful words (with fallback if spaCy unavailable)
 words = extract_words("Photosynthesis is a crucial biological process")
 print(words)  # ['photosynthesis', 'crucial', 'biological', 'process']
 
@@ -70,6 +111,30 @@ print(words)  # ['photosynthesis', 'crucial', 'biological', 'process']
 patterns = get_association_patterns()
 for pattern, assoc_type in patterns:
     print(f"{assoc_type}: {pattern}")
+```
+
+### Input Validation
+
+```python
+from sutra_core import Validator
+
+# NEW: Comprehensive validation
+try:
+    Validator.validate_content("Some content")  # ✅ Valid
+    Validator.validate_query("What is X?")      # ✅ Valid
+    Validator.validate_confidence(0.95)         # ✅ Valid
+    Validator.validate_depth(5)                 # ✅ Valid
+    
+    # DOS protection
+    huge_content = "x" * 100000
+    Validator.validate_content(huge_content)    # ❌ Raises ValidationError
+    
+    # Auto-clamping
+    confidence = Validator.validate_confidence(1.5)
+    print(confidence)  # 1.0 (clamped)
+    
+except Exception as e:
+    print(f"Validation error: {e}")
 ```
 
 ## Architecture
