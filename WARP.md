@@ -2,6 +2,27 @@
 
 This file provides guidance to WARP (warp.dev) when working with code in this repository.
 
+## 📚 Documentation Structure
+
+**Comprehensive documentation is available** in the following files:
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture, layers, components, data flow, storage design, and scalability
+- **[DESIGN.md](DESIGN.md)** - Design philosophy, core decisions, temporal dynamics, trade-offs, and rationale
+- **[ALGORITHMS.md](ALGORITHMS.md)** - Detailed algorithms with pseudocode, complexity analysis, and mathematical models
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Complete development workflow, code standards, testing, commit guidelines, and PR process
+- **[README.md](README.md)** - Project overview, quick start, and basic usage examples
+
+**When to use each document:**
+- For **architectural questions** (components, layers, data flow) → See ARCHITECTURE.md
+- For **design rationale** (why decisions were made, trade-offs) → See DESIGN.md  
+- For **algorithm details** (how things work, complexity, formulas) → See ALGORITHMS.md
+- For **development workflow** (setup, testing, commits, PRs) → See CONTRIBUTING.md
+- For **quick reference** and overview → See README.md
+
+All documentation is cross-referenced for easy navigation.
+
+---
+
 ## Architecture Overview
 
 Sutra AI is a **production-ready, explainable graph-based AI system** that provides genuine AI-level capabilities rivaling traditional LLMs. The system features sophisticated multi-path reasoning, real-time learning, and complete explainability - all running efficiently on CPU without GPU requirements.
@@ -171,6 +192,8 @@ Current (Oct 2025):
 
 ## Key Architectural Patterns
 
+> **📖 For detailed architectural patterns and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md) and [DESIGN.md](DESIGN.md)**
+
 ### Package Dependency Structure
 
 ```
@@ -182,6 +205,8 @@ sutra-core     (base package, no dependencies)
 
 ### Development Workflow
 
+> **📖 For comprehensive development guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md)**
+
 1. **Make changes in appropriate package** (currently only `packages/sutra-core/`)
 2. **Run tests**: `make test-core` 
 3. **Run demos**: `make demo-core`
@@ -189,6 +214,9 @@ sutra-core     (base package, no dependencies)
 5. **Build**: `make build` (when ready)
 
 ### Concept Strength Dynamics
+
+> **📖 For mathematical models and detailed algorithms, see [ALGORITHMS.md#temporal-dynamics-algorithms](ALGORITHMS.md#temporal-dynamics-algorithms)**
+
 - **Initial strength**: 1.0 on creation
 - **Access boost**: `min(10.0, strength * 1.02)` per access
 - **Adaptive boost**: 1.15× for weak concepts, 1.01× for strong concepts
@@ -201,6 +229,9 @@ sutra-core     (base package, no dependencies)
 - **Compositional**: 0.9 confidence (high trust in user-defined compositions)
 
 ### Multi-Path Reasoning
+
+> **📖 For MPPA algorithm details, see [ALGORITHMS.md#multi-path-aggregation](ALGORITHMS.md#multi-path-aggregation)**
+
 - **Consensus threshold**: `max(1, num_paths // 2)` - majority voting
 - **Consensus boost**: `total_confidence * (1.0 + path_support * 0.2)`
 - **Non-consensus penalty**: `best_confidence * 0.8`
@@ -354,6 +385,8 @@ The test suite is organized by functionality:
 
 ## Common Development Pitfalls
 
+> **📖 For troubleshooting and detailed setup instructions, see [CONTRIBUTING.md#getting-help](CONTRIBUTING.md#getting-help)**
+
 1. **Forgetting to activate virtual environment**: Always run `source venv/bin/activate` before testing
 2. **Forgetting to call `concept.access()`**: Concepts don't strengthen automatically - must call during traversal
 3. **Missing PYTHONPATH**: When running tests manually, set `PYTHONPATH=packages/sutra-core`
@@ -403,3 +436,26 @@ The codebase now follows enterprise-grade standards:
 - **Type hints** throughout the codebase
 
 For detailed progress tracking, see `IMPROVEMENTS_COMPLETED.md`.
+
+---
+
+## 🎯 Quick Reference for Common Tasks
+
+### Need to understand system design?
+→ Read [ARCHITECTURE.md](ARCHITECTURE.md) - System layers, components, and data flow
+
+### Need to understand why something was designed this way?
+→ Read [DESIGN.md](DESIGN.md) - Design philosophy, decisions, and trade-offs
+
+### Need algorithm details or complexity analysis?
+→ Read [ALGORITHMS.md](ALGORITHMS.md) - Pseudocode, mathematical models, and complexity
+
+### Need to contribute or set up development environment?
+→ Read [CONTRIBUTING.md](CONTRIBUTING.md) - Complete development workflow and guidelines
+
+### Need quick start or basic usage?
+→ Read [README.md](README.md) - Overview and quick start guide
+
+---
+
+**All documentation is cross-linked** - follow references between documents for related information.
