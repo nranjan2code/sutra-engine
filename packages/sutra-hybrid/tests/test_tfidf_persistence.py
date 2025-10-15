@@ -11,7 +11,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from sutra_hybrid import HybridAI
 
 
@@ -123,9 +122,7 @@ class TestTfidfPersistence:
         ai2 = HybridAI(use_semantic=False, storage_path=str(self.storage_path))
 
         # Use a query with words from the learned content
-        results = ai2.semantic_search(
-            "energy cellular", top_k=3, threshold=0.1
-        )
+        results = ai2.semantic_search("energy cellular", top_k=3, threshold=0.1)
 
         # Should be able to search (may or may not find results
         # depending on vocabulary). The important thing is no crash

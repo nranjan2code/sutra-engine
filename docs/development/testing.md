@@ -6,7 +6,7 @@ This document explains how to run tests across packages and how to write new tes
 
 | Package      | Command                                                                                 | Notes                      |
 |--------------|------------------------------------------------------------------------------------------|----------------------------|
-| sutra-core   | `PYTHONPATH=packages/sutra-core python -m pytest packages/sutra-core/tests -v`           | 60 tests, ~96% coverage    |
+| sutra-core   | `PYTHONPATH=packages/sutra-core python -m pytest packages/sutra-core/tests -v`           | 60 tests                    |
 | sutra-hybrid | `PYTHONPATH=packages/sutra-hybrid:packages/sutra-core python -m pytest packages/sutra-hybrid/tests -v` | 9 tests, persistence focus |
 | all          | `make test`                                                                              | If Makefile available      |
 
@@ -91,10 +91,12 @@ black packages/
 isort packages/
 ```
 
-Run linter:
+Run linter (core package):
 
 ```bash
-flake8 packages/
+make lint
+# or
+flake8 packages/sutra-core/sutra_core
 ```
 
 Type checking (where configured):

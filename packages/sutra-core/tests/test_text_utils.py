@@ -3,7 +3,6 @@ Comprehensive tests for text utility functions.
 """
 
 import pytest
-
 from sutra_core.utils import (
     calculate_word_overlap,
     clean_text,

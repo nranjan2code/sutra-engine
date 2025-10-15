@@ -12,10 +12,11 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sutra_core import SutraError
+from sutra_core.reasoning import ReasoningEngine
 from sutra_hybrid import HybridAI
 
 from .config import settings
-from .dependencies import get_ai, get_uptime
+from .dependencies import get_ai, get_reasoner, get_uptime
 from .models import (
     BatchLearnRequest,
     BatchLearnResponse,
@@ -24,9 +25,9 @@ from .models import (
     HealthResponse,
     LearnRequest,
     LearnResponse,
+    ReasoningPath,
     ReasonRequest,
     ReasonResponse,
-    ReasoningPath,
     SearchResult,
     SemanticSearchRequest,
     SemanticSearchResponse,
@@ -44,15 +45,12 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info(f"Starting {settings.api_title} v{settings.api_version}")
     logger.info(f"Storage path: {settings.storage_path}")
-    logger.info(
-        f"Semantic embeddings: {settings.use_semantic_embeddings}"
-    )
+    logger.info(f"Semantic embeddings: {settings.use_semantic_embeddings}")
 
     # Initialize AI instance
     ai = get_ai()
     logger.info(
-        f"Loaded {len(ai.concepts)} concepts, "
-        f"{len(ai.associations)} associations"
+        f"Loaded {len(ai.concepts)} concepts, " f"{len(ai.associations)} associations"
     )
 
     yield
@@ -136,9 +134,7 @@ async def health_check(ai: HybridAI = Depends(get_ai)):
     status_code=status.HTTP_201_CREATED,
     tags=["Learning"],
 )
-async def learn_knowledge(
-    request: LearnRequest, ai: HybridAI = Depends(get_ai)
-):
+async def learn_knowledge(request: LearnRequest, ai: HybridAI = Depends(get_ai)):
     """
     Learn new knowledge.
 
@@ -171,9 +167,7 @@ async def learn_knowledge(
     status_code=status.HTTP_201_CREATED,
     tags=["Learning"],
 )
-async def batch_learn(
-    request: BatchLearnRequest, ai: HybridAI = Depends(get_ai)
-):
+async def batch_learn(request: BatchLearnRequest, ai: HybridAI = Depends(get_ai)):
     """
     Learn multiple knowledge items in batch.
 
@@ -205,54 +199,66 @@ async def batch_learn(
 # Reasoning endpoints
 @app.post("/reason", response_model=ReasonResponse, tags=["Reasoning"])
 async def reason(
-    request: ReasonRequest, ai: HybridAI = Depends(get_ai)
+    request: ReasonRequest,
+    ai: HybridAI = Depends(get_ai),
+    reasoner: ReasoningEngine = Depends(get_reasoner),
 ):
     """
-    Perform reasoning query.
-
-    Uses multi-path spreading activation to find answers.
+    Perform reasoning query using the core ReasoningEngine.
     """
-    # Perform spreading activation reasoning
-    # Note: This is a simplified version. Full implementation would use
-    # the spreading activation algorithm from sutra-core
-    from sutra_core.utils import extract_words
+    # Propagate requested max depth into the path finder
+    try:
+        reasoner.path_finder.max_depth = request.max_steps
+    except Exception:
+        pass
 
-    query_words = extract_words(request.query)
+    # Ask the engine for an answer
+    result = reasoner.ask(
+        request.query,
+        num_reasoning_paths=request.num_paths,
+    )
 
-    # Find relevant concepts
-    relevant_concepts = []
-    for word in query_words:
-        if word in ai.word_to_concepts:
-            relevant_concepts.extend(list(ai.word_to_concepts[word]))
+    # Map supporting paths to API model
+    api_paths: list[ReasoningPath] = []
+    concepts_seen = set()
 
-    # Build simple reasoning paths
-    paths = []
-    for concept_id in relevant_concepts[:request.num_paths]:
-        concept = ai.concepts.get(concept_id)
-        if concept:
-            paths.append(
-                ReasoningPath(
-                    concepts=[concept_id],
-                    confidence=min(concept.strength / 10.0, 1.0),
-                    explanation=f"Found: {concept.content[:100]}",
-                )
+    for core_path in result.supporting_paths or []:
+        ordered_ids: list[str] = []
+        id_seen = set()
+        explanation_parts = []
+        for step in core_path.steps:
+            # Preserve order and uniqueness of concept IDs along the path
+            for cid in (
+                getattr(step, "source_id", None),
+                getattr(step, "target_id", None),
+            ):
+                if cid and cid not in id_seen:
+                    ordered_ids.append(cid)
+                    id_seen.add(cid)
+                    concepts_seen.add(cid)
+            explanation_parts.append(
+                f"{step.source_concept} --[{step.relation}]--> {step.target_concept}"
             )
+        explanation = (
+            "; ".join(explanation_parts) if explanation_parts else core_path.answer
+        )
+        api_paths.append(
+            ReasoningPath(
+                concepts=ordered_ids,
+                confidence=core_path.confidence,
+                explanation=explanation,
+            )
+        )
 
-    # Generate answer from top path
-    answer = "No relevant knowledge found"
-    confidence = 0.0
-    if paths:
-        top_path = max(paths, key=lambda p: p.confidence)
-        top_concept = ai.concepts[top_path.concepts[0]]
-        answer = top_concept.content
-        confidence = top_path.confidence
+    # Fallback concepts accessed when no supporting paths
+    concepts_accessed = len(concepts_seen)
 
     return ReasonResponse(
         query=request.query,
-        answer=answer,
-        confidence=confidence,
-        paths=paths,
-        concepts_accessed=len(relevant_concepts),
+        answer=result.primary_answer,
+        confidence=result.confidence,
+        paths=api_paths,
+        concepts_accessed=concepts_accessed,
     )
 
 
@@ -298,14 +304,14 @@ async def semantic_search(
     response_model=ConceptDetail,
     tags=["Reasoning"],
 )
-async def get_concept(
-    concept_id: str, ai: HybridAI = Depends(get_ai)
-):
+async def get_concept(concept_id: str, ai: HybridAI = Depends(get_ai)):
     """
     Get detailed information about a specific concept.
 
     Includes associations and metadata.
     """
+    from datetime import datetime, timezone
+
     concept = ai.concepts.get(concept_id)
     if not concept:
         raise HTTPException(
@@ -316,12 +322,21 @@ async def get_concept(
     # Get associated concept IDs
     associations = list(ai.concept_neighbors.get(concept_id, set()))
 
+    created_iso = None
+    try:
+        if getattr(concept, "created", None):
+            created_iso = datetime.fromtimestamp(
+                concept.created, tz=timezone.utc
+            ).isoformat()
+    except Exception:
+        created_iso = None
+
     return ConceptDetail(
         id=concept.id,
         content=concept.content,
         strength=concept.strength,
         access_count=concept.access_count,
-        created_at=concept.created_at.isoformat() if concept.created_at else None,
+        created_at=created_iso,
         source=concept.source,
         associations=associations,
     )
@@ -346,6 +361,17 @@ async def get_stats(ai: HybridAI = Depends(get_ai)):
         average_strength=stats["average_strength"],
         memory_usage_mb=None,  # Could implement memory profiling
     )
+
+
+@app.get("/reasoner/stats", tags=["System"])
+async def get_reasoner_stats(reasoner: ReasoningEngine = Depends(get_reasoner)):
+    """
+    Get ReasoningEngine system statistics.
+
+    Exposes internal engine metrics including cache stats, association stats,
+    and learning stats.
+    """
+    return reasoner.get_system_stats()
 
 
 @app.post("/save", status_code=status.HTTP_200_OK, tags=["System"])
@@ -387,9 +413,7 @@ async def load_knowledge(ai: HybridAI = Depends(get_ai)):
         )
 
 
-@app.delete(
-    "/reset", status_code=status.HTTP_200_OK, tags=["System"]
-)
+@app.delete("/reset", status_code=status.HTTP_200_OK, tags=["System"])
 async def reset_system():
     """
     Reset the system and clear all knowledge.

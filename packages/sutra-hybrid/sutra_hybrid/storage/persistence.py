@@ -51,9 +51,7 @@ class HybridStorage:
             vectorizer_state: Pickled TF-IDF vectorizer state (optional)
         """
         # Save concepts
-        concepts_data = {
-            cid: concept.to_dict() for cid, concept in concepts.items()
-        }
+        concepts_data = {cid: concept.to_dict() for cid, concept in concepts.items()}
         concepts_file = self.storage_path / "concepts.json"
         with open(concepts_file, "w") as f:
             json.dump(concepts_data, f, indent=2)
@@ -72,9 +70,7 @@ class HybridStorage:
         # Save embeddings
         embeddings_data = {
             "provider": embedding_provider_name,
-            "embeddings": {
-                cid: emb.tolist() for cid, emb in embeddings.items()
-            },
+            "embeddings": {cid: emb.tolist() for cid, emb in embeddings.items()},
             "vocabulary": vocabulary if vocabulary else {},  # Legacy support
         }
         embeddings_file = self.storage_path / "embeddings.json"
@@ -87,8 +83,7 @@ class HybridStorage:
             with open(vectorizer_file, "wb") as f:
                 f.write(vectorizer_state)
             logger.info(
-                f"Saved TF-IDF vectorizer state "
-                f"({len(vectorizer_state)} bytes)"
+                f"Saved TF-IDF vectorizer state " f"({len(vectorizer_state)} bytes)"
             )
 
         logger.info(
@@ -118,8 +113,7 @@ class HybridStorage:
             with open(concepts_file, "r") as f:
                 concepts_data = json.load(f)
                 concepts = {
-                    cid: Concept.from_dict(data)
-                    for cid, data in concepts_data.items()
+                    cid: Concept.from_dict(data) for cid, data in concepts_data.items()
                 }
 
         # Load associations
@@ -131,7 +125,13 @@ class HybridStorage:
                 associations_data = json.load(f)
                 for str_key, assoc_data in associations_data.items():
                     # Convert string key back to tuple
-                    source_id, target_id = str_key.split(":", 1)
+                    if ":" in str_key:
+                        source_id, target_id = str_key.split(":", 1)
+                    elif "|" in str_key:
+                        source_id, target_id = str_key.split("|", 1)
+                    else:
+                        # Unknown format; skip
+                        continue
                     key = (source_id, target_id)
                     associations[key] = Association.from_dict(assoc_data)
 
@@ -143,9 +143,7 @@ class HybridStorage:
                 provider_name = embeddings_data.get("provider", "unknown")
                 embeddings = {
                     cid: np.array(emb)
-                    for cid, emb in embeddings_data.get(
-                        "embeddings", {}
-                    ).items()
+                    for cid, emb in embeddings_data.get("embeddings", {}).items()
                 }
                 vocabulary = embeddings_data.get("vocabulary", {})  # Legacy
 
@@ -155,8 +153,7 @@ class HybridStorage:
             with open(vectorizer_file, "rb") as f:
                 vectorizer_state = f.read()
             logger.info(
-                f"Loaded TF-IDF vectorizer state "
-                f"({len(vectorizer_state)} bytes)"
+                f"Loaded TF-IDF vectorizer state " f"({len(vectorizer_state)} bytes)"
             )
 
         logger.info(

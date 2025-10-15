@@ -74,7 +74,7 @@ class AdaptiveLearner:
             Concept ID
         """
         # Create concept ID
-        concept_id = hashlib.md5(content.encode()).hexdigest()[:12]
+        concept_id = hashlib.md5(content.encode()).hexdigest()[:16]
 
         if concept_id in self.concepts:
             # Handle existing concept with adaptive reinforcement
@@ -108,10 +108,8 @@ class AdaptiveLearner:
         concept = self.concepts[concept_id]
         extraction_depth = self._get_extraction_depth(concept)
 
-        associations_created = (
-            self.association_extractor.extract_associations_adaptive(
-                content, concept_id, depth=extraction_depth
-            )
+        associations_created = self.association_extractor.extract_associations_adaptive(
+            content, concept_id, depth=extraction_depth
         )
 
         logger.debug(
@@ -130,15 +128,11 @@ class AdaptiveLearner:
         """
         if concept.strength < self.DIFFICULT_THRESHOLD:
             # Difficult concept: strong reinforcement
-            concept.strength = min(
-                10.0, concept.strength * self.DIFFICULT_MULTIPLIER
-            )
+            concept.strength = min(10.0, concept.strength * self.DIFFICULT_MULTIPLIER)
 
         elif concept.strength > self.EASY_THRESHOLD:
             # Easy concept: minimal reinforcement
-            concept.strength = min(
-                10.0, concept.strength * self.EASY_MULTIPLIER
-            )
+            concept.strength = min(10.0, concept.strength * self.EASY_MULTIPLIER)
 
         # Moderate concepts use standard 1.02× from access() method
 

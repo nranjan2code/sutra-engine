@@ -5,7 +5,6 @@ Basic tests for sutra-core functionality.
 from collections import defaultdict
 
 import pytest
-
 from sutra_core import (
     Association,
     AssociationType,

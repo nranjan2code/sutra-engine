@@ -5,9 +5,10 @@ Core graph reasoning engine. Production-ready.
 ## Features
 
 - Concepts (nodes) with adaptive strength (1.0-10.0)
-- Associations (edges) with types and confidence
-- Spreading activation traversal
+- Associations (edges) with types, confidence, and last_used timestamps
+- Advanced reasoning engine (ReasoningEngine) with QueryProcessor, PathFinder, MPPA
 - Adaptive learning (strength boost depends on difficulty)
+- Maintenance APIs: health snapshot and decay/prune
 - Text utilities (tokenization, normalization)
 - Custom exception hierarchy
 
@@ -24,6 +25,23 @@ Core graph reasoning engine. Production-ready.
 - `sutra_core.exceptions` (SutraError and subclasses)
 
 ## Usage
+
+### Maintenance APIs
+
+```python
+from sutra_core import ReasoningEngine
+
+ai = ReasoningEngine()
+health = ai.get_health_snapshot()
+pruned = ai.decay_and_prune(
+    concept_decay_after_days=14,
+    concept_remove_after_days=90,
+    min_strength_to_keep=1.0,
+    association_remove_after_days=90,
+    min_association_confidence_to_keep=0.2,
+    daily_decay_rate=0.995,
+)
+```
 
 ### Create and Access Concept
 
@@ -88,10 +106,14 @@ print(list(AssociationType))
 PYTHONPATH=packages/sutra-core python -m pytest packages/sutra-core/tests -v
 ```
 
-Coverage: ~96%
-
 ## Notes
 
 - Maintain a `visited` set during traversal to avoid cycles
 - Strength max is 10.0 to prevent runaway growth
+- Associations strengthen both weight and confidence and update `last_used`
+- Traversal refreshes association `last_used`
+- Context expansion uses associations with confidence >= 0.6
+- Final query confidence is clamped to [0, 1]
+- Co-occurrence extraction has a cap (default 200 links)
+- Concept/phrase IDs use 16 hex chars
 - Decay factor during propagation: 0.9 per hop

@@ -16,9 +16,11 @@ class Settings(BaseSettings):
     # API Metadata
     api_title: str = "Sutra AI API"
     api_version: str = "1.0.0"
-    api_description: str = (
-        "REST API for Sutra AI graph-based reasoning system"
-    )
+    api_description: str = "REST API for Sutra AI graph-based reasoning system"
+
+    # Reasoning cache configuration
+    # Set via env var SUTRA_CACHE_TTL_SECONDS (e.g., 300 for 5 minutes)
+    cache_ttl_seconds: Optional[float] = None
 
     # Server Configuration
     host: str = "0.0.0.0"
@@ -34,6 +36,11 @@ class Settings(BaseSettings):
     # AI Configuration
     use_semantic_embeddings: bool = True
     max_concepts: Optional[int] = None  # No limit by default
+
+    # Learning/linking configuration
+    compositional_links: bool = True
+    compositional_confidence: float = 0.6
+    compositional_type: str = "compositional"
 
     # CORS Configuration
     allow_origins: list = ["*"]

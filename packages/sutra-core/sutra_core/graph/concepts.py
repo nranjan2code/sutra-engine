@@ -89,11 +89,17 @@ class Association:
     weight: float = 1.0
     confidence: float = 1.0
     created: float = field(default_factory=time.time)
+    last_used: float = field(default_factory=time.time)
 
-    def strengthen(self) -> None:
-        """Strengthen this association through use."""
+    def strengthen(self, confidence_boost: float = 0.02) -> None:
+        """Strengthen this association through use.
+        Increases both weight (bounded) and confidence (bounded), updates last_used."""
         # Max weight of 5.0 to prevent dominance
         self.weight = min(5.0, self.weight * 1.1)
+        # Increase confidence modestly; cap at 1.0
+        self.confidence = min(1.0, self.confidence + confidence_boost)
+        # Update usage timestamp
+        self.last_used = time.time()
 
     def to_dict(self) -> dict:
         """Serialize association to dictionary."""
@@ -104,6 +110,7 @@ class Association:
             "weight": self.weight,
             "confidence": self.confidence,
             "created": self.created,
+            "last_used": self.last_used,
         }
 
     @classmethod
@@ -116,6 +123,7 @@ class Association:
             weight=data.get("weight", 1.0),
             confidence=data.get("confidence", 1.0),
             created=data.get("created", time.time()),
+            last_used=data.get("last_used", data.get("created", time.time())),
         )
 
 
@@ -128,6 +136,9 @@ class ReasoningStep:
     target_concept: str
     confidence: float
     step_number: int
+    # New: stable identifiers for overlap/diversity calculations
+    source_id: Optional[str] = None
+    target_id: Optional[str] = None
 
     def to_dict(self) -> dict:
         """Serialize reasoning step to dictionary."""
@@ -137,6 +148,8 @@ class ReasoningStep:
             "target_concept": self.target_concept,
             "confidence": self.confidence,
             "step_number": self.step_number,
+            "source_id": self.source_id,
+            "target_id": self.target_id,
         }
 
 

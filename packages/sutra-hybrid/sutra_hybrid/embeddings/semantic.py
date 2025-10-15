@@ -41,9 +41,7 @@ class SemanticEmbedding(EmbeddingProvider):
 
             self.model = SentenceTransformer(model_name)
             self.model_name = model_name
-            logger.info(
-                f"Initialized SemanticEmbedding with model: {model_name}"
-            )
+            logger.info(f"Initialized SemanticEmbedding with model: {model_name}")
         except ImportError:
             raise ImportError(
                 "sentence-transformers is required for semantic embeddings. "

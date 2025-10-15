@@ -27,29 +27,22 @@ def main():
     # Learn biology knowledge
     print("🧠 LEARNING PHASE")
     print("-" * 60)
-    
+
     knowledge = [
         "Photosynthesis is the process by which plants convert sunlight "
         "into chemical energy stored in glucose molecules",
-        
         "Cellular respiration breaks down glucose to produce ATP energy "
         "that cells use for various functions",
-        
         "Mitochondria are organelles that produce ATP through cellular "
         "respiration in eukaryotic cells",
-        
         "Chloroplasts are organelles in plant cells that perform "
         "photosynthesis using chlorophyll pigment",
-        
         "DNA contains genetic information encoded in sequences of "
         "nucleotide bases adenine thymine guanine cytosine",
-        
         "RNA is similar to DNA but uses uracil instead of thymine "
         "and is single-stranded",
-        
         "Proteins are made of amino acids and perform most cellular "
         "functions including catalyzing reactions",
-        
         "Enzymes are proteins that speed up chemical reactions by "
         "lowering activation energy",
     ]
@@ -57,7 +50,7 @@ def main():
     for i, text in enumerate(knowledge, 1):
         concept_id = ai.learn(text, source="biology_textbook")
         print(f"{i}. Learned: {text[:60]}... (ID: {concept_id[:8]})")
-    
+
     print()
     print(f"✅ Learned {len(knowledge)} concepts")
     print()
@@ -65,7 +58,7 @@ def main():
     # Demonstrate semantic search
     print("🔍 SEMANTIC SEARCH DEMO")
     print("-" * 60)
-    
+
     queries = [
         "How do plants make energy?",
         "What produces ATP in cells?",
@@ -76,7 +69,7 @@ def main():
     for query in queries:
         print(f"\n Query: '{query}'")
         results = ai.semantic_search(query, top_k=3, threshold=0.3)
-        
+
         if results:
             print(f"   Found {len(results)} results:")
             for concept_id, similarity in results:

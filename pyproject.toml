@@ -127,3 +127,19 @@ exclude_lines = [
     "raise AssertionError",
     "raise NotImplementedError"
 ]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "venv",
+    ".venv",
+    ".mypy_cache",
+    ".pytest_cache",
+    "build",
+    "dist",
+    "*/tests/*",
+    "*/examples/*"
+]

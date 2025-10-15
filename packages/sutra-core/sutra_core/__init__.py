@@ -32,7 +32,7 @@ from .graph import (
     ReasoningStep,
 )
 from .learning import AdaptiveLearner, AssociationExtractor
-from .reasoning import ReasoningEngine, MultiPathAggregator, PathFinder, QueryProcessor
+from .reasoning import MultiPathAggregator, PathFinder, QueryProcessor, ReasoningEngine
 from .utils import (
     calculate_word_overlap,
     clean_text,

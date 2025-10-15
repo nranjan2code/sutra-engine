@@ -161,12 +161,32 @@ make test-api     # API package only
 
 # Code quality
 make format       # Format code
-make lint         # Run linting
+make lint         # Run linting (core)
+make lint-all     # Lint all packages (may report issues in non-core packages)
 make check        # Full quality check
 
 # Build
 make build        # Build all packages  
 make clean        # Clean artifacts
+```
+
+### Maintenance
+
+```python
+from sutra_core import ReasoningEngine
+
+ai = ReasoningEngine()
+# Quick health snapshot
+print(ai.get_health_snapshot())
+
+# Decay and prune stale items
+ai.decay_and_prune(
+    concept_decay_after_days=14,
+    concept_remove_after_days=90,
+    min_strength_to_keep=1.0,
+    association_remove_after_days=90,
+    min_association_confidence_to_keep=0.2,
+)
 ```
 
 ### Package Dependencies

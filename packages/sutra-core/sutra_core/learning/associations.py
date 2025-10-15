@@ -25,6 +25,10 @@ class AssociationExtractor:
         word_to_concepts: defaultdict,
         concept_neighbors: defaultdict,
         associations: Dict[Tuple[str, str], Association],
+        enable_central_links: bool = True,
+        central_link_confidence: float = 0.6,
+        central_link_type: AssociationType = AssociationType.COMPOSITIONAL,
+        max_cooccurrence_links: int = 200,
     ):
         """
         Initialize association extractor.
@@ -34,11 +38,18 @@ class AssociationExtractor:
             word_to_concepts: Word -> concept ID mapping
             concept_neighbors: Concept -> neighbor IDs mapping
             associations: All associations in the system
+            enable_central_links: Create links from central concept to extracted phrases
+            central_link_confidence: Confidence for central links (0.0 - 1.0)
+            central_link_type: Association type for central links
         """
         self.concepts = concepts
         self.word_to_concepts = word_to_concepts
         self.concept_neighbors = concept_neighbors
         self.associations = associations
+        self.enable_central_links = enable_central_links
+        self.central_link_confidence = central_link_confidence
+        self.central_link_type = central_link_type
+        self.max_cooccurrence_links = max_cooccurrence_links
 
     def extract_associations(self, content: str, concept_id: str) -> int:
         """
@@ -64,11 +75,25 @@ class AssociationExtractor:
                 source_id = self._find_or_create_concept(source_text)
                 target_id = self._find_or_create_concept(target_text)
 
-                # Create association with high confidence
-                if self._create_association(
-                    source_id, target_id, assoc_type, 0.8
-                ):
+                # Create association with high confidence between extracted phrases
+                if self._create_association(source_id, target_id, assoc_type, 0.8):
                     associations_created += 1
+
+                # Link the central learned concept to extracted phrases (configurable)
+                # Ties the full content concept to its components for better traversal
+                if self.enable_central_links:
+                    self._create_association(
+                        concept_id,
+                        source_id,
+                        self.central_link_type,
+                        self.central_link_confidence,
+                    )
+                    self._create_association(
+                        concept_id,
+                        target_id,
+                        self.central_link_type,
+                        self.central_link_confidence,
+                    )
 
         return associations_created
 
@@ -101,9 +126,7 @@ class AssociationExtractor:
 
         return associations_created
 
-    def _extract_cooccurrence_associations(
-        self, content: str, concept_id: str
-    ) -> int:
+    def _extract_cooccurrence_associations(self, content: str, concept_id: str) -> int:
         """
         Extract co-occurrence based semantic associations.
 
@@ -121,7 +144,7 @@ class AssociationExtractor:
 
         # Sliding window of 3 words to find co-occurrences
         for i, word1 in enumerate(words):
-            for word2 in words[i + 1: i + 4]:  # Window of 3 words
+            for word2 in words[i + 1 : i + 4]:  # Window of 3 words
                 # Find concepts containing these words
                 concepts1 = self.word_to_concepts.get(word1, set())
                 concepts2 = self.word_to_concepts.get(word2, set())
@@ -135,6 +158,8 @@ class AssociationExtractor:
                                 c1, c2, AssociationType.SEMANTIC, 0.5
                             ):
                                 associations_created += 1
+                                if associations_created >= self.max_cooccurrence_links:
+                                    return associations_created
 
         return associations_created
 
@@ -148,13 +173,11 @@ class AssociationExtractor:
         Returns:
             Concept ID
         """
-        concept_id = hashlib.md5(text.encode()).hexdigest()[:12]
+        concept_id = hashlib.md5(text.encode()).hexdigest()[:16]
 
         if concept_id not in self.concepts:
             # Create new concept with lower confidence
-            concept = Concept(
-                id=concept_id, content=text, confidence=0.7
-            )
+            concept = Concept(id=concept_id, content=text, confidence=0.7)
             self.concepts[concept_id] = concept
             self._index_concept(concept)
 

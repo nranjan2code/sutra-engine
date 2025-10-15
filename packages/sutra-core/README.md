@@ -129,6 +129,22 @@ mypy sutra_core/
 - **Access**: O(1) concept lookup via word indexing
 - **Associations**: O(branches^depth) graph traversal
 
+## Configuration (New)
+
+- ReasoningEngine caching:
+  - enable_caching (bool): enable query caching
+  - max_cache_size (int): max cached queries
+  - cache_ttl_seconds (float|None): optional TTL for cached entries (LRU+TTL)
+- Learning links from central concept to extracted phrases:
+  - enable_central_links (bool): default True
+  - central_link_confidence (float): default 0.6
+  - central_link_type (AssociationType): default COMPOSITIONAL
+
+## Persistence Notes (Updated)
+
+- Associations are serialized with ":" as the source/target separator. The loader accepts both ":" and "|" for backward compatibility.
+- Index rebuild now uses the same tokenization as learning (utils.extract_words) to keep word-to-concepts consistent after load.
+
 ## License
 
 MIT License - see LICENSE file for details.

@@ -60,6 +60,10 @@ test-api:
 
 # Code quality
 lint:
+	flake8 packages/sutra-core/sutra_core
+	mypy packages/sutra-core/sutra_core
+
+lint-all:
 	flake8 packages/
 	mypy packages/
 

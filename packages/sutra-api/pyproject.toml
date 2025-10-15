@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sutra-api"
+version = "1.0.0"
+description = "REST API service for Sutra AI graph reasoning system"
+readme = "README.md"
+authors = [
+  { name = "Sutra AI Team", email = "team@sutra-ai.dev" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.8"
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+  "sutra-core>=1.0.0",
+  "sutra-hybrid>=1.0.0",
+  "fastapi>=0.104.0",
+  "uvicorn[standard]>=0.24.0",
+  "pydantic>=2.0.0",
+  "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+# Development tools
+dev = [
+  "pytest>=7.4.0",
+  "pytest-asyncio>=0.21.0",
+  "httpx>=0.25.0",
+  "black>=23.0.0",
+  "isort>=5.12.0",
+  "flake8>=6.0.0",
+  "mypy>=1.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/sutra-ai/sutra-models"
+Repository = "https://github.com/sutra-ai/sutra-models"
+Documentation = "https://sutra-ai.github.io/sutra-models"
+Issues = "https://github.com/sutra-ai/sutra-models/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sutra_api*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

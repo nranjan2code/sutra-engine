@@ -77,9 +77,7 @@ class HybridAI:
         if self.storage.exists():
             self.load()
 
-        logger.info(
-            f"Initialized HybridAI with {self.embedding_provider.get_name()}"
-        )
+        logger.info(f"Initialized HybridAI with {self.embedding_provider.get_name()}")
 
     def _init_embeddings(self, use_semantic: bool) -> EmbeddingProvider:
         """Initialize embedding provider with fallback."""
@@ -87,9 +85,7 @@ class HybridAI:
             try:
                 return SemanticEmbedding()
             except ImportError:
-                logger.warning(
-                    "sentence-transformers not available, using TF-IDF"
-                )
+                logger.warning("sentence-transformers not available, using TF-IDF")
                 return TfidfEmbedding()
         else:
             return TfidfEmbedding()
@@ -219,9 +215,7 @@ class HybridAI:
             if success:
                 logger.info("Restored TF-IDF vectorizer from pickled state")
             else:
-                logger.warning(
-                    "Failed to restore vectorizer, will refit on use"
-                )
+                logger.warning("Failed to restore vectorizer, will refit on use")
         # Fallback to legacy vocabulary method
         elif vocabulary and hasattr(self.embedding_provider, "set_vocabulary"):
             logger.warning("Using legacy vocabulary restore (incomplete)")
@@ -242,6 +236,4 @@ class HybridAI:
             self.concept_neighbors[source_id].add(target_id)
             self.concept_neighbors[target_id].add(source_id)
 
-        logger.info(
-            f"Loaded {len(concepts)} concepts from {provider_name} embeddings"
-        )
+        logger.info(f"Loaded {len(concepts)} concepts from {provider_name} embeddings")

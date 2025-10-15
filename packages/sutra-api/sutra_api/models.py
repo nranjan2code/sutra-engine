@@ -24,12 +24,8 @@ class LearnRequest(BaseModel):
     """Request model for learning new knowledge."""
 
     content: str = Field(..., description="Knowledge content to learn")
-    source: Optional[str] = Field(
-        None, description="Source of the knowledge"
-    )
-    metadata: Optional[Dict[str, str]] = Field(
-        None, description="Additional metadata"
-    )
+    source: Optional[str] = Field(None, description="Source of the knowledge")
+    metadata: Optional[Dict[str, str]] = Field(None, description="Additional metadata")
 
 
 class LearnResponse(BaseModel):
@@ -38,9 +34,7 @@ class LearnResponse(BaseModel):
     concept_id: str = Field(..., description="ID of the created/updated concept")
     message: str = Field(..., description="Success message")
     concepts_created: int = Field(..., description="Number of concepts created")
-    associations_created: int = Field(
-        ..., description="Number of associations created"
-    )
+    associations_created: int = Field(..., description="Number of associations created")
 
 
 class BatchLearnRequest(BaseModel):
@@ -54,9 +48,7 @@ class BatchLearnRequest(BaseModel):
 class BatchLearnResponse(BaseModel):
     """Response model for batch learning operations."""
 
-    concept_ids: List[str] = Field(
-        ..., description="IDs of all created concepts"
-    )
+    concept_ids: List[str] = Field(..., description="IDs of all created concepts")
     total_concepts: int = Field(..., description="Total concepts created")
     total_associations: int = Field(..., description="Total associations created")
     message: str = Field(..., description="Success message")
@@ -82,9 +74,7 @@ class ReasoningPath(BaseModel):
 
     concepts: List[str] = Field(..., description="Concept IDs in the path")
     confidence: float = Field(..., description="Path confidence score")
-    explanation: str = Field(
-        ..., description="Human-readable explanation of the path"
-    )
+    explanation: str = Field(..., description="Human-readable explanation of the path")
 
 
 class ReasonResponse(BaseModel):
@@ -93,9 +83,7 @@ class ReasonResponse(BaseModel):
     query: str = Field(..., description="Original query")
     answer: str = Field(..., description="Reasoning result/answer")
     confidence: float = Field(..., description="Overall confidence score")
-    paths: List[ReasoningPath] = Field(
-        ..., description="Reasoning paths explored"
-    )
+    paths: List[ReasoningPath] = Field(..., description="Reasoning paths explored")
     concepts_accessed: int = Field(..., description="Number of concepts accessed")
 
 
@@ -137,18 +125,14 @@ class ConceptDetail(BaseModel):
     access_count: int = Field(..., description="Number of times accessed")
     created_at: Optional[str] = Field(None, description="Creation timestamp")
     source: Optional[str] = Field(None, description="Source of knowledge")
-    associations: List[str] = Field(
-        ..., description="IDs of associated concepts"
-    )
+    associations: List[str] = Field(..., description="IDs of associated concepts")
 
 
 class SystemStats(BaseModel):
     """System statistics and metrics."""
 
     total_concepts: int = Field(..., description="Total number of concepts")
-    total_associations: int = Field(
-        ..., description="Total number of associations"
-    )
+    total_associations: int = Field(..., description="Total number of associations")
     total_embeddings: int = Field(..., description="Total number of embeddings")
     embedding_provider: str = Field(..., description="Active embedding provider")
     embedding_dimension: int = Field(..., description="Embedding dimensionality")

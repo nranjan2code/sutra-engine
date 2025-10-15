@@ -202,6 +202,7 @@ outlier_penalty = 1.0 - penalty_factor  # 0.7 for single paths
 - **Greedy Selection**: Choose highest confidence, then most diverse
 - **Cluster Analysis**: Group similar reasoning approaches
 - **Diversity Scoring**: Reward unique reasoning patterns
+- **Stable IDs**: Overlap/diversity now computed using concept IDs when available (more accurate than text-only)
 
 ## 📊 Performance Characteristics
 
@@ -216,8 +217,11 @@ outlier_penalty = 1.0 - penalty_factor  # 0.7 for single paths
 ### ReasoningEngine Parameters
 ```python
 ai = ReasoningEngine(
-    enable_caching=True,        # Enable query result caching
-    max_cache_size=1000         # Maximum cached queries
+    enable_caching=True,          # Enable query result caching
+    max_cache_size=1000,          # Maximum cached queries
+    cache_ttl_seconds=None,       # Optional TTL (seconds) for query cache
+    enable_central_links=True,    # Link central concept to extracted phrases
+    central_link_confidence=0.6   # Confidence for central links
 )
 ```
 

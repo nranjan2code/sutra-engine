@@ -16,7 +16,7 @@ from .query import QueryProcessor
 
 __all__ = [
     "ReasoningEngine",
-    "MultiPathAggregator", 
+    "MultiPathAggregator",
     "PathFinder",
     "QueryProcessor",
 ]

@@ -102,7 +102,7 @@ python packages/sutra-core/examples/ai_reasoning_demo.py
 
 # Run tests (requires virtual environment activation)
 source venv/bin/activate
-make test-core              # Run sutra-core tests (60/60 passing, 96% coverage)
+make test-core              # Run sutra-core tests (60/60 passing)
 make test                   # Run all package tests
 
 # Manual test running
@@ -138,13 +138,16 @@ pip install sentence-transformers
 ### Code Quality and Building
 
 ```bash
-# Format code (black, isort) - Applied to entire codebase
+# Format code (black, isort) - applied to entire repo
 make format
 
-# Run linting (flake8, mypy) - Currently 0 errors
+# Lint core package (flake8, mypy)
 make lint
 
-# Run full quality checks
+# Lint all packages (may report issues in non-core packages)
+make lint-all
+
+# Run full quality checks (core)
 make check
 
 # Clean build artifacts
@@ -159,12 +162,12 @@ make help
 
 ### Code Quality Status
 
-**Current Status (as of Oct 2025)**:
-- ✅ **0 flake8 errors** (was 136, now fully resolved)
-- ✅ **96% test coverage** (was 80%, +16% improvement)
-- ✅ **60 tests passing** (was 10, +50 new tests)
-- ✅ **All code formatted** with black and isort
-- ✅ **Custom exception hierarchy** implemented
+Current (Oct 2025):
+- Core package (sutra-core) passes flake8 and mypy under the repo configuration
+- 60 tests passing for sutra-core
+- Formatting via black and isort is enforced
+- Custom exception hierarchy implemented
+- Lint-all across the monorepo may surface issues in non-core packages; fix iteratively
 
 ## Key Architectural Patterns
 
@@ -235,6 +238,39 @@ The 0.9 decay factor prevents infinite loops and ensures convergence.
 
 ### Embedding Dimension Compatibility
 When switching between `sentence-transformers` (384 dims) and TF-IDF (100 dims), the system automatically re-encodes concepts on first load. This has a performance cost but ensures compatibility.
+
+### Maintenance APIs (New)
+
+- `ReasoningEngine.get_health_snapshot()` returns a compact runtime snapshot (counts, averages, cache stats).
+- `ReasoningEngine.decay_and_prune(...)` decays inactive concepts and prunes stale/low-confidence associations; rebuilds indexes after removals.
+
+Example:
+
+```python
+from sutra_core import ReasoningEngine
+
+ai = ReasoningEngine()
+# ... learn/ask ...
+health = ai.get_health_snapshot()
+pruned = ai.decay_and_prune(
+    concept_decay_after_days=14,
+    concept_remove_after_days=90,
+    min_strength_to_keep=1.0,
+    association_remove_after_days=90,
+    min_association_confidence_to_keep=0.2,
+    daily_decay_rate=0.995,
+)
+```
+
+### Association and Traversal Semantics (Updated)
+
+- Association.strengthen() increases both `weight` and `confidence` (capped at 1.0) and updates `last_used`.
+- Associations track `last_used` and traversal updates it for edges expanded during path search.
+- Neighbor indexing is symmetric after load to match runtime indexing, fixing bidirectional search.
+- Central link threshold: context expansion uses associations with confidence >= 0.6.
+- Query confidence post-processing is clamped to [0, 1].
+- Co-occurrence extraction has a hard cap (default 200 links per call) to limit graph growth.
+- Concept/phrase IDs use 16 hex chars (MD5) to reduce collision risk.
 
 ## Important Implementation Details
 
@@ -314,7 +350,7 @@ The test suite is organized by functionality:
 - `test_text_utils.py` - Text processing utilities (27 tests)
 - `test_associations.py` - Association extraction (23 tests)
 
-**Total: 60 tests, 96% coverage**
+**Total: 60 tests**
 
 ## Common Development Pitfalls
 
@@ -324,8 +360,8 @@ The test suite is organized by functionality:
 4. **Package import confusion**: Use the new imports (`sutra_core.*`) not the old monolithic ones
 5. **Infinite loops in reasoning**: Always maintain `visited` set during graph traversal
 6. **Working with archived code**: Legacy implementations are in `.archive/old-structure/` for reference only
-7. **Code style violations**: Always run `make format` before committing - we maintain 0 linter errors
-8. **Skipping tests**: Always run tests after changes - we maintain 96% coverage
+7. **Code style**: Run `make format` and `make lint` (core) before committing
+8. **Skipping tests**: Always run tests after changes
 9. **Virtual environment not found**: If `make setup` fails, manually create with `python3 -m venv venv`
 10. **Import errors in tests**: Ensure you're in the repository root when running test commands
 

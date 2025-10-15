@@ -64,6 +64,28 @@ for word in words:
 print(f"Found {len(related_concepts)} related concepts")
 ```
 
+### Core Maintenance (ReasoningEngine)
+
+```python
+from sutra_core import ReasoningEngine
+
+ai = ReasoningEngine()
+# ... learn/ask ...
+
+# Quick health snapshot
+health = ai.get_health_snapshot()
+print(health)
+
+# Decay/prune stale concepts and low-confidence, long-inactive associations
+ai.decay_and_prune(
+    concept_decay_after_days=14,
+    concept_remove_after_days=90,
+    min_strength_to_keep=1.0,
+    association_remove_after_days=90,
+    min_association_confidence_to_keep=0.2,
+)
+```
+
 ## Hybrid Package (With Embeddings)
 
 ### Initialize

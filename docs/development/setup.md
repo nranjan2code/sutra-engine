@@ -93,7 +93,8 @@ make test-core
 
 # Format and lint
 make format
-make lint
+make lint           # Lint core package (flake8, mypy)
+make lint-all       # Lint entire repo (may report issues in non-core packages)
 
 # Build all packages
 make build
@@ -115,7 +116,7 @@ sutra-models/
 ## IDE Configuration
 
 - Enable Black and isort on save
-- Configure flake8 (max line length 79 is enforced in codebase)
+- Configure flake8 via the repo’s .flake8 (max-line-length 88; ignore E203, W503)
 - Set project root as working directory so relative paths resolve
 
 ## Verification

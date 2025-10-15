@@ -46,9 +46,7 @@ class EmbeddingProvider(ABC):
         """
         pass
 
-    def similarity(
-        self, embedding1: np.ndarray, embedding2: np.ndarray
-    ) -> float:
+    def similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
         """
         Calculate cosine similarity between two embeddings.
 

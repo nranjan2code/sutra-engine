@@ -166,9 +166,7 @@ class TfidfEmbedding(EmbeddingProvider):
             self.is_fitted = True
             # Update max_features in case it changed
             if hasattr(self.vectorizer, "max_features"):
-                self.max_features = (
-                    self.vectorizer.max_features or self.max_features
-                )
+                self.max_features = self.vectorizer.max_features or self.max_features
             logger.info("Successfully restored vectorizer from pickled state")
             return True
         except Exception as e:

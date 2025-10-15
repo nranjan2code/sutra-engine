@@ -9,7 +9,14 @@ The main AI interface that orchestrates all reasoning components.
 ### Constructor
 
 ```python
-ReasoningEngine(enable_caching=True, max_cache_size=1000)
+ReasoningEngine(
+    enable_caching=True,
+    max_cache_size=1000,
+    cache_ttl_seconds=None,          # Optional TTL (seconds) for query cache
+    enable_central_links=True,       # Link central concept to extracted phrases
+    central_link_confidence=0.6,     # Confidence for central links
+    central_link_type=AssociationType.COMPOSITIONAL  # Link type
+)
 ```
 
 **Parameters:**
@@ -124,6 +131,45 @@ Dictionary with optimization results:
 - `weak_associations_removed` (int): Number of weak associations pruned
 - `cache_entries_pruned` (int): Number of cache entries cleaned
 
+#### get_health_snapshot() → dict
+Return a compact runtime health snapshot (totals, averages, cache stats).
+
+```python
+snapshot = ai.get_health_snapshot()
+```
+
+**Returns:**
+Dictionary with:
+- `totals`: `concepts`, `associations`
+- `concepts`: `avg_strength`, `weak_pct`, `strong_pct`
+- `associations`: `avg_confidence`, `weak_count`, `stale_count`
+- `graph`: `avg_degree`
+- `cache`: `enabled`, `size`, `hit_rate`
+
+#### decay_and_prune(...) → dict
+Decay inactive concepts and prune stale/low-confidence associations.
+
+```python
+pruned = ai.decay_and_prune(
+    concept_decay_after_days=14,
+    concept_remove_after_days=90,
+    min_strength_to_keep=1.0,
+    association_remove_after_days=90,
+    min_association_confidence_to_keep=0.2,
+    daily_decay_rate=0.995,
+)
+```
+
+Parameters:
+- `concept_decay_after_days` (int): Inactivity threshold to start decaying strength
+- `concept_remove_after_days` (int): Inactivity threshold for potential concept removal
+- `min_strength_to_keep` (float): Minimum strength to avoid removal
+- `association_remove_after_days` (int): Inactivity threshold for associations
+- `min_association_confidence_to_keep` (float): Prune stale associations below this
+- `daily_decay_rate` (float): Multiplicative daily decay factor for concept strength
+
+Returns counts for: `concepts_decayed`, `concepts_removed`, `associations_removed`
+
 #### save_knowledge_base(filepath) → bool
 Save knowledge base to file.
 
@@ -164,6 +210,8 @@ info = ai.get_concept_info("concept_id_here")
 ## 🔍 PathFinder
 
 Advanced graph traversal for multi-hop reasoning.
+
+Note: Traversal refreshes association `last_used` when edges are expanded, enabling time-based pruning policies.
 
 ### Constructor
 
@@ -276,9 +324,13 @@ The system recognizes these query patterns:
 ### Query Complexity Assessment
 
 - **Simple queries** (definitions): +10% confidence boost
-- **Complex multi-part queries** (>10 words): -5% confidence
+- **Complex multi-part queries** (>10 words): -5% confidence  
 - **Causal reasoning** (seeking causes): -10% confidence  
 - **Comparison queries**: -15% confidence
+
+Notes:
+- Final confidence is clamped to [0, 1].
+- Context expansion uses associations with confidence >= 0.6.
 
 ### get_query_suggestions(partial_query, max_suggestions=5) → List[str]
 
@@ -322,16 +374,18 @@ class ReasoningPath:
 
 ### ReasoningStep
 
-Single step in explainable reasoning chain.
+Single step in explainable reasoning chain (includes stable IDs).
 
 ```python
 @dataclass
 class ReasoningStep:
-    source_concept: str    # Starting concept
+    source_concept: str    # Starting concept (label)
     relation: str          # Relationship type
-    target_concept: str    # Target concept  
+    target_concept: str    # Target concept (label)
     confidence: float      # Step confidence
     step_number: int       # Step position
+    source_id: Optional[str] = None  # Stable concept ID
+    target_id: Optional[str] = None  # Stable concept ID
 ```
 
 ### Concept
@@ -365,6 +419,7 @@ class Association:
     weight: float               # Connection strength
     confidence: float           # Relationship confidence
     created: float              # Creation timestamp
+    last_used: float            # Last traversal/strengthen timestamp
 ```
 
 ### AssociationType
@@ -385,8 +440,8 @@ class AssociationType(Enum):
 ### Performance Tuning
 
 ```python
-# Query caching for repeated questions
-ai = ReasoningEngine(enable_caching=True, max_cache_size=1000)
+# Query caching for repeated questions (LRU + optional TTL)
+ai = ReasoningEngine(enable_caching=True, max_cache_size=1000, cache_ttl_seconds=300)
 
 # Path finding parameters
 ai.path_finder.max_depth = 6              # Max reasoning depth

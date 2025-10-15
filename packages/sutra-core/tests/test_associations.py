@@ -2,9 +2,9 @@
 Comprehensive tests for association extraction and management.
 """
 
-import pytest
 from collections import defaultdict
 
+import pytest
 from sutra_core import Association, AssociationType, Concept
 from sutra_core.learning import AssociationExtractor
 
@@ -115,7 +115,7 @@ class TestAssociationExtractor:
     def test_adaptive_extraction_depth_2(self):
         """Test adaptive extraction with depth 2 (deep)."""
         text = "Sunlight energy photosynthesis process"
-        
+
         # Add some pre-existing concepts to test co-occurrence
         c1 = Concept(id="c1", content="sunlight information")
         c2 = Concept(id="c2", content="photosynthesis details")
@@ -209,9 +209,7 @@ class TestAssociationExtractor:
         self.concepts[c1.id] = c1
         self.concepts[c2.id] = c2
 
-        self.extractor._create_association(
-            c1.id, c2.id, AssociationType.SEMANTIC, 0.8
-        )
+        self.extractor._create_association(c1.id, c2.id, AssociationType.SEMANTIC, 0.8)
 
         assert c2.id in self.concept_neighbors[c1.id]
         assert c1.id in self.concept_neighbors[c2.id]
@@ -318,9 +316,7 @@ class TestEdgeCases:
     def test_very_long_text_extraction(self):
         """Test extraction from very long text."""
         long_text = "word causes effect " * 100
-        associations_created = self.extractor.extract_associations(
-            long_text, "test_id"
-        )
+        associations_created = self.extractor.extract_associations(long_text, "test_id")
         # Should handle without crashing
         assert associations_created >= 0
 

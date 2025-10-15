@@ -54,7 +54,12 @@ print(f"Embedding provider: {stats['embedding_provider']}")
 ai = HybridAI(use_semantic=False)
 ```
 
-⚠️ **Known Limitation**: TF-IDF embeddings do not fully persist (vectorizer state is lost on reload). For production use with persistence, use semantic embeddings (`pip install sentence-transformers`).
+✅ **Persistence (Updated)**: TF-IDF vectorizer state is now fully persisted via a pickled sklearn TfidfVectorizer (embeddings.json + tfidf_vectorizer.pkl). On load, the vectorizer is restored; if restoration fails, it will refit on demand. Semantic embeddings remain recommended for best quality.
+
+## Persistence Format (Updated)
+
+- Concepts and associations are stored as JSON. Association keys are serialized with ":" between source and target IDs. The loader accepts both legacy "|" and current ":" separators.
+- Embeddings are stored as JSON arrays; TF-IDF vectorizer state is stored as a separate pickle file tfidf_vectorizer.pkl.
 
 ## Architecture
 
