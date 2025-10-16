@@ -67,6 +67,8 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+dataset
+
 # Translations
 *.mo
 *.pot
@@ -119,6 +121,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
 .venv
 env/
 venv/
@@ -158,10 +161,16 @@ dmypy.json
 
 # Data files
 *.csv
-*.json
 *.jsonl
 *.parquet
 *.arrow
+
+# Performance and benchmark results
+performance_results/
+**/performance_results/
+*.performance.json
+*_performance_*.json
+perf_*.json
 
 # Weights & Biases
 wandb/
@@ -219,6 +228,19 @@ knowledge_store/
 *.knowledge
 *.memory
 *.swarm
+
+# Vector embeddings and knowledge bases
+vectors/
+**/vectors/
+*.vec
+*.embedding
+*.embeddings
+wikipedia_knowledge_production/vectors/
+
+# Rust specific (for sutra-storage)
+Cargo.lock
+*.rs.bk
+target/
 
 # Checkpoint files
 *.checkpoint
