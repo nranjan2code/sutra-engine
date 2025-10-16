@@ -55,7 +55,7 @@ from .validation import Validator
 # Vector indexing (optional, requires hnswlib)
 try:
     from .indexing import VectorIndex
-    
+
     __all_vector__ = ["VectorIndex"]
 except ImportError:
     __all_vector__ = []
@@ -63,47 +63,51 @@ except ImportError:
 # NLP processing (optional, requires spacy)
 try:
     from .utils.nlp import TextProcessor
-    
+
     __all_nlp__ = ["TextProcessor"]
 except ImportError:
     __all_nlp__ = []
 
 __version__ = "1.0.0"
 
-__all__ = [
-    # Core data structures
-    "Concept",
-    "Association",
-    "AssociationType",
-    "ReasoningStep",
-    "ReasoningPath",
-    # Learning components
-    "AssociationExtractor",
-    "AdaptiveLearner",
-    # Reasoning engine
-    "ReasoningEngine",
-    "MultiPathAggregator",
-    "PathFinder",
-    "QueryProcessor",
-    # Configuration
-    "ReasoningEngineConfig",
-    "ReasoningEngineConfigBuilder",
-    "minimal_config",
-    "development_config",
-    "production_config",
-    # Utilities
-    "extract_words",
-    "get_association_patterns",
-    "clean_text",
-    "calculate_word_overlap",
-    # Validation
-    "Validator",
-    # Exceptions
-    "SutraError",
-    "ConceptError",
-    "AssociationError",
-    "LearningError",
-    "ValidationError",
-    "StorageError",
-    "ConfigurationError",
-] + __all_nlp__ + __all_vector__
+__all__ = (
+    [
+        # Core data structures
+        "Concept",
+        "Association",
+        "AssociationType",
+        "ReasoningStep",
+        "ReasoningPath",
+        # Learning components
+        "AssociationExtractor",
+        "AdaptiveLearner",
+        # Reasoning engine
+        "ReasoningEngine",
+        "MultiPathAggregator",
+        "PathFinder",
+        "QueryProcessor",
+        # Configuration
+        "ReasoningEngineConfig",
+        "ReasoningEngineConfigBuilder",
+        "minimal_config",
+        "development_config",
+        "production_config",
+        # Utilities
+        "extract_words",
+        "get_association_patterns",
+        "clean_text",
+        "calculate_word_overlap",
+        # Validation
+        "Validator",
+        # Exceptions
+        "SutraError",
+        "ConceptError",
+        "AssociationError",
+        "LearningError",
+        "ValidationError",
+        "StorageError",
+        "ConfigurationError",
+    ]
+    + __all_nlp__
+    + __all_vector__
+)

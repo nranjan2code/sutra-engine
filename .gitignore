@@ -71,6 +71,10 @@ coverage.xml
 dataset/
 dataset/*
 *.txt
+# But keep important txt files
+!requirements*.txt
+!README.txt
+!LICENSE.txt
 
 # Translations
 *.mo
@@ -265,3 +269,59 @@ test_results/
 # Generated documentation
 docs/generated/
 docs/_build/
+
+# =============================================================================
+# Sutra AI Specific
+# =============================================================================
+
+# Knowledge storage directories
+knowledge/
+knowledge_*/
+sutra_data/
+sutra_data_*/
+test_knowledge/
+*.knowledge/
+
+# Storage files (Rust-backed storage)
+concepts.json
+associations.json
+embeddings.pkl
+vectors
+wal.log
+*.wal
+*.db
+*.db-shm
+*.db-wal
+
+# API logs and temp files
+/tmp/sutra_api.log
+nohup.out
+api.log
+sutra_*.log
+
+# Test artifacts
+test_*.pkl
+test_*.json
+*.test.db
+
+# Backup files from testing
+engine_old.py.backup
+*.backup
+*.bak
+
+# Temporary storage from tests
+/var/folders/*/T/tmp*/
+tmp*/test_knowledge/
+
+# API server PID files
+*.pid
+uvicorn.pid
+
+# Production/deployment specific
+.env.production
+.env.local
+config.local.*
+
+# Documentation that shouldn't be committed
+PRODUCTION_READY.md.draft
+PRODUCTION_COMPLETE.md.draft

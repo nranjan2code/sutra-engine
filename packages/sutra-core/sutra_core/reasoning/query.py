@@ -59,7 +59,7 @@ class QueryProcessor:
         self.association_extractor = association_extractor
         self.path_finder = path_finder
         self.mppa = mppa
-        
+
         # Performance components for semantic search
         self.vector_index = vector_index
         self.embedding_processor = embedding_processor
@@ -72,7 +72,15 @@ class QueryProcessor:
             "why": ["why does", "why do", "why is", "why are", "why"],
             "when": ["when does", "when do", "when is", "when are", "when"],
             "where": ["where is", "where are", "where does", "where"],
-            "who": ["who is", "who are", "who does", "who created", "who made", "who invented", "who"],
+            "who": [
+                "who is",
+                "who are",
+                "who does",
+                "who created",
+                "who made",
+                "who invented",
+                "who",
+            ],
         }
 
     def process_query(
@@ -119,19 +127,24 @@ class QueryProcessor:
         reasoning_paths = self._generate_reasoning_paths(
             expanded_concepts, query_intent, num_reasoning_paths, cleaned_query
         )
-        
+
         # PRODUCTION: Check if all paths are trivial self-loops (no real associations)
         # This happens when knowledge graph has no associations yet
         all_self_loops = True
         if reasoning_paths:
             for path in reasoning_paths:
-                if len(path.steps) > 1 or (len(path.steps) == 1 and path.steps[0].source_concept != path.steps[0].target_concept):
+                if len(path.steps) > 1 or (
+                    len(path.steps) == 1
+                    and path.steps[0].source_concept != path.steps[0].target_concept
+                ):
                     all_self_loops = False
                     break
-        
+
         # If no paths or only trivial self-loops, use vector search result directly
         if not reasoning_paths or all_self_loops:
-            logger.debug(f"No meaningful reasoning paths ({len(reasoning_paths)} trivial paths), using best vector search result")
+            logger.debug(
+                f"No meaningful reasoning paths ({len(reasoning_paths)} trivial paths), using best vector search result"
+            )
             best_concept = self.storage.get_concept(relevant_concepts[0][0])
             if best_concept:
                 # Extract targeted answer from concept content
@@ -141,7 +154,7 @@ class QueryProcessor:
                     best_concept.content,
                     cleaned_query,
                     query_intent,
-                    similarity_score=similarity_score
+                    similarity_score=similarity_score,
                 )
                 return ConsensusResult(
                     primary_answer=answer,
@@ -213,7 +226,7 @@ class QueryProcessor:
         self, query: str, max_concepts: int
     ) -> List[Tuple[str, float]]:
         """Find and rank concepts relevant to the query.
-        
+
         PRODUCTION: Vector search is the ONLY path. No fallbacks, no hacks.
         Embeddings naturally handle query variations, no expansion needed.
         """
@@ -223,56 +236,62 @@ class QueryProcessor:
                 "Vector index is required. Initialize QueryProcessor with vector_index. "
                 "Vector search is the only path that scales to millions of concepts."
             )
-        
+
         return self._find_concepts_semantic(query, max_concepts)
-    
+
     def _find_concepts_semantic(
         self, query: str, max_concepts: int
     ) -> List[Tuple[str, float]]:
         """Find concepts using semantic vector search (O(log N)).
-        
+
         PRODUCTION: Pure vector search, no fallbacks, no hacks.
         Trust embeddings to handle semantic similarity correctly.
         """
         import numpy as np
-        
+
         # Generate query embedding
         query_embedding = None
-        
+
         # Try embedding processor first (faster, batched)
         # Use 'Retrieval-query' prompt for queries (not documents)
         if self.embedding_processor:
             try:
-                query_embedding = self.embedding_processor.encode_single(query, prompt_name="Retrieval-query")
-                logger.debug(f"Query embedding via EmbeddingGemma: dim={len(query_embedding) if query_embedding is not None else 0}")
+                query_embedding = self.embedding_processor.encode_single(
+                    query, prompt_name="Retrieval-query"
+                )
+                logger.debug(
+                    f"Query embedding via EmbeddingGemma: dim={len(query_embedding) if query_embedding is not None else 0}"
+                )
             except Exception as e:
                 logger.warning(f"Batch embedding failed: {e}")
-        
+
         # Fallback to NLP processor
         if query_embedding is None and self.nlp_processor:
             try:
                 query_embedding = self.nlp_processor.get_embedding(query)
-                logger.warning(f"Query embedding FALLBACK to spaCy: dim={len(query_embedding) if query_embedding is not None else 0}")
+                logger.warning(
+                    f"Query embedding FALLBACK to spaCy: dim={len(query_embedding) if query_embedding is not None else 0}"
+                )
             except Exception as e:
                 logger.warning(f"NLP embedding failed: {e}")
-        
+
         # No embedding = hard fail (embeddings are mandatory)
         if query_embedding is None:
             raise RuntimeError(
                 "No embedding processor available. "
                 "Vector search requires embedding_processor or nlp_processor."
             )
-        
+
         # Ensure numpy array
         if not isinstance(query_embedding, np.ndarray):
             query_embedding = np.array(query_embedding, dtype=np.float32)
-        
+
         # Search vector index (O(log N))
         vector_results = self.vector_index.search(
             query_embedding,
             k=max_concepts,
         )
-        
+
         # Score with concept metadata (strength, confidence)
         # NO lexical boost, NO word matching merge - trust embeddings
         relevant_concepts = []
@@ -288,12 +307,11 @@ class QueryProcessor:
                     f"  {concept_id[:8]}: sim={similarity:.3f}, strength={concept.strength:.2f}, "
                     f"conf={concept.confidence:.2f}, final={final_score:.3f} | {concept.content[:60]}"
                 )
-        
+
         # Sort and return
         relevant_concepts.sort(key=lambda x: x[1], reverse=True)
         logger.debug(f"Vector search found {len(relevant_concepts)} concepts")
         return relevant_concepts
-    
 
     def _expand_query_context(
         self, relevant_concepts: List[Tuple[str, float]], query_intent: Dict[str, Any]
@@ -319,7 +337,9 @@ class QueryProcessor:
                     expanded.add(neighbor_id)
 
                 # Also check reverse direction
-                reverse_association = self.storage.get_association(neighbor_id, concept_id)
+                reverse_association = self.storage.get_association(
+                    neighbor_id, concept_id
+                )
                 if reverse_association and reverse_association.confidence >= 0.6:
                     expanded.add(neighbor_id)
 
@@ -331,9 +351,12 @@ class QueryProcessor:
         )
         return expanded_list
 
-    
     def _generate_reasoning_paths(
-        self, concepts: List[str], query_intent: Dict[str, Any], num_paths: int, query: str = ""
+        self,
+        concepts: List[str],
+        query_intent: Dict[str, Any],
+        num_paths: int,
+        query: str = "",
     ) -> List[Any]:
         """Generate multiple reasoning paths for the query using storage graph."""
 
@@ -348,13 +371,16 @@ class QueryProcessor:
         try:
             # Pass full query to find_paths for intelligent answer extraction
             paths = self.storage.find_paths(
-                start_concepts, target_concepts, max_depth=5, num_paths=num_paths, query=query
+                start_concepts,
+                target_concepts,
+                max_depth=5,
+                num_paths=num_paths,
+                query=query,
             )
             return paths
         except Exception as e:
             logger.warning(f"Storage-backed pathfinding failed: {e}")
             return []
-        
 
     def _enhance_consensus_result(
         self,
@@ -364,22 +390,24 @@ class QueryProcessor:
         start_time: float,
     ) -> ConsensusResult:
         """Enhance consensus result with query-specific information.
-        
+
         PRODUCTION: Extract semantically targeted answers based on question type.
         """
 
         processing_time = time.time() - start_time
-        
+
         # PRODUCTION: Extract targeted answer based on query type
         # For MPPA consensus, use conservative similarity (lower confidence in extraction)
         enhanced_answer = self._extract_targeted_answer(
             result.primary_answer,
             original_query,
             query_intent,
-            similarity_score=0.5  # Conservative for aggregated results
+            similarity_score=0.5,  # Conservative for aggregated results
         )
         if enhanced_answer != result.primary_answer:
-            logger.debug(f"Answer extraction: '{result.primary_answer}' → '{enhanced_answer}'")
+            logger.debug(
+                f"Answer extraction: '{result.primary_answer}' → '{enhanced_answer}'"
+            )
 
         # Enhance the explanation with query context
         enhanced_explanation = (
@@ -400,136 +428,150 @@ class QueryProcessor:
             alternative_answers=result.alternative_answers,
             reasoning_explanation=enhanced_explanation,
         )
-    
+
     def _extract_targeted_answer(
-        self, answer: str, query: str, query_intent: Dict[str, Any], similarity_score: float = 1.0
+        self,
+        answer: str,
+        query: str,
+        query_intent: Dict[str, Any],
+        similarity_score: float = 1.0,
     ) -> str:
         """PRODUCTION-GRADE hybrid answer extraction.
-        
+
         Strategy:
         1. High similarity? Trust embeddings, return full content
         2. Try intelligent extraction for common patterns
         3. If extraction incomplete/generic, return full content
-        
+
         This handles all human query variations without brittleness.
-        
+
         Examples:
         - "Who created Python?" → "Guido van Rossum" (NER extraction)
         - "What is the largest ocean?" → Full content (extraction would lose "Pacific")
         - "When did WWII end?" → "1945" (date extraction)
         """
         import re
-        
-        qtype = query_intent.get('type', 'unknown')
-        logger.debug(f"Hybrid extraction: qtype={qtype}, similarity={similarity_score:.2f}, answer='{answer[:60]}'...")
-        
+
+        qtype = query_intent.get("type", "unknown")
+        logger.debug(
+            f"Hybrid extraction: qtype={qtype}, similarity={similarity_score:.2f}, answer='{answer[:60]}'..."
+        )
+
         # STRATEGY 1: High similarity = trust embeddings, return full answer
         # The embeddings already solved the hard problem!
         if similarity_score >= 0.7:
             logger.debug("High similarity - returning full content")
             return answer
-        
+
         # STRATEGY 2: Intelligent extraction for common patterns
         extracted = None
-        
+
         # WHO questions: Extract person/entity names using spaCy NER
-        if qtype == 'who' and self.nlp_processor:
+        if qtype == "who" and self.nlp_processor:
             try:
                 doc = self.nlp_processor.nlp(answer)
-                persons = [ent.text for ent in doc.ents if ent.label_ == 'PERSON']
-                orgs = [ent.text for ent in doc.ents if ent.label_ == 'ORG']
+                persons = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
+                orgs = [ent.text for ent in doc.ents if ent.label_ == "ORG"]
                 entities = persons + orgs
                 if entities:
                     extracted = entities[0]
                     logger.debug(f"NER extraction: {extracted}")
             except Exception as e:
                 logger.debug(f"NER failed: {e}")
-        
+
         # WHEN questions: Extract dates/years using spaCy or regex
-        elif qtype == 'when':
+        elif qtype == "when":
             if self.nlp_processor:
                 try:
                     doc = self.nlp_processor.nlp(answer)
-                    dates = [ent.text for ent in doc.ents if ent.label_ == 'DATE']
+                    dates = [ent.text for ent in doc.ents if ent.label_ == "DATE"]
                     if dates:
                         extracted = dates[0]
                         logger.debug(f"Date extraction: {extracted}")
                 except Exception:
                     pass
-            
+
             # Fallback: simple year/date extraction
             if not extracted:
-                date_pattern = r'\b(1[0-9]{3}|20[0-2][0-9])\b'
+                date_pattern = r"\b(1[0-9]{3}|20[0-2][0-9])\b"
                 years = re.findall(date_pattern, answer)
                 if years:
                     extracted = years[0]
-        
+
         # WHERE questions: Extract locations using spaCy NER
-        elif qtype == 'where' and self.nlp_processor:
+        elif qtype == "where" and self.nlp_processor:
             try:
                 doc = self.nlp_processor.nlp(answer)
-                locations = [ent.text for ent in doc.ents if ent.label_ in ['GPE', 'LOC']]
+                locations = [
+                    ent.text for ent in doc.ents if ent.label_ in ["GPE", "LOC"]
+                ]
                 if locations:
                     extracted = locations[0]
                     logger.debug(f"Location extraction: {extracted}")
             except Exception:
                 pass
-        
+
         # WHAT questions: Careful! Don't lose subject names
         # "The Pacific Ocean is..." should NOT become just "the largest ocean"
-        elif qtype == 'what':
+        elif qtype == "what":
             # Check if answer starts with a proper noun/subject
             # If yes, keep it. If no, extract definition.
             if self.nlp_processor:
                 try:
                     doc = self.nlp_processor.nlp(answer)
                     # If first token is proper noun, it's likely the subject we want
-                    if doc and doc[0].pos_ == 'PROPN':
+                    if doc and doc[0].pos_ == "PROPN":
                         logger.debug("Proper noun detected - returning full content")
                         return answer
                 except Exception:
                     pass
-            
+
             # Otherwise extract definition after is/are
-            is_pattern = r'^(.+?)\s+(?:is|are)\s+(.+?)(?:\.|$)'
+            is_pattern = r"^(.+?)\s+(?:is|are)\s+(.+?)(?:\.|$)"
             match = re.search(is_pattern, answer, re.IGNORECASE)
             if match:
                 subject = match.group(1).strip()
                 definition = match.group(2).strip()
-                
+
                 # If subject looks important (capitalized, multiple words), include it
                 if subject[0].isupper() or len(subject.split()) > 1:
                     extracted = answer  # Keep full answer
                 else:
                     # Clean up articles from definition
-                    definition = re.sub(r'^(?:a|an|the)\s+', '', definition, flags=re.IGNORECASE)
+                    definition = re.sub(
+                        r"^(?:a|an|the)\s+", "", definition, flags=re.IGNORECASE
+                    )
                     extracted = definition
-        
+
         # STRATEGY 3: Validate extraction quality
         # If extraction seems incomplete/too generic, return full answer
         if extracted:
             words = extracted.split()
             word_count = len(words)
-            
+
             # Too short? Probably lost context
             if word_count < 2:
-                logger.debug(f"Extraction too short ({word_count} words) - using full content")
+                logger.debug(
+                    f"Extraction too short ({word_count} words) - using full content"
+                )
                 return answer
-            
+
             # Too generic? (just articles/pronouns)
-            if extracted.lower() in ['the', 'a', 'an', 'it', 'this', 'that']:
+            if extracted.lower() in ["the", "a", "an", "it", "this", "that"]:
                 logger.debug("Extraction too generic - using full content")
                 return answer
-            
+
             # Extraction looks good!
             logger.debug(f"Using extracted answer: '{extracted}'")
             return extracted
-        
+
         # No extraction worked - return full answer (safe default)
         logger.debug("No extraction - returning full content")
         return answer
 
-    def _assess_query_complexity(self, query: str, query_intent: Dict[str, Any]) -> float:
+    def _assess_query_complexity(
+        self, query: str, query_intent: Dict[str, Any]
+    ) -> float:
         """Assess query complexity and adjust confidence accordingly."""
 
         base_factor = 1.0

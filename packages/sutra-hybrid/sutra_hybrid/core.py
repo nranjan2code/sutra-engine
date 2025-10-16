@@ -115,36 +115,36 @@ class HybridAI:
     ) -> List[str]:
         """
         Learn multiple knowledge items in batch for efficiency.
-        
+
         Args:
             contents: List of (content, source, category) tuples
-            
+
         Returns:
             List of concept IDs
         """
         if not contents:
             return []
-        
+
         concept_ids = []
         embeddings_list = []
-        
+
         # Learn all concepts first
         for content, source, category in contents:
             concept_id = self.learner.learn_adaptive(
                 content, source=source, category=category
             )
             concept_ids.append(concept_id)
-        
+
         # Batch generate embeddings
         content_texts = [c[0] for c in contents]
         embeddings = self.embedding_provider.encode(content_texts)
-        
+
         # Store embeddings
         for concept_id, embedding in zip(concept_ids, embeddings):
             self.concept_embeddings[concept_id] = embedding
-        
+
         logger.info(f"Batch learned {len(concept_ids)} concepts")
-        
+
         return concept_ids
 
     def semantic_search(

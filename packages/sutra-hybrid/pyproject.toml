@@ -35,6 +35,13 @@ embeddings = [
     "sentence-transformers>=2.2.2",
 ]
 
+# Optional API server
+api = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.0.0",
+]
+
 # Development dependencies
 dev = [
     "pytest>=7.0.0",
@@ -43,6 +50,15 @@ dev = [
     "isort>=5.10.0",
     "flake8>=5.0.0",
     "mypy>=1.0.0",
+    "httpx>=0.25.0",  # For API testing
+]
+
+# All optional dependencies
+all = [
+    "sentence-transformers>=2.2.2",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.0.0",
 ]
 
 [project.urls]

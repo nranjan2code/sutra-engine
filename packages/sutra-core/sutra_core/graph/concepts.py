@@ -131,7 +131,7 @@ class Association:
         else:
             # String value from JSON
             assoc_type = AssociationType(assoc_type_raw)
-        
+
         return cls(
             source_id=data["source_id"],
             target_id=data["target_id"],

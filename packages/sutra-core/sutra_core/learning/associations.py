@@ -10,13 +10,12 @@ This module handles:
 import hashlib
 import re
 from collections import defaultdict
-from typing import Dict, Tuple
+
+# Import Optional for type hints
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 from ..graph.concepts import Association, AssociationType, Concept
 from ..utils.text import extract_words, get_association_patterns
-
-# Import Optional for type hints
-from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..utils.nlp import TextProcessor
@@ -34,7 +33,7 @@ class AssociationExtractor:
         central_link_type: AssociationType = AssociationType.COMPOSITIONAL,
         max_cooccurrence_links: int = 200,
         nlp_processor: Optional["TextProcessor"] = None,
-        entity_cache: Optional['EntityCache'] = None,
+        entity_cache: Optional["EntityCache"] = None,
     ):
         """
         Initialize association extractor.
@@ -48,7 +47,7 @@ class AssociationExtractor:
             entity_cache: Optional EntityCache for LLM-extracted entities
         """
         self.storage = storage
-        
+
         self.enable_central_links = enable_central_links
         self.central_link_confidence = central_link_confidence
         self.central_link_type = central_link_type
@@ -135,8 +134,8 @@ class AssociationExtractor:
         """
         Extract co-occurrence based semantic associations using noun chunks.
 
-        OPTIONAL OPTIMIZATION: Uses spaCy noun chunks (if available) instead of 
-        sliding window to reduce associations from ~900 to <50 per document. 
+        OPTIONAL OPTIMIZATION: Uses spaCy noun chunks (if available) instead of
+        sliding window to reduce associations from ~900 to <50 per document.
         Falls back to sliding window if spaCy unavailable.
 
         Args:
@@ -156,28 +155,29 @@ class AssociationExtractor:
             # NOTE: This will fail if spaCy not installed - that's OK, we use fallback
             try:
                 from ..utils.nlp import TextProcessor
+
                 processor = TextProcessor()
             except Exception:
                 # spaCy unavailable - use simple sliding window fallback (still works!)
                 return self._extract_cooccurrence_fallback(content, concept_id)
-        
+
         try:
             # Extract meaningful noun chunks (lemmatized)
             tokens = processor.extract_meaningful_tokens(content)
-            
+
             # Use noun chunks for semantic associations
             doc = processor.nlp(content)
             chunks = [chunk.root.lemma_.lower() for chunk in doc.noun_chunks]
-            
+
             # Limit chunks to most relevant
             chunks = list(set(chunks))[:10]  # Top 10 unique chunks
-            
+
             # Create associations between chunks
             for i, chunk1 in enumerate(chunks):
-                for chunk2 in chunks[i + 1:]:
+                for chunk2 in chunks[i + 1 :]:
                     concepts1 = self.word_to_concepts.get(chunk1, set())
                     concepts2 = self.word_to_concepts.get(chunk2, set())
-                    
+
                     # Create associations between related concepts
                     for c1 in list(concepts1)[:2]:  # Max 2 concepts per chunk
                         for c2 in list(concepts2)[:2]:
@@ -188,7 +188,7 @@ class AssociationExtractor:
                                     associations_created += 1
                                     if associations_created >= 50:  # Hard limit
                                         return associations_created
-            
+
             return associations_created
         except Exception as e:
             # Fallback if spaCy processing fails (system still works without it!)
@@ -198,27 +198,31 @@ class AssociationExtractor:
     def _extract_cooccurrence_fallback(self, content: str, concept_id: str) -> int:
         """
         Simple sliding window fallback for co-occurrence extraction.
-        
+
         This method works WITHOUT spaCy - uses simple word extraction and sliding window.
         Performance: Creates more associations (~200) but still bounded by hard limits.
-        
+
         Args:
             content: Text content
             concept_id: Central concept ID
-            
+
         Returns:
             Number of associations created
         """
         associations_created = 0
         words = extract_words(content)
-        
+
         # Sliding window of 3 words to find co-occurrences
         for i, word1 in enumerate(words):
             for word2 in words[i + 1 : i + 4]:  # Window of 3 words
                 # Find concepts containing these words
                 # Use Rust inverted index to find concepts containing words
-                concepts1 = set(self.storage.search_by_text(word1)) if self.storage else set()
-                concepts2 = set(self.storage.search_by_text(word2)) if self.storage else set()
+                concepts1 = (
+                    set(self.storage.search_by_text(word1)) if self.storage else set()
+                )
+                concepts2 = (
+                    set(self.storage.search_by_text(word2)) if self.storage else set()
+                )
 
                 # Strict limit to avoid exponential explosion
                 for c1 in list(concepts1)[:2]:  # Max 2 concepts per word
@@ -252,11 +256,12 @@ class AssociationExtractor:
                 return concept_id
         except Exception:
             pass
-        
+
         # Create new concept directly in storage
         concept = Concept(id=concept_id, content=text, confidence=0.7)
         try:
             import numpy as np
+
             embedding = None
             if self.nlp_processor:
                 try:
@@ -266,7 +271,7 @@ class AssociationExtractor:
                 except Exception:
                     embedding = None
             if embedding is None:
-                dim = getattr(self.storage, 'vector_dimension', 384)
+                dim = getattr(self.storage, "vector_dimension", 384)
                 embedding = np.zeros(dim, dtype=np.float32)
             self.storage.add_concept(concept, embedding)
         except Exception:
@@ -307,7 +312,11 @@ class AssociationExtractor:
             confidence=confidence,
         )
         try:
-            if self.storage and self.storage.has_concept(source_id) and self.storage.has_concept(target_id):
+            if (
+                self.storage
+                and self.storage.has_concept(source_id)
+                and self.storage.has_concept(target_id)
+            ):
                 self.storage.add_association(association)
                 return True
         except Exception:

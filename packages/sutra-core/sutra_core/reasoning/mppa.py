@@ -11,7 +11,8 @@ Implements sophisticated multi-path reasoning that:
 import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from typing import Counter as CounterType, Dict, List, Tuple
+from typing import Counter as CounterType
+from typing import Dict, List, Tuple
 
 from ..graph.concepts import ReasoningPath
 

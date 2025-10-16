@@ -17,30 +17,30 @@ Protocol Features:
 DO NOT expose this to external users.
 """
 
+from .decoder import SBPDecoder
+from .encoder import SBPEncoder
 from .messages import (
-    MessageType,
-    SBPMessage,
+    AssociationMessage,
+    ConceptMessage,
     LearnMessage,
+    MessageType,
+    PathMessage,
     QueryMessage,
     ResultMessage,
-    ConceptMessage,
-    AssociationMessage,
-    PathMessage,
+    SBPMessage,
 )
-from .encoder import SBPEncoder
-from .decoder import SBPDecoder
 
 __all__ = [
-    'MessageType',
-    'SBPMessage',
-    'LearnMessage',
-    'QueryMessage',
-    'ResultMessage',
-    'ConceptMessage',
-    'AssociationMessage',
-    'PathMessage',
-    'SBPEncoder',
-    'SBPDecoder',
+    "MessageType",
+    "SBPMessage",
+    "LearnMessage",
+    "QueryMessage",
+    "ResultMessage",
+    "ConceptMessage",
+    "AssociationMessage",
+    "PathMessage",
+    "SBPEncoder",
+    "SBPDecoder",
 ]
 
 # Protocol version

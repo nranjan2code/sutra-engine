@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class EmbeddingBatchProcessor:
     """
     Efficient batch embedding generation optimized for Apple Silicon.
-    
+
     Key features:
     - Automatic device selection (CPU vs MPS)
     - Smart batch size tuning
@@ -68,7 +68,7 @@ class EmbeddingBatchProcessor:
         # Load model
         logger.info(f"Loading embedding model: {model_name}")
         start_time = time.time()
-        
+
         # Try to load from cache first (no network calls)
         try:
             self.model = SentenceTransformer(model_name, local_files_only=True)
@@ -77,7 +77,7 @@ class EmbeddingBatchProcessor:
             # If not in cache, download once then use cache
             logger.info(f"Downloading {model_name} to cache...")
             self.model = SentenceTransformer(model_name, local_files_only=False)
-            
+
         load_time = time.time() - start_time
         logger.info(f"Model loaded in {load_time:.2f}s")
 
@@ -120,9 +120,11 @@ class EmbeddingBatchProcessor:
 
         # Auto-selection
         if torch.backends.mps.is_available():
-            logger.info("MPS available - will use for batches ≥ {}".format(self.mps_threshold))
+            logger.info(
+                "MPS available - will use for batches ≥ {}".format(self.mps_threshold)
+            )
             return "mps"  # Will switch dynamically based on batch size
-        
+
         return "cpu"
 
     def _get_device_for_batch(self, batch_size: int) -> str:
@@ -137,11 +139,11 @@ class EmbeddingBatchProcessor:
         """
         if self.device == "cpu":
             return "cpu"
-        
+
         # Use MPS for large batches, CPU for small ones
         if batch_size >= self.mps_threshold:
             return "mps"
-        
+
         return "cpu"
 
     def encode_batch(
@@ -189,7 +191,7 @@ class EmbeddingBatchProcessor:
         if uncached_texts:
             # Select device based on batch size
             target_device = self._get_device_for_batch(len(uncached_texts))
-            
+
             # Move model if needed
             if target_device == "mps" and str(self.model.device) != "mps":
                 self.model.to("mps")
@@ -203,21 +205,25 @@ class EmbeddingBatchProcessor:
                 "normalize_embeddings": normalize,
                 "convert_to_numpy": True,
             }
-            
+
             # Add prompt for task-specific models (e.g., EmbeddingGemma)
             if prompt_name:
                 encode_kwargs["prompt_name"] = prompt_name
-            
+
             new_embeddings = self.model.encode(uncached_texts, **encode_kwargs)
 
             # Update cache and results
             for i, idx in enumerate(uncached_indices):
                 emb = new_embeddings[i]
                 embeddings[idx] = emb
-                
+
                 # Add to cache if not full (use prompt-aware key)
                 if len(self.cache) < self.cache_size:
-                    cache_key = f"{prompt_name}:{uncached_texts[i]}" if prompt_name else uncached_texts[i]
+                    cache_key = (
+                        f"{prompt_name}:{uncached_texts[i]}"
+                        if prompt_name
+                        else uncached_texts[i]
+                    )
                     self.cache[cache_key] = emb
 
         # Stack embeddings
@@ -231,7 +237,7 @@ class EmbeddingBatchProcessor:
 
         throughput = batch_size / elapsed if elapsed > 0 else 0
         cache_rate = self.cache_hits / (self.cache_hits + self.cache_misses) * 100
-        
+
         logger.debug(
             f"Encoded {batch_size} texts in {elapsed:.3f}s "
             f"({throughput:.1f} texts/sec, cache hit rate: {cache_rate:.1f}%)"
@@ -239,7 +245,9 @@ class EmbeddingBatchProcessor:
 
         return result
 
-    def encode_single(self, text: str, normalize: bool = True, prompt_name: Optional[str] = None) -> np.ndarray:
+    def encode_single(
+        self, text: str, normalize: bool = True, prompt_name: Optional[str] = None
+    ) -> np.ndarray:
         """
         Encode single text (convenience wrapper).
 
@@ -251,7 +259,9 @@ class EmbeddingBatchProcessor:
         Returns:
             Embedding vector
         """
-        result = self.encode_batch([text], show_progress=False, normalize=normalize, prompt_name=prompt_name)
+        result = self.encode_batch(
+            [text], show_progress=False, normalize=normalize, prompt_name=prompt_name
+        )
         return result[0]
 
     def clear_cache(self):

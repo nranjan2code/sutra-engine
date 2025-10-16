@@ -13,10 +13,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sutra_core import SutraError
 from sutra_core.reasoning import ReasoningEngine
-from sutra_hybrid import HybridAI
+from sutra_hybrid import SutraAI
 
 from .config import settings
-from .dependencies import get_ai, get_reasoner, get_uptime, init_dependencies, shutdown_dependencies
+from .dependencies import (
+    get_ai,
+    get_reasoner,
+    get_uptime,
+    init_dependencies,
+    shutdown_dependencies,
+)
 from .models import (
     BatchLearnRequest,
     BatchLearnResponse,
@@ -49,11 +55,13 @@ async def lifespan(app: FastAPI):
 
     # Initialize dependencies properly (stores in app.state)
     init_dependencies(app)
-    
+
     # Get AI instance to log stats
     ai = app.state.ai_instance
+    stats = ai.engine.get_system_stats()
     logger.info(
-        f"Loaded {len(ai.concepts)} concepts, " f"{len(ai.associations)} associations"
+        f"Loaded {stats.get('total_concepts', 0)} concepts, "
+        f"{stats.get('total_associations', 0)} associations"
     )
 
     yield
@@ -126,17 +134,19 @@ async def general_exception_handler(request, exc: Exception):
 
 # Health check endpoint
 @app.get("/health", response_model=HealthResponse, tags=["System"])
-async def health_check(ai: HybridAI = Depends(get_ai)):
+async def health_check(ai: SutraAI = Depends(get_ai)):
     """
     Check API health status.
 
     Returns service status, version, uptime, and basic metrics.
     """
+    # Get stats from core engine
+    stats = ai.engine.get_system_stats()
     return HealthResponse(
         status="healthy",
         version=settings.api_version,
         uptime_seconds=get_uptime(),
-        concepts_loaded=len(ai.concepts),
+        concepts_loaded=stats.get("total_concepts", 0),
     )
 
 
@@ -147,30 +157,24 @@ async def health_check(ai: HybridAI = Depends(get_ai)):
     status_code=status.HTTP_201_CREATED,
     tags=["Learning"],
 )
-async def learn_knowledge(request: LearnRequest, ai: HybridAI = Depends(get_ai)):
+async def learn_knowledge(request: LearnRequest, ai: SutraAI = Depends(get_ai)):
     """
     Learn new knowledge.
 
     Creates concepts and associations from the provided content.
     """
-    concepts_before = len(ai.concepts)
-    associations_before = len(ai.associations)
-
-    # Learn the content
-    concept_id = ai.learn(
+    # Learn the content - returns LearnResult with stats
+    result = ai.learn(
         request.content,
         source=request.source,
         **(request.metadata or {}),
     )
 
-    concepts_created = len(ai.concepts) - concepts_before
-    associations_created = len(ai.associations) - associations_before
-
     return LearnResponse(
-        concept_id=concept_id,
-        message="Knowledge learned successfully",
-        concepts_created=concepts_created,
-        associations_created=associations_created,
+        concept_id=result.concept_id,
+        message=result.message,
+        concepts_created=result.concepts_created,
+        associations_created=result.associations_created,
     )
 
 
@@ -180,26 +184,25 @@ async def learn_knowledge(request: LearnRequest, ai: HybridAI = Depends(get_ai))
     status_code=status.HTTP_201_CREATED,
     tags=["Learning"],
 )
-async def batch_learn(request: BatchLearnRequest, ai: HybridAI = Depends(get_ai)):
+async def batch_learn(request: BatchLearnRequest, ai: SutraAI = Depends(get_ai)):
     """
     Learn multiple knowledge items in batch.
 
     More efficient than calling /learn multiple times.
     """
-    concepts_before = len(ai.concepts)
-    associations_before = len(ai.associations)
-
     concept_ids = []
+    total_concepts = 0
+    total_associations = 0
+
     for item in request.items:
-        concept_id = ai.learn(
+        result = ai.learn(
             item.content,
             source=item.source,
             **(item.metadata or {}),
         )
-        concept_ids.append(concept_id)
-
-    total_concepts = len(ai.concepts) - concepts_before
-    total_associations = len(ai.associations) - associations_before
+        concept_ids.append(result.concept_id)
+        total_concepts += result.concepts_created
+        total_associations += result.associations_created
 
     return BatchLearnResponse(
         concept_ids=concept_ids,
@@ -213,7 +216,7 @@ async def batch_learn(request: BatchLearnRequest, ai: HybridAI = Depends(get_ai)
 @app.post("/reason", response_model=ReasonResponse, tags=["Reasoning"])
 async def reason(
     request: ReasonRequest,
-    ai: HybridAI = Depends(get_ai),
+    ai: SutraAI = Depends(get_ai),
     reasoner: ReasoningEngine = Depends(get_reasoner),
 ):
     """
@@ -438,7 +441,7 @@ async def reset_system(request: Request):
         use_semantic=settings.use_semantic_embeddings,
         storage_path=settings.storage_path,
     )
-    
+
     # Recreate reasoner bound to new AI instance
     ai = request.app.state.ai_instance
     request.app.state.reasoner_instance.concepts = ai.concepts

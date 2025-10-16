@@ -86,7 +86,9 @@ class Validator:
         return query
 
     @classmethod
-    def validate_confidence(cls, confidence: float, field_name: str = "confidence") -> float:
+    def validate_confidence(
+        cls, confidence: float, field_name: str = "confidence"
+    ) -> float:
         """
         Validate and clamp confidence score.
 
@@ -124,7 +126,9 @@ class Validator:
             ValidationError: If strength is not a number
         """
         if not isinstance(strength, (int, float)):
-            raise ValidationError(f"{field_name} must be a number, got {type(strength)}")
+            raise ValidationError(
+                f"{field_name} must be a number, got {type(strength)}"
+            )
 
         # Clamp to valid range
         return max(cls.MIN_STRENGTH, min(cls.MAX_STRENGTH, float(strength)))
@@ -224,7 +228,9 @@ class Validator:
             forbidden_dirs = ["/etc", "/sys", "/proc", "/dev", "/bin", "/sbin"]
             for forbidden in forbidden_dirs:
                 if str(path).startswith(forbidden):
-                    raise ValidationError(f"Cannot write to system directory: {forbidden}")
+                    raise ValidationError(
+                        f"Cannot write to system directory: {forbidden}"
+                    )
 
         return filepath
 
@@ -243,7 +249,9 @@ class Validator:
             ValidationError: If concept ID is invalid
         """
         if not isinstance(concept_id, str):
-            raise ValidationError(f"Concept ID must be a string, got {type(concept_id)}")
+            raise ValidationError(
+                f"Concept ID must be a string, got {type(concept_id)}"
+            )
 
         if not concept_id or not concept_id.strip():
             raise ValidationError("Concept ID cannot be empty")

@@ -13,12 +13,50 @@ from typing import List, Tuple
 from ..graph.concepts import AssociationType
 
 # Module-level constant for stop words (avoid recreation on every call)
-STOP_WORDS = frozenset({
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of",
-    "with", "by", "is", "was", "are", "were", "be", "been", "being", "have",
-    "has", "had", "do", "does", "did", "will", "would", "could", "should",
-    "may", "might", "can", "must", "shall", "this", "that", "these", "those",
-})
+STOP_WORDS = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "of",
+        "with",
+        "by",
+        "is",
+        "was",
+        "are",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "can",
+        "must",
+        "shall",
+        "this",
+        "that",
+        "these",
+        "those",
+    }
+)
 
 
 def extract_words(text: str) -> List[str]:
@@ -62,23 +100,19 @@ def get_association_patterns() -> List[Tuple[str, AssociationType]]:
         (r"(.+?) causes (.+)", AssociationType.CAUSAL),
         (r"(.+?) leads to (.+)", AssociationType.CAUSAL),
         (r"(.+?) results in (.+)", AssociationType.CAUSAL),
-        
-        # Hierarchical relationships  
+        # Hierarchical relationships
         (r"(.+?) is (?:a|an) (.+)", AssociationType.HIERARCHICAL),
         (r"(.+?) are (?:a|an|types? of) (.+)", AssociationType.HIERARCHICAL),
-        
         # Compositional relationships
         (r"(.+?) contains (.+)", AssociationType.COMPOSITIONAL),
         (r"(.+?) includes (.+)", AssociationType.COMPOSITIONAL),
         (r"(.+?) consists of (.+)", AssociationType.COMPOSITIONAL),
-        
         # Semantic relationships (definitions, descriptions)
         (r"(.+?) refers to (.+)", AssociationType.SEMANTIC),
         (r"(.+?) means (.+)", AssociationType.SEMANTIC),
         (r"(.+?) involves (.+)", AssociationType.SEMANTIC),
         (r"(.+?) similar to (.+)", AssociationType.SEMANTIC),
         (r"(.+?) related to (.+)", AssociationType.SEMANTIC),
-        
         # Temporal relationships
         (r"(.+?) before (.+)", AssociationType.TEMPORAL),
         (r"(.+?) after (.+)", AssociationType.TEMPORAL),

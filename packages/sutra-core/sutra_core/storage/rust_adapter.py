@@ -14,6 +14,7 @@ import numpy as np
 
 try:
     import sutra_storage
+
     RUST_STORAGE_AVAILABLE = True
 except ImportError:
     RUST_STORAGE_AVAILABLE = False
@@ -84,7 +85,7 @@ class RustStorageAdapter:
         Args:
             concept: Concept object with all attributes
             embedding: Vector embedding (numpy array)
-        
+
         Raises:
             ValueError: If embedding dimension doesn't match or embedding is invalid
             RuntimeError: If storage operation fails
@@ -135,7 +136,9 @@ class RustStorageAdapter:
         Delete concept (stub until Rust exposes deletion API).
         For now, we log and return to avoid breaking rollback paths.
         """
-        logger.warning("delete_concept not yet supported in ReasoningStore; stubbed no-op")
+        logger.warning(
+            "delete_concept not yet supported in ReasoningStore; stubbed no-op"
+        )
 
     # ===== Association Operations =====
 
@@ -163,9 +166,7 @@ class RustStorageAdapter:
             f"Added association {association.source_id[:8]}... → {association.target_id[:8]}..."
         )
 
-    def get_association(
-        self, source_id: str, target_id: str
-    ) -> Optional[Association]:
+    def get_association(self, source_id: str, target_id: str) -> Optional[Association]:
         """Get association between two concepts (from ReasoningStore)."""
         # Fallback via listing from source (since direct API not exposed in Python binding)
         try:
@@ -179,7 +180,7 @@ class RustStorageAdapter:
 
     def get_neighbors(self, concept_id: str) -> List[str]:
         """Get neighboring concept IDs (undirected) from ReasoningStore.
-        
+
         Combines outgoing neighbors from the store with incoming neighbors
         discovered via association scan to support undirected reasoning.
         """
@@ -187,7 +188,7 @@ class RustStorageAdapter:
             out = set(self.store.get_neighbors(concept_id))
         except Exception:
             out = set()
-        
+
         # Fallback: include incoming edges by scanning associations
         try:
             items = self.store.get_all_associations()
@@ -200,7 +201,7 @@ class RustStorageAdapter:
                     out.add(tgt)
         except Exception:
             pass
-        
+
         return list(out)
 
     def get_all_associations(self) -> List[Association]:
@@ -219,7 +220,9 @@ class RustStorageAdapter:
                 assoc = Association(
                     source_id=a.get("source_id"),
                     target_id=a.get("target_id"),
-                    assoc_type=type_map.get(int(a.get("assoc_type", 0)), AssociationType.SEMANTIC),
+                    assoc_type=type_map.get(
+                        int(a.get("assoc_type", 0)), AssociationType.SEMANTIC
+                    ),
                     confidence=float(a.get("confidence", 0.5)),
                 )
                 # Optionally set weight/created/last_used if present
@@ -241,23 +244,29 @@ class RustStorageAdapter:
         return out
 
     # ===== Atomic Learn (concept + associations) =====
-    def learn_atomic(self, concept: Concept, embedding: np.ndarray, associations: List[Association]) -> None:
+    def learn_atomic(
+        self, concept: Concept, embedding: np.ndarray, associations: List[Association]
+    ) -> None:
         """Atomically add a concept and its associations.
         If the native store exposes learn_atomic, use it. Otherwise fallback to sequential ops.
         """
         # Native fast-path
         if hasattr(self.store, "learn_atomic"):
             try:
-                logger.debug(f"Using NATIVE learn_atomic for {concept.id[:8]}... with {len(associations)} associations")
+                logger.debug(
+                    f"Using NATIVE learn_atomic for {concept.id[:8]}... with {len(associations)} associations"
+                )
                 # Prepare dict payloads expected by native binding
                 concept_dict = concept.to_dict()
                 assoc_dicts = [a.to_dict() for a in associations]
-                self.store.learn_atomic(concept_dict, assoc_dicts, embedding.astype(np.float32))
+                self.store.learn_atomic(
+                    concept_dict, assoc_dicts, embedding.astype(np.float32)
+                )
                 logger.debug(f"✓ Native learn_atomic succeeded")
                 return
             except Exception as e:
                 logger.warning(f"Native learn_atomic failed, falling back: {e}")
-        
+
         # Fallback: sequential (still durable due to WAL+flush on save())
         logger.debug(f"Using FALLBACK sequential ops for {concept.id[:8]}...")
         self.add_concept(concept, embedding)
@@ -265,12 +274,14 @@ class RustStorageAdapter:
             try:
                 self.add_association(a)
             except Exception as e:
-                logger.warning(f"Failed to add association during learn_atomic fallback: {e}")
+                logger.warning(
+                    f"Failed to add association during learn_atomic fallback: {e}"
+                )
 
     # ------------------------------------------------------------------
     # Reasoning helpers (BFS over Rust graph) until native Rust pathfinding is exposed
     # ------------------------------------------------------------------
-    
+
     def _extract_best_answer_from_path(
         self,
         concepts_seq: List[str],
@@ -278,44 +289,45 @@ class RustStorageAdapter:
     ) -> str:
         """
         PRODUCTION: Extract the best answer from a reasoning path.
-        
+
         Intelligently selects the most relevant concept based on:
         - Query term overlap (prefer concepts containing query words)
         - Content completeness (prefer full sentences over fragments)
         - Concept confidence and strength
         - Position preference (earlier concepts often more relevant)
-        
+
         Args:
             concepts_seq: Ordered list of concept IDs in reasoning path
             query: Original query (for relevance scoring)
-        
+
         Returns:
             Best answer string extracted from path
         """
         if not concepts_seq:
             return ""
-        
+
         # Extract query words for relevance scoring
         from ..utils.text import extract_words
+
         query_words = set(extract_words(query.lower())) if query else set()
-        
+
         # Score each concept in the path
         scored_concepts = []
         for idx, concept_id in enumerate(concepts_seq):
             concept = self.get_concept(concept_id)
             if not concept:
                 continue
-            
+
             content = concept.content
             content_words = set(extract_words(content.lower()))
-            
+
             # Factor 1: Query relevance (word overlap)
             if query_words:
                 overlap = len(query_words & content_words)
                 query_relevance = overlap / len(query_words) if query_words else 0.0
             else:
                 query_relevance = 0.5  # Neutral if no query
-            
+
             # Factor 2: Content completeness
             # Full sentences (>5 words) STRONGLY preferred over fragments
             word_count = len(content.split())
@@ -328,38 +340,40 @@ class RustStorageAdapter:
             else:
                 # Full sentences (5+ words) get full score
                 completeness_score = min(word_count / 10.0, 1.0)
-            
+
             # Factor 3: Concept quality (confidence × strength)
             quality_score = concept.confidence * min(concept.strength / 5.0, 1.0)
-            
+
             # Factor 4: Position preference
             # Earlier concepts (closer to query) often more relevant
             # But not too aggressive - middle concepts can be good too
             position_score = 1.0 - (idx / max(len(concepts_seq), 1)) * 0.3
-            
+
             # Combined score with weighted factors
             final_score = (
-                query_relevance * 0.35 +      # 35% weight on query match
-                completeness_score * 0.35 +   # 35% weight on completeness (increased!)
-                quality_score * 0.20 +        # 20% weight on quality
-                position_score * 0.10         # 10% weight on position
+                query_relevance * 0.35  # 35% weight on query match
+                + completeness_score * 0.35  # 35% weight on completeness (increased!)
+                + quality_score * 0.20  # 20% weight on quality
+                + position_score * 0.10  # 10% weight on position
             )
-            
+
             scored_concepts.append((concept_id, content, final_score))
-        
+
         if not scored_concepts:
             # Fallback: return last concept's content
             last_concept = self.get_concept(concepts_seq[-1])
             return last_concept.content if last_concept else concepts_seq[-1]
-        
+
         # Return content of highest-scoring concept
-        best_concept_id, best_content, best_score = max(scored_concepts, key=lambda x: x[2])
+        best_concept_id, best_content, best_score = max(
+            scored_concepts, key=lambda x: x[2]
+        )
         logger.debug(
             f"Selected best answer: '{best_content[:50]}...' "
             f"(score: {best_score:.2f}, from {len(scored_concepts)} candidates)"
         )
         return best_content
-    
+
     def find_paths(
         self,
         start_ids: List[str],
@@ -369,18 +383,22 @@ class RustStorageAdapter:
         query: str = "",
     ) -> List["ReasoningPath"]:
         from ..graph.concepts import ReasoningPath, ReasoningStep
-        
+
         targets = set(target_ids)
         paths: List[ReasoningPath] = []
-        
+
         # Try native pathfinding first
         if hasattr(self.store, "find_paths"):
             try:
-                logger.debug(f"Using NATIVE find_paths: {len(start_ids)} starts → {len(target_ids)} targets (depth={max_depth})")
+                logger.debug(
+                    f"Using NATIVE find_paths: {len(start_ids)} starts → {len(target_ids)} targets (depth={max_depth})"
+                )
                 for s in start_ids:
                     for t in target_ids:
                         native_paths = self.store.find_paths(s, t, max_depth, num_paths)
-                        logger.debug(f"✓ Native find_paths returned {len(native_paths)} paths for {s[:8]}...→{t[:8]}...")
+                        logger.debug(
+                            f"✓ Native find_paths returned {len(native_paths)} paths for {s[:8]}...→{t[:8]}..."
+                        )
                         for p in native_paths:
                             # Convert native dict into ReasoningPath
                             steps = []
@@ -395,9 +413,21 @@ class RustStorageAdapter:
                                 step_conf = assoc.confidence if assoc else 0.5
                                 steps.append(
                                     ReasoningStep(
-                                        source_concept=(src_c.content[:50] + "...") if src_c else src,
-                                        relation=assoc.assoc_type.value if assoc else "related",
-                                        target_concept=(tgt_c.content[:50] + "...") if tgt_c else tgt,
+                                        source_concept=(
+                                            (src_c.content[:50] + "...")
+                                            if src_c
+                                            else src
+                                        ),
+                                        relation=(
+                                            assoc.assoc_type.value
+                                            if assoc
+                                            else "related"
+                                        ),
+                                        target_concept=(
+                                            (tgt_c.content[:50] + "...")
+                                            if tgt_c
+                                            else tgt
+                                        ),
                                         confidence=step_conf,
                                         step_number=i + 1,
                                         source_id=src,
@@ -405,7 +435,9 @@ class RustStorageAdapter:
                                     )
                                 )
                             # PRODUCTION: Extract best answer from path (not just last concept)
-                            best_answer = self._extract_best_answer_from_path(concepts_seq, query)
+                            best_answer = self._extract_best_answer_from_path(
+                                concepts_seq, query
+                            )
                             paths.append(
                                 ReasoningPath(
                                     query=query,
@@ -424,19 +456,20 @@ class RustStorageAdapter:
         for start in start_ids:
             # BFS queue: (node, depth, path)
             from collections import deque
+
             queue = deque([(start, 0, [start])])
             seen = set([start])
-            
+
             while queue and len(paths) < num_paths:
                 node, depth, path = queue.popleft()
                 if depth >= max_depth:
                     continue
-                
+
                 try:
                     neighbors = self.get_neighbors(node)
                 except Exception:
                     neighbors = []
-                
+
                 for nb in neighbors:
                     if nb in path:
                         continue
@@ -455,9 +488,15 @@ class RustStorageAdapter:
                             conf = conf * step_conf
                             steps.append(
                                 ReasoningStep(
-                                    source_concept=(src_c.content[:50] + "...") if src_c else s,
-                                    relation=assoc.assoc_type.value if assoc else "related",
-                                    target_concept=(tgt_c.content[:50] + "...") if tgt_c else t,
+                                    source_concept=(
+                                        (src_c.content[:50] + "...") if src_c else s
+                                    ),
+                                    relation=(
+                                        assoc.assoc_type.value if assoc else "related"
+                                    ),
+                                    target_concept=(
+                                        (tgt_c.content[:50] + "...") if tgt_c else t
+                                    ),
                                     confidence=step_conf,
                                     step_number=i + 1,
                                     source_id=s,
@@ -465,7 +504,9 @@ class RustStorageAdapter:
                                 )
                             )
                         # PRODUCTION: Extract best answer from path (not just last concept)
-                        best_answer = self._extract_best_answer_from_path(new_path, query)
+                        best_answer = self._extract_best_answer_from_path(
+                            new_path, query
+                        )
                         paths.append(
                             ReasoningPath(
                                 query=query,
@@ -486,8 +527,6 @@ class RustStorageAdapter:
     # ===== Vector Operations =====
 
     # Note: Vector operations are internal to ReasoningStore. Expose only if needed.
-
-
 
     # ===== Search Operations =====
 

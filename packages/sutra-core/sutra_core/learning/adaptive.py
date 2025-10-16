@@ -76,12 +76,14 @@ class AdaptiveLearner:
             Concept ID
         """
         import numpy as np
-        
+
         # Create concept ID
         concept_id = hashlib.md5(content.encode()).hexdigest()[:16]
 
-        existing_concept = self.storage.get_concept(concept_id) if self.storage else None
-        
+        existing_concept = (
+            self.storage.get_concept(concept_id) if self.storage else None
+        )
+
         if existing_concept:
             # Handle existing concept with adaptive reinforcement
             old_strength = existing_concept.strength
@@ -91,12 +93,12 @@ class AdaptiveLearner:
 
             # Apply adaptive reinforcement
             self._apply_adaptive_reinforcement(existing_concept)
-            
+
             # Update in storage
             if embedding is not None:
                 embedding_array = np.array(embedding, dtype=np.float32)
                 self.storage.add_concept(existing_concept, embedding_array)
-            
+
             logger.debug(
                 f"Strengthened concept: {content[:30]}... "
                 f"({old_strength:.2f} → {existing_concept.strength:.2f})"
@@ -110,7 +112,7 @@ class AdaptiveLearner:
                 source=source,
                 category=category,
             )
-            
+
             # Store in Rust storage immediately
             if embedding is not None:
                 embedding_array = np.array(embedding, dtype=np.float32)
@@ -181,7 +183,7 @@ class AdaptiveLearner:
                 "easy_concepts": 0,
                 "average_strength": 0.0,
             }
-        
+
         all_concept_ids = self.storage.get_all_concept_ids()
         if not all_concept_ids:
             return {
@@ -191,13 +193,13 @@ class AdaptiveLearner:
                 "easy_concepts": 0,
                 "average_strength": 0.0,
             }
-        
+
         strengths = []
         for concept_id in all_concept_ids:
             concept = self.storage.get_concept(concept_id)
             if concept:
                 strengths.append(concept.strength)
-        
+
         if not strengths:
             return {
                 "total_concepts": len(all_concept_ids),
@@ -206,7 +208,7 @@ class AdaptiveLearner:
                 "easy_concepts": 0,
                 "average_strength": 0.0,
             }
-        
+
         difficult = sum(1 for s in strengths if s < self.DIFFICULT_THRESHOLD)
         easy = sum(1 for s in strengths if s > self.EASY_THRESHOLD)
         moderate = len(strengths) - difficult - easy

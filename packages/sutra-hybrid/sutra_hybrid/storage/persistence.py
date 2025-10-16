@@ -39,10 +39,14 @@ class HybridStorage:
         vocabulary: dict = None,
         vectorizer_state: Optional[bytes] = None,
     ) -> None:
-        raise RuntimeError("HybridStorage.save is removed. Use sutra_core.storage.RustStorageAdapter")
+        raise RuntimeError(
+            "HybridStorage.save is removed. Use sutra_core.storage.RustStorageAdapter"
+        )
 
     def load(self) -> tuple:
-        raise RuntimeError("HybridStorage.load is removed. Use sutra_core.storage.RustStorageAdapter")
+        raise RuntimeError(
+            "HybridStorage.load is removed. Use sutra_core.storage.RustStorageAdapter"
+        )
 
     def exists(self) -> bool:
         """DEPRECATED: always returns False."""

@@ -125,7 +125,9 @@ class PathFinder:
 
         paths_found: List[ReasoningPath] = []
         # Priority queue: (-score, path_node)
-        heap: List[Tuple[float, PathNode]] = [(-1.0, PathNode(start_id, 1.0, 0, [start_id], 1.0))]
+        heap: List[Tuple[float, PathNode]] = [
+            (-1.0, PathNode(start_id, 1.0, 0, [start_id], 1.0))
+        ]
         visited_states: Set[Tuple[str, Tuple[str, ...]]] = set()
 
         while heap and len(paths_found) < 3:
@@ -162,9 +164,7 @@ class PathFinder:
 
                     # Calculate confidence with harmonic mean or multiplicative decay
                     new_confidence = self._propagate_confidence(
-                        current.confidence, 
-                        association.confidence,
-                        current.depth + 1
+                        current.confidence, association.confidence, current.depth + 1
                     )
 
                     if new_confidence < self.min_confidence:
@@ -296,11 +296,15 @@ class PathFinder:
         return paths_found[:3]  # Return top 3 paths
 
     def _expand_bidirectional_frontier(
-        self, queue: Deque[PathNode], visited: Dict[str, PathNode], depth: int, direction: str
+        self,
+        queue: Deque[PathNode],
+        visited: Dict[str, PathNode],
+        depth: int,
+        direction: str,
     ) -> None:
         """
         Expand one step in bidirectional search.
-        
+
         BUGFIX: Previously filtered by depth incorrectly, dropping valid paths.
         Now processes entire queue for current depth level.
         """
@@ -338,9 +342,7 @@ class PathFinder:
 
                 # Use harmonic mean confidence propagation (OPTIMIZATION)
                 new_confidence = self._propagate_confidence(
-                    current.confidence,
-                    association.confidence,
-                    current.depth + 1
+                    current.confidence, association.confidence, current.depth + 1
                 )
 
                 if new_confidence < self.min_confidence:
@@ -399,9 +401,13 @@ class PathFinder:
             target_concept = self.storage.get_concept(target_id)
 
             step = ReasoningStep(
-                source_concept=(source_concept.content[:50] + "...") if source_concept else "?",
+                source_concept=(
+                    (source_concept.content[:50] + "...") if source_concept else "?"
+                ),
                 relation=association.assoc_type.value if association else "related",
-                target_concept=(target_concept.content[:50] + "...") if target_concept else "?",
+                target_concept=(
+                    (target_concept.content[:50] + "...") if target_concept else "?"
+                ),
                 confidence=association.confidence if association else 0.5,
                 step_number=i + 1,
                 source_id=source_id,
@@ -487,16 +493,16 @@ class PathFinder:
     ) -> float:
         """
         Propagate confidence through reasoning path.
-        
+
         OPTIMIZATION: Uses harmonic mean instead of pure multiplication to avoid
         confidence collapse on long paths. With multiplication, 10 hops at 0.85
         each gives 0.20 confidence. With harmonic mean, maintains ~0.60.
-        
+
         Args:
             current_conf: Current path confidence
             edge_conf: Edge/association confidence
             depth: Current depth in path
-            
+
         Returns:
             New confidence score
         """
@@ -505,12 +511,12 @@ class PathFinder:
             # Better for preserving confidence in multi-hop reasoning
             if current_conf + edge_conf == 0:
                 return 0.0
-            
+
             harmonic = (2 * current_conf * edge_conf) / (current_conf + edge_conf)
-            
+
             # Gentle depth penalty (1% per hop) instead of aggressive decay
-            depth_penalty = 0.99 ** depth
-            
+            depth_penalty = 0.99**depth
+
             return harmonic * depth_penalty
         else:
             # Original multiplicative decay (prone to collapse)

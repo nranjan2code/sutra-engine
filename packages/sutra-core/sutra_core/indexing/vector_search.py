@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class VectorIndex:
     """
     Fast vector search using HNSW index.
-    
+
     Key features:
     - O(log N) search vs O(N) linear scan
     - Incremental updates (no full rebuild needed)
@@ -38,8 +38,8 @@ class VectorIndex:
         dimension: int = 768,
         max_elements: int = 100000,
         ef_construction: int = 400,  # Production scale for 10K+ vectors
-        m: int = 48,                # More connections for better recall
-        ef_search: int = 150,        # Better search quality
+        m: int = 48,  # More connections for better recall
+        ef_search: int = 150,  # Better search quality
         enable_auto_rebuild: bool = True,
         rebuild_threshold: int = 1000,
     ):
@@ -152,11 +152,11 @@ class VectorIndex:
             return
 
         start_time = time.time()
-        
+
         # Prepare batch data
         indices = []
         embeddings = []
-        
+
         for concept_id, embedding in concept_embeddings:
             if embedding.shape[0] != self.dimension:
                 logger.warning(
@@ -188,7 +188,7 @@ class VectorIndex:
             embeddings_array = np.vstack(embeddings)
             indices_array = np.array(indices)
             self.index.add_items(embeddings_array, indices_array)
-            
+
             elapsed = time.time() - start_time
             logger.info(
                 f"Batch added {len(embeddings)} concepts in {elapsed:.3f}s "
@@ -234,7 +234,7 @@ class VectorIndex:
         # Search index (returns indices and distances)
         # Note: hnswlib returns cosine distance (0=identical, 2=opposite)
         k_search = min(k * 2 if filter_ids else k, self.next_idx)
-        
+
         try:
             indices, distances = self.index.knn_query(
                 query_embedding.reshape(1, -1),
@@ -249,17 +249,17 @@ class VectorIndex:
         for idx, dist in zip(indices[0], distances[0]):
             if idx in self.idx_to_concept_id:
                 concept_id = self.idx_to_concept_id[idx]
-                
+
                 # Apply filter if provided
                 if filter_ids and concept_id not in filter_ids:
                     continue
-                
+
                 # Convert distance to similarity (1 - dist/2)
                 # cosine distance 0 -> similarity 1.0
                 # cosine distance 2 -> similarity 0.0
                 similarity = 1.0 - (dist / 2.0)
                 results.append((concept_id, float(similarity)))
-                
+
                 if len(results) >= k:
                     break
 
@@ -290,7 +290,7 @@ class VectorIndex:
 
         idx = self.concept_id_to_idx[concept_id]
         self.index.mark_deleted(idx)
-        
+
         # Note: We keep the ID mappings to avoid reindexing
         # The slot is marked deleted in HNSW
         logger.debug(f"Removed concept {concept_id} (idx={idx})")
@@ -299,12 +299,12 @@ class VectorIndex:
     def _rebuild_index(self) -> None:
         """Rebuild index for optimal performance."""
         start_time = time.time()
-        
+
         # Note: HNSW doesn't need explicit rebuild
         # Deleted items are already handled internally
         self.pending_additions = 0
         self.last_rebuild_time = time.time()
-        
+
         elapsed = time.time() - start_time
         logger.info(
             f"Index rebuild completed in {elapsed:.3f}s "
@@ -340,10 +340,10 @@ class VectorIndex:
             M=self.m,
         )
         self.index.set_ef(self.ef_search)
-        
+
         self.concept_id_to_idx.clear()
         self.idx_to_concept_id.clear()
         self.next_idx = 0
         self.pending_additions = 0
-        
+
         logger.info("Index cleared")

@@ -11,17 +11,17 @@ This package implements sophisticated AI reasoning capabilities:
 - Contradiction resolution
 """
 
+from .contradictions import (
+    ConflictType,
+    Contradiction,
+    ContradictionResolver,
+    ResolutionStrategy,
+)
 from .engine import ReasoningEngine
 from .mppa import MultiPathAggregator
 from .paths import PathFinder
+from .planner import QueryPlan, QueryPlanner, QueryStep, QueryType
 from .query import QueryProcessor
-from .planner import QueryPlanner, QueryPlan, QueryStep, QueryType
-from .contradictions import (
-    ContradictionResolver,
-    Contradiction,
-    ConflictType,
-    ResolutionStrategy,
-)
 
 __all__ = [
     "ReasoningEngine",
