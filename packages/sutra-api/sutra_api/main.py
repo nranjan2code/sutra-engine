@@ -56,13 +56,16 @@ async def lifespan(app: FastAPI):
     # Initialize dependencies properly (stores in app.state)
     init_dependencies(app)
 
-    # Get AI instance to log stats
+    # Get AI instance to log stats (best-effort)
     ai = app.state.ai_instance
-    stats = ai.engine.get_system_stats()
-    logger.info(
-        f"Loaded {stats.get('total_concepts', 0)} concepts, "
-        f"{stats.get('total_associations', 0)} associations"
-    )
+    try:
+        stats = ai.engine.get_system_stats()
+        logger.info(
+            f"Loaded {stats.get('total_concepts', 0)} concepts, "
+            f"{stats.get('total_associations', 0)} associations"
+        )
+    except Exception as e:
+        logger.info(f"Engine stats unavailable at startup: {e}")
 
     yield
 
@@ -140,13 +143,18 @@ async def health_check(ai: SutraAI = Depends(get_ai)):
 
     Returns service status, version, uptime, and basic metrics.
     """
-    # Get stats from core engine
-    stats = ai.engine.get_system_stats()
+    # Get stats (best-effort)
+    loaded = 0
+    try:
+        s = ai.get_stats()
+        loaded = s.get("total_concepts", 0)
+    except Exception:
+        loaded = 0
     return HealthResponse(
         status="healthy",
         version=settings.api_version,
         uptime_seconds=get_uptime(),
-        concepts_loaded=stats.get("total_concepts", 0),
+        concepts_loaded=loaded,
     )
 
 
@@ -284,7 +292,7 @@ async def reason(
     tags=["Reasoning"],
 )
 async def semantic_search(
-    request: SemanticSearchRequest, ai: HybridAI = Depends(get_ai)
+    request: SemanticSearchRequest, ai: SutraAI = Depends(get_ai)
 ):
     """
     Search for similar concepts using semantic embeddings.
@@ -320,7 +328,7 @@ async def semantic_search(
     response_model=ConceptDetail,
     tags=["Reasoning"],
 )
-async def get_concept(concept_id: str, ai: HybridAI = Depends(get_ai)):
+async def get_concept(concept_id: str, ai: SutraAI = Depends(get_ai)):
     """
     Get detailed information about a specific concept.
 
@@ -360,7 +368,7 @@ async def get_concept(concept_id: str, ai: HybridAI = Depends(get_ai)):
 
 # Management endpoints
 @app.get("/stats", response_model=SystemStats, tags=["System"])
-async def get_stats(ai: HybridAI = Depends(get_ai)):
+async def get_stats(ai: SutraAI = Depends(get_ai)):
     """
     Get system statistics and metrics.
 
@@ -391,7 +399,7 @@ async def get_reasoner_stats(reasoner: ReasoningEngine = Depends(get_reasoner)):
 
 
 @app.post("/save", status_code=status.HTTP_200_OK, tags=["System"])
-async def save_knowledge(ai: HybridAI = Depends(get_ai)):
+async def save_knowledge(ai: SutraAI = Depends(get_ai)):
     """
     Save current knowledge to disk.
 
@@ -409,17 +417,23 @@ async def save_knowledge(ai: HybridAI = Depends(get_ai)):
 
 
 @app.post("/load", status_code=status.HTTP_200_OK, tags=["System"])
-async def load_knowledge(ai: HybridAI = Depends(get_ai)):
+async def load_knowledge(request: Request, ai: SutraAI = Depends(get_ai)):
     """
-    Reload knowledge from disk.
+    Reload knowledge from disk by reinitializing the AI instance.
 
-    Replaces current knowledge with saved data.
+    Replaces current in-memory state with persisted data.
     """
     try:
-        ai.load()
+        # Recreate SutraAI which loads from disk on init
+        new_ai = SutraAI(
+            storage_path=settings.storage_path,
+            enable_semantic=settings.use_semantic_embeddings,
+        )
+        request.app.state.ai_instance = new_ai
+        stats = new_ai.get_stats()
         return {
             "message": "Knowledge loaded successfully",
-            "concepts_loaded": len(ai.concepts),
+            "concepts_loaded": stats.get("total_concepts", 0),
         }
     except Exception as e:
         logger.error(f"Failed to load knowledge: {e}")
@@ -436,23 +450,15 @@ async def reset_system(request: Request):
 
     WARNING: This deletes all concepts and associations!
     """
-    # Create fresh HybridAI instance
-    request.app.state.ai_instance = HybridAI(
-        use_semantic=settings.use_semantic_embeddings,
+    # Recreate SutraAI instance (empty in-memory state; disk unchanged)
+    request.app.state.ai_instance = SutraAI(
         storage_path=settings.storage_path,
+        enable_semantic=settings.use_semantic_embeddings,
     )
-
-    # Recreate reasoner bound to new AI instance
-    ai = request.app.state.ai_instance
-    request.app.state.reasoner_instance.concepts = ai.concepts
-    request.app.state.reasoner_instance.associations = ai.associations
-    request.app.state.reasoner_instance.concept_neighbors = ai.concept_neighbors
-    request.app.state.reasoner_instance.word_to_concepts = ai.word_to_concepts
-    request.app.state.reasoner_instance._rebuild_indexes()
 
     return {
         "message": "System reset successfully",
-        "concepts": len(ai.concepts),
+        "concepts": request.app.state.ai_instance.get_stats().get("total_concepts", 0),
     }
 
 

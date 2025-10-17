@@ -1,10 +1,11 @@
 """
 Vector indexing and search for fast semantic retrieval.
 
-This module provides efficient vector search capabilities using HNSW
-(Hierarchical Navigable Small World) graphs for O(log N) search complexity.
+NOTE: As of the production refactor, vector indexing is handled internally
+by ConcurrentStorage using native Rust HNSW. This module is deprecated.
+
+Vector search is now accessed via:
+    storage.vector_search(query_embedding, k=10)
 """
 
-from .vector_search import VectorIndex
-
-__all__ = ["VectorIndex"]
+__all__ = []

@@ -1,3 +1,5 @@
+#![allow(non_local_definitions)]
+
 /// Simplified Python bindings for Sutra Storage Engine
 /// 
 /// This is a minimal working version to establish the Python interface.
@@ -49,6 +51,7 @@ impl From<anyhow::Error> for StorageError {
 struct PyGraphStore {
     vectors: Arc<Mutex<VectorStore>>,
     index: Arc<Mutex<GraphIndex>>,
+    #[allow(dead_code)]
     path: PathBuf,
 }
 
@@ -293,6 +296,7 @@ impl PyGraphStore {
 fn sutra_storage(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyGraphStore>()?;
     m.add_class::<PyReasoningStore>()?;
+    m.add_class::<crate::python_concurrent::PyConcurrentStorage>()?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

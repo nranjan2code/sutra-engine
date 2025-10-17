@@ -71,7 +71,7 @@ class SutraAI:
 
         # Internal: Core reasoning engine (hidden from users)
         logger.info(f"Initializing SutraAI at {storage_path}")
-        
+
         # Production config handles caching internally
         # If custom caching is needed, use builder pattern
         config = production_config(storage_path=storage_path)
@@ -478,14 +478,16 @@ class SutraAI:
         entries = []
         for query_id, result in list(self._query_cache.items())[:limit]:
             if result.audit_trail:
-                entries.append({
-                    "query_id": query_id,
-                    "timestamp": result.audit_trail.timestamp,
-                    "operation": "query",
-                    "input": {"query": result.audit_trail.query},
-                    "output": {"answer": result.answer},
-                    "confidence": result.confidence,
-                })
+                entries.append(
+                    {
+                        "query_id": query_id,
+                        "timestamp": result.audit_trail.timestamp,
+                        "operation": "query",
+                        "input": {"query": result.audit_trail.query},
+                        "output": {"answer": result.answer},
+                        "confidence": result.confidence,
+                    }
+                )
         return entries
 
     def get_concept(self, concept_id: str) -> Optional[Dict[str, Any]]:

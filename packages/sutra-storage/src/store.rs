@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 /// Main graph storage engine
 pub struct GraphStore {
+    #[allow(dead_code)]
     path: PathBuf,
     concepts: Arc<DashMap<ConceptId, ConceptRecord>>,
     associations: Arc<DashMap<(ConceptId, ConceptId), AssociationRecord>>,

@@ -39,7 +39,6 @@ class QueryProcessor:
         association_extractor: AssociationExtractor,
         path_finder: PathFinder,
         mppa: MultiPathAggregator,
-        vector_index: Optional[Any] = None,
         embedding_processor: Optional[Any] = None,
         nlp_processor: Optional[Any] = None,
     ):
@@ -47,11 +46,10 @@ class QueryProcessor:
         Initialize query processor.
 
         Args:
-            storage: RustStorageAdapter (single source of truth)
+            storage: RustStorageAdapter with native HNSW vector search
             association_extractor: For concept finding
             path_finder: For reasoning path generation
             mppa: For consensus aggregation
-            vector_index: Optional HNSW index for O(log N) semantic search
             embedding_processor: Optional batch embedding processor
             nlp_processor: Optional NLP processor for embeddings
         """
@@ -61,7 +59,6 @@ class QueryProcessor:
         self.mppa = mppa
 
         # Performance components for semantic search
-        self.vector_index = vector_index
         self.embedding_processor = embedding_processor
         self.nlp_processor = nlp_processor
 
@@ -229,14 +226,8 @@ class QueryProcessor:
 
         PRODUCTION: Vector search is the ONLY path. No fallbacks, no hacks.
         Embeddings naturally handle query variations, no expansion needed.
+        Uses native HNSW in storage for O(log N) semantic search.
         """
-        # Vector index is MANDATORY for production
-        if self.vector_index is None:
-            raise RuntimeError(
-                "Vector index is required. Initialize QueryProcessor with vector_index. "
-                "Vector search is the only path that scales to millions of concepts."
-            )
-
         return self._find_concepts_semantic(query, max_concepts)
 
     def _find_concepts_semantic(
@@ -286,8 +277,8 @@ class QueryProcessor:
         if not isinstance(query_embedding, np.ndarray):
             query_embedding = np.array(query_embedding, dtype=np.float32)
 
-        # Search vector index (O(log N))
-        vector_results = self.vector_index.search(
+        # Search using native HNSW in storage (O(log N))
+        vector_results = self.storage.vector_search(
             query_embedding,
             k=max_concepts,
         )

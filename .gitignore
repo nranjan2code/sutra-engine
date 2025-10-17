@@ -283,10 +283,11 @@ test_knowledge/
 *.knowledge/
 
 # Storage files (Rust-backed storage)
+storage.dat
 concepts.json
 associations.json
 embeddings.pkl
-vectors
+vectors/
 wal.log
 *.wal
 *.db

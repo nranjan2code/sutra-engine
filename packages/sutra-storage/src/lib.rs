@@ -10,7 +10,6 @@
 /// - Temporal decay and evolution
 /// - Native vector storage with quantization
 /// - Python bindings via PyO3
-
 mod types;
 mod segment;
 mod manifest;
@@ -21,7 +20,15 @@ mod wal;
 mod quantization;
 mod vectors;
 mod python;
+mod python_concurrent;
 mod reasoning_store;
+
+// New concurrent memory modules
+mod write_log;
+mod read_view;
+mod reconciler;
+mod concurrent_memory;
+mod mmap_store;
 
 pub use types::{
     ConceptId, AssociationId, AssociationType, ConceptRecord, AssociationRecord,
@@ -37,6 +44,13 @@ pub use wal::{WriteAheadLog, LogEntry, Operation};
 pub use quantization::ProductQuantizer;
 pub use vectors::{VectorStore, VectorConfig, VectorMetadata, VectorStats};
 pub use reasoning_store::{ReasoningStore, ConceptData, AssociationData, ReasoningContext};
+
+// New concurrent memory exports
+pub use concurrent_memory::{ConcurrentMemory, ConcurrentConfig, ConcurrentStats, SnapshotInfo, HnswStats};
+pub use write_log::{WriteLog, WriteEntry, WriteLogStats, WriteLogError};
+pub use read_view::{ReadView, GraphSnapshot, ConceptNode};
+pub use reconciler::{Reconciler, ReconcilerConfig, ReconcilerStats};
+pub use mmap_store::{MmapStore, MmapStats};
 
 // Re-export Python bindings
 // TODO: Uncomment when ready
