@@ -15,23 +15,26 @@ Sutra AI is an explainable graph-based AI system that learns in real-time withou
 
 ## Architecture
 
-This is a monorepo with clear separation of concerns across multiple packages:
+gRPC-first monorepo — all app services connect to the storage server.
 
 ```
-sutra-core     → Graph reasoning engine (Python)
-     ↓
-sutra-storage  → High-performance storage (Rust) 
-     ↓
-sutra-hybrid   → Semantic embeddings layer (Python)
-     ↓
-sutra-api      → REST API (FastAPI)
+┌───────────────┐         gRPC          ┌─────────────────────┐
+│  sutra-api    │ ───────────────────▶  │  storage-server     │
+│  (FastAPI)    │ ◀───────────────────  │  (Rust, gRPC)       │
+└───────────────┘                       └─────────────────────┘
+        ▲                                        ▲
+        │                                        │
+        └──────────── gRPC ──────────────────────┘
+
+┌───────────────┐
+│ sutra-hybrid  │  (embeddings + orchestration)
+└───────────────┘
 ```
 
 **Key Architectural Principles:**
-- Only `sutra-api` is external-facing; core and hybrid are internal implementation details
-- Graph-based reasoning is inherently explainable (can trace every path)
+- All graph/vector ops run in storage-server; no in-process storage in API/Hybrid
 - Rust storage provides zero-copy memory-mapped files and lock-free concurrency
-- Optional semantic embeddings enhance reasoning but maintain explainability
+- Optional semantic embeddings enhance reasoning but remain transparent
 - Temporal log-structured storage for time-travel queries
 
 ### Package Structure
@@ -88,18 +91,12 @@ make check  # Runs format, lint, and test
 
 ### Demos and Development
 ```bash
-# Simple demos (root directory)
-python demo_simple.py           # Basic learning and querying
-python demo_end_to_end.py       # Complete workflow
-python demo_mass_learning.py    # Performance testing
-python demo_wikipedia_learning.py  # Wikipedia processing
+# Local stack (recommended)
+DEPLOY=local VERSION=v2 bash deploy-optimized.sh
 
-# Hybrid demo
-python packages/sutra-hybrid/examples/hybrid_demo.py
-
-# Run API server
-cd packages/sutra-api
-python -m sutra_api.main
+# Or run API locally (requires storage server)
+export SUTRA_STORAGE_SERVER=localhost:50051
+uvicorn sutra_api.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### Build and Distribution
@@ -152,16 +149,12 @@ Production-ready storage architecture:
 - Immutable read snapshots for burst-tolerant performance
 - Path finding and graph traversal (BFS)
 - 100% test pass rate with verified accuracy
-
-## Configuration
+### Configuration
 
 ### Environment Variables
 ```bash
-# Storage location
-export SUTRA_STORAGE_PATH="./knowledge"
-
-# Enable semantic embeddings
-export SUTRA_USE_SEMANTIC_EMBEDDINGS="true"
+# Storage server address (all services)
+export SUTRA_STORAGE_SERVER="storage-server:50051"
 
 # API settings
 export SUTRA_API_PORT="8000"
@@ -169,6 +162,7 @@ export SUTRA_API_PORT="8000"
 # Rate limits
 export SUTRA_RATE_LIMIT_LEARN="30"
 export SUTRA_RATE_LIMIT_REASON="60"
+```
 ```
 
 ### Reasoning Configuration

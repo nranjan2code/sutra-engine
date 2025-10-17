@@ -6,6 +6,7 @@ Production-ready API with middleware, error handling, and CORS.
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
+import os
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -36,8 +37,9 @@ async def lifespan(app: FastAPI):
 
     # Initialize AI instance if not already set
     if _ai_instance is None:
-        logger.info("Creating new SutraAI instance...")
-        _ai_instance = SutraAI(storage_path="./sutra_data")
+        logger.info("Creating new SutraAI instance (gRPC)...")
+        storage_server = os.getenv("SUTRA_STORAGE_SERVER", "storage-server:50051")
+        _ai_instance = SutraAI(storage_server=storage_server)
 
     # Set AI instance in endpoint modules
     openai_endpoints.set_ai_instance(_ai_instance)

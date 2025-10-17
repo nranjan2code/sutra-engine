@@ -1,0 +1,122 @@
+syntax = "proto3";
+
+package sutra.storage;
+
+// Storage service definition
+service StorageService {
+  // Concept operations
+  rpc LearnConcept(LearnConceptRequest) returns (LearnConceptResponse);
+  rpc QueryConcept(QueryConceptRequest) returns (QueryConceptResponse);
+  
+  // Association operations
+  rpc LearnAssociation(LearnAssociationRequest) returns (LearnAssociationResponse);
+  rpc GetNeighbors(GetNeighborsRequest) returns (GetNeighborsResponse);
+  
+  // Path finding
+  rpc FindPath(FindPathRequest) returns (FindPathResponse);
+  
+  // Vector operations
+  rpc VectorSearch(VectorSearchRequest) returns (VectorSearchResponse);
+  
+  // Management
+  rpc GetStats(StatsRequest) returns (StatsResponse);
+  rpc Flush(FlushRequest) returns (FlushResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Request/Response messages
+
+message LearnConceptRequest {
+  string concept_id = 1;
+  string content = 2;
+  repeated float embedding = 3;
+  float strength = 4;
+  float confidence = 5;
+}
+
+message LearnConceptResponse {
+  uint64 sequence = 1;
+}
+
+message LearnAssociationRequest {
+  string source_id = 1;
+  string target_id = 2;
+  uint32 assoc_type = 3;
+  float confidence = 4;
+}
+
+message LearnAssociationResponse {
+  uint64 sequence = 1;
+}
+
+message QueryConceptRequest {
+  string concept_id = 1;
+}
+
+message QueryConceptResponse {
+  bool found = 1;
+  string concept_id = 2;
+  string content = 3;
+  float strength = 4;
+  float confidence = 5;
+}
+
+message GetNeighborsRequest {
+  string concept_id = 1;
+}
+
+message GetNeighborsResponse {
+  repeated string neighbor_ids = 1;
+}
+
+message FindPathRequest {
+  string start_id = 1;
+  string end_id = 2;
+  uint32 max_depth = 3;
+}
+
+message FindPathResponse {
+  bool found = 1;
+  repeated string path = 2;
+}
+
+message VectorSearchRequest {
+  repeated float query_vector = 1;
+  uint32 k = 2;
+  uint32 ef_search = 3;
+}
+
+message VectorMatch {
+  string concept_id = 1;
+  float similarity = 2;
+}
+
+message VectorSearchResponse {
+  repeated VectorMatch results = 1;
+}
+
+message StatsRequest {}
+
+message StatsResponse {
+  uint64 concepts = 1;
+  uint64 edges = 2;
+  uint64 written = 3;
+  uint64 dropped = 4;
+  uint64 pending = 5;
+  uint64 reconciliations = 6;
+  uint64 uptime_seconds = 7;
+}
+
+message FlushRequest {}
+
+message FlushResponse {
+  bool success = 1;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string status = 2;
+  uint64 uptime_seconds = 3;
+}

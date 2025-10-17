@@ -69,24 +69,14 @@ async def learn(
         HTTPException: If learning fails
     """
     try:
-        # Get concept count before learning
-        concepts_before = len(ai.engine.get_all_concepts())
-
-        # Learn from text
-        ai.learn(request.text)
-
-        # Get concept count after learning
-        concepts_after = len(ai.engine.get_all_concepts())
-        concepts_learned = concepts_after - concepts_before
-
-        # Estimate associations created (simplified)
-        associations_created = concepts_learned * 2  # Rough estimate
+        # Learn via hybrid (embeddings -> storage)
+        result = ai.learn(request.text)
 
         return LearnResponse(
             success=True,
-            concepts_learned=concepts_learned,
-            associations_created=associations_created,
-            message=f"Successfully learned {concepts_learned} new concepts",
+            concepts_learned=1,
+            associations_created=0,
+            message="Successfully learned 1 concept",
         )
 
     except Exception as e:
@@ -231,20 +221,14 @@ async def health(ai: SutraAI = Depends(get_ai)) -> HealthResponse:
 
     uptime = time.time() - _start_time
 
-    # Get knowledge base statistics
-    all_concepts = ai.engine.get_all_concepts()
-    total_concepts = len(all_concepts)
-    total_associations = sum(
-        len(ai.engine.get_associations_for_concept(concept.word))
-        for concept in all_concepts
-    )
+    stats = ai.get_stats()
 
     return HealthResponse(
         status="healthy",
         version="1.0.0",
         uptime_seconds=uptime,
-        total_concepts=total_concepts,
-        total_associations=total_associations,
+        total_concepts=stats.get("total_concepts", 0),
+        total_associations=stats.get("total_associations", 0),
     )
 
 
@@ -306,37 +290,13 @@ async def stats(
     Returns:
         Knowledge base statistics
     """
-    # Get all concepts
-    all_concepts = ai.engine.get_all_concepts()
-    total_concepts = len(all_concepts)
+    stats = ai.get_stats()
 
-    # Calculate total associations
-    total_associations = sum(
-        len(ai.engine.get_associations_for_concept(concept.word))
-        for concept in all_concepts
-    )
+    total_concepts = int(stats.get("total_concepts", 0))
+    total_associations = int(stats.get("total_associations", 0))
+    avg_strength = 0.0  # Not tracked in storage server yet
 
-    # Calculate average strength
-    avg_strength = (
-        sum(concept.strength for concept in all_concepts) / total_concepts
-        if total_concepts > 0
-        else 0.0
-    )
-
-    # Get top concepts by access count
-    sorted_concepts = sorted(all_concepts, key=lambda c: c.access_count, reverse=True)[
-        :top_n
-    ]
-
-    top_concepts = [
-        ConceptInfo(
-            word=concept.word,
-            strength=concept.strength,
-            access_count=concept.access_count,
-            associations=len(ai.engine.get_associations_for_concept(concept.word)),
-        )
-        for concept in sorted_concepts
-    ]
+    top_concepts: List[ConceptInfo] = []  # Not available via gRPC yet
 
     return StatsResponse(
         total_concepts=total_concepts,

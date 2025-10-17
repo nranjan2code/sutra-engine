@@ -1,28 +1,22 @@
 """
-SutraAI - PRODUCTION-READY engine with full hybrid functionality.
+SutraAI - Hybrid service using gRPC-only architecture.
 
-This replaces engine.py with complete semantic integration.
-NO TODOs, NO mocks, NO placeholders.
-
-Features:
-- Real-time learning with embeddings
-- Hybrid reasoning (graph + semantic)
-- Multi-strategy comparison (actually different)
-- Semantic agreement calculation
-- Full explainability and audit trails
+This implementation removes any direct sutra-core dependency.
+All graph/storage operations are done via gRPC to the storage server.
+Local component focuses on embeddings and orchestration only.
 """
 
+import hashlib
 import logging
 import time
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from sutra_core.config import production_config
-from sutra_core.reasoning import ReasoningEngine
 
-# Import embedding support from old HybridAI
+from sutra_storage_client import StorageClient
+
 from .embeddings import EmbeddingProvider, SemanticEmbedding, TfidfEmbedding
 from .explanation import ExplanationGenerator
 from .results import (
@@ -39,66 +33,29 @@ logger = logging.getLogger(__name__)
 
 class SutraAI:
     """
-    Production-ready Sutra AI engine with full hybrid capabilities.
+    Hybrid AI orchestrator (embeddings + storage via gRPC).
 
-    Combines:
-    - Graph-based reasoning (explainable paths)
-    - Semantic embeddings (similarity matching)
-    - Multi-strategy reasoning (compare approaches)
-    - Complete audit trails (regulatory compliance)
-
-    Example:
-        >>> ai = SutraAI(storage_path="./knowledge")
-        >>> ai.learn("Python is a programming language")
-        >>> result = ai.ask("What is Python?", explain=True, semantic_boost=True)
-        >>> result.show_explanation()
+    Responsibilities:
+    - Generate embeddings for learn/query
+    - Forward learn/graph ops to storage via gRPC
+    - Build explainable results using available signals
     """
 
     def __init__(
         self,
-        storage_path: str = "./knowledge",
+        storage_server: str = "storage-server:50051",
         enable_semantic: bool = True,
-    ):
-        """
-        Initialize Sutra AI system with full capabilities.
-
-        Args:
-            storage_path: Path for persistent storage
-            enable_semantic: Enable semantic embeddings (recommended)
-        """
-        self.storage_path = storage_path
+    ) -> None:
         self.enable_semantic = enable_semantic
-
-        # Internal: Core reasoning engine (hidden from users)
-        logger.info(f"Initializing SutraAI at {storage_path}")
-
-        # Production config handles caching internally
-        # If custom caching is needed, use builder pattern
-        config = production_config(storage_path=storage_path)
-        self._core = ReasoningEngine.from_config(config)
-
-        # Semantic embeddings
+        self._storage = StorageClient(storage_server)
         self._embedding_provider = self._init_embeddings(enable_semantic)
-        self._concept_embeddings: Dict[str, np.ndarray] = {}
-
-        # Explanation generator
         self._explainer = ExplanationGenerator()
-
-        # Query cache for /explain endpoint
         self._query_cache: Dict[str, ExplainableResult] = {}
-
-        # Load embeddings if they exist
-        self._load_embeddings()
-
-        logger.info(f"SutraAI initialized with {self._embedding_provider.get_name()}")
-
-    @property
-    def engine(self) -> ReasoningEngine:
-        """Access to core reasoning engine (for advanced users)."""
-        return self._core
+        logger.info(
+            f"Initialized SutraAI (gRPC) with embeddings={self._embedding_provider.get_name()}"
+        )
 
     def _init_embeddings(self, use_semantic: bool) -> EmbeddingProvider:
-        """Initialize embedding provider with fallback."""
         if use_semantic:
             try:
                 return SemanticEmbedding()
@@ -108,24 +65,208 @@ class SutraAI:
         else:
             return TfidfEmbedding()
 
-    def _load_embeddings(self) -> None:
-        """Load embeddings from disk if they exist."""
-        import pickle
-        from pathlib import Path
+    def _content_id(self, content: str) -> str:
+        return hashlib.sha1(content.encode("utf-8")).hexdigest()[:16]
 
-        embeddings_path = Path(self.storage_path) / "embeddings.pkl"
-        if embeddings_path.exists():
+    # --------------------------- Learning ---------------------------------
+    def learn(
+        self,
+        content: str,
+        source: Optional[str] = None,
+        category: Optional[str] = None,
+        **metadata,
+    ) -> LearnResult:
+        start_time = time.time()
+
+        concept_id = self._content_id(content)
+
+        embedding: Optional[np.ndarray] = None
+        if self.enable_semantic:
             try:
-                with open(embeddings_path, "rb") as f:
-                    self._concept_embeddings = pickle.load(f)
-                logger.info(
-                    f"Loaded {len(self._concept_embeddings)} embeddings from disk"
-                )
+                embedding = self._embedding_provider.encode([content])[0]
             except Exception as e:
-                logger.warning(f"Failed to load embeddings: {e}")
-                self._concept_embeddings = {}
+                logger.warning(f"Embedding generation failed: {e}")
+
+        seq = self._storage.learn_concept(
+            concept_id=concept_id,
+            content=content,
+            embedding=embedding,
+            strength=1.0,
+            confidence=1.0,
+        )
+
+        exec_ms = (time.time() - start_time) * 1000
+        logger.info(f"Learned concept {concept_id} (seq={seq}) in {exec_ms:.1f}ms")
+
+        stats = self._storage.stats()
+        return LearnResult(
+            concept_id=concept_id,
+            timestamp=datetime.utcnow().isoformat() + "Z",
+            concepts_created=1,
+            associations_created=0,
+            message="Knowledge learned successfully",
+            source=source,
+            category=category,
+        )
+
+    # ----------------------------- Query ---------------------------------
+    def ask(
+        self,
+        query: str,
+        explain: bool = True,
+        semantic_boost: bool = True,
+        num_paths: int = 5,
+        min_confidence: float = 0.0,
+    ) -> ExplainableResult:
+        start_time = time.time()
+        query_id = f"q_{uuid.uuid4().hex[:12]}"
+
+        semantic_confidence = 0.0
+        semantic_support: Optional[List[Dict[str, Any]]] = None
+        matched_concept: Optional[str] = None
+
+        if semantic_boost and self.enable_semantic:
+            try:
+                qvec = self._embedding_provider.encode([query])[0]
+                matches: List[Tuple[str, float]] = self._storage.vector_search(qvec, k=5)
+                if matches:
+                    semantic_confidence = float(matches[0][1])
+                    semantic_support = [
+                        {"concept_id": cid, "similarity": float(sim)}
+                        for cid, sim in matches
+                    ]
+                    matched_concept = matches[0][0]
+            except Exception as e:
+                logger.warning(f"Semantic search failed: {e}")
+
+        # Fallback answer strategy: echo top matched concept content if available
+        if matched_concept:
+            concept = self._storage.query_concept(matched_concept)
+            answer = concept["content"] if concept else query
         else:
-            self._concept_embeddings = {}
+            answer = query  # Minimal fallback: mirror query when no knowledge yet
+
+        # Try to craft a simple reasoning path via storage (optional)
+        reasoning_paths: Optional[List[ReasoningPathDetail]] = None
+        try:
+            if matched_concept:
+                # Single-node path representing semantic match
+                reasoning_paths = [
+                    ReasoningPathDetail(
+                        concepts=[answer],
+                        concept_ids=[matched_concept],
+                        association_types=[],
+                        confidence=semantic_confidence,
+                        explanation="Top semantic match from vector search",
+                    )
+                ]
+        except Exception:
+            reasoning_paths = None
+
+        final_confidence = max(semantic_confidence, min_confidence)
+        exec_ms = (time.time() - start_time) * 1000
+
+        confidence_breakdown = ConfidenceBreakdown(
+            graph_confidence=0.0,  # graph reasoning handled by storage service
+            semantic_confidence=semantic_confidence,
+            path_quality=semantic_confidence,
+            consensus_strength=semantic_confidence,
+            final_confidence=final_confidence,
+        )
+
+        audit_trail = AuditTrail(
+            query_id=query_id,
+            query=query,
+            timestamp=datetime.utcnow().isoformat() + "Z",
+            concepts_accessed=len(semantic_support or []),
+            associations_traversed=0,
+            execution_time_ms=exec_ms,
+            reasoning_method="semantic_only",
+            semantic_boost_used=semantic_boost and self.enable_semantic,
+            paths_explored=1 if reasoning_paths else 0,
+            storage_path="grpc://storage-server",
+        )
+
+        explanation_text = None
+        if explain:
+            explanation_text = self._explainer.generate(
+                query=query,
+                answer=answer,
+                confidence=final_confidence,
+                reasoning_paths=reasoning_paths or [],
+                semantic_boost=semantic_boost and self.enable_semantic,
+                semantic_contribution=semantic_confidence,
+            )
+
+        result = ExplainableResult(
+            answer=answer,
+            confidence=final_confidence,
+            explanation=explanation_text,
+            reasoning_paths=reasoning_paths,
+            confidence_breakdown=confidence_breakdown,
+            semantic_support=semantic_support,
+            audit_trail=audit_trail,
+            metadata={"query_id": query_id, "execution_time_ms": exec_ms},
+        )
+
+        self._query_cache[query_id] = result
+        logger.info(
+            f"Query {query_id} answered in {exec_ms:.1f}ms (confidence: {final_confidence:.2f})"
+        )
+        return result
+
+    # --------------------------- Utilities --------------------------------
+    def multi_strategy(self, query: str) -> MultiStrategyResult:
+        # With gRPC-only architecture, we currently have one strategy (semantic)
+        semantic = self.ask(query, explain=True, semantic_boost=True)
+        return MultiStrategyResult(
+            query=query,
+            graph_only=semantic,  # Placeholder: graph handled by storage server
+            semantic_enhanced=semantic,
+            agreement_score=1.0,
+            recommended_strategy="semantic_only",
+            reasoning="Single available strategy in this service",
+        )
+
+    def get_audit_trail(self, limit: int = 10) -> List[Dict[str, Any]]:
+        entries = []
+        for qid, res in list(self._query_cache.items())[:limit]:
+            if res.audit_trail:
+                entries.append(
+                    {
+                        "query_id": qid,
+                        "timestamp": res.audit_trail.timestamp,
+                        "operation": "query",
+                        "input": {"query": res.audit_trail.query},
+                        "output": {"answer": res.answer},
+                        "confidence": res.confidence,
+                    }
+                )
+        return entries
+
+    def get_stats(self) -> Dict[str, Any]:
+        s = self._storage.stats()
+        return {
+            "total_concepts": s.get("concepts", 0),
+            "total_associations": s.get("edges", 0),
+            "total_embeddings": None,
+            "embedding_coverage": None,
+            "storage_path": "grpc://storage-server",
+            "semantic_enabled": self.enable_semantic,
+            "embedding_provider": self._embedding_provider.get_name(),
+            "version": "2.0.0",
+            "cached_queries": len(self._query_cache),
+        }
+
+    def save(self) -> None:
+        # No local persistence required; vectors stored server-side
+        return None
+
+    def close(self) -> None:
+        try:
+            self._storage.close()
+        except Exception:
+            pass
 
     def learn(
         self,

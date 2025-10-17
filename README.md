@@ -40,35 +40,39 @@ Tested with 5 concepts, ~100ms query latency, full persistence verified.
 
 ## Architecture
 
-Separation of concerns with clear boundaries:
+gRPC-first, service-oriented design. All application services talk to the Storage Server over gRPC.
 
 ```
-sutra-core     → Graph reasoning engine (Python)
-     ↓
-sutra-storage  → High-performance storage (Rust)
-     ↓
-sutra-hybrid   → Semantic embeddings layer (Python)
-     ↓
-sutra-api      → REST API (FastAPI)
+┌───────────────┐       gRPC        ┌─────────────────────┐
+│  sutra-api    │ ───────────────▶  │  storage-server     │
+│ (FastAPI)     │ ◀───────────────  │  (Rust, gRPC)       │
+└───────────────┘                   └─────────────────────┘
+       ▲   ▲                                  ▲
+       │   │                                  │
+       │   └─────────────── gRPC ─────────────┘
+       │
+┌───────────────┐
+│ sutra-hybrid  │  (embeddings + orchestration, gRPC client)
+└───────────────┘
 ```
 
-**Important**: Only `sutra-api` is external-facing. Core and hybrid are internal implementation details.
+- sutra-api: Thin REST-to-gRPC proxy (no local reasoning)
+- sutra-hybrid: Embeddings + orchestration, forwards graph ops via gRPC
+- storage-server: Single source of truth for graph + vectors
+
+Only `sutra-api` and `sutra-hybrid` are user-facing HTTP services. No component accesses storage directly in-process.
 
 ## Quick Start
 
-### 1. Install
+### 1. Run locally (Docker Compose)
 
 ```bash
-# Clone and setup
-git clone <repo>
-cd sutra-models
-python3 -m venv venv
-source venv/bin/activate
+# From repo root
+DEPLOY=local VERSION=v2 bash deploy-optimized.sh
 
-# Install packages
-pip install -e packages/sutra-core/
-pip install -e packages/sutra-hybrid/
-pip install -e packages/sutra-api/
+# Health checks
+curl -s http://localhost:8000/health     # sutra-api
+curl -s http://localhost:8001/ping       # sutra-hybrid
 ```
 
 ### 2. Test End-to-End
@@ -80,29 +84,16 @@ python test_direct_workflow.py
 
 This tests: Learn → Save → Reload → Query → Multi-strategy → Audit
 
-### 3. Use via API (Production)
+### 2. Use the API
 
 ```bash
-# Start API server
-cd packages/sutra-api
-python -m sutra_api.main
-```
-
-API available at http://localhost:8000 (docs at /docs)
-
-```bash
-# Learn
+# Learn (thin proxy → storage via gRPC)
 curl -X POST http://localhost:8000/learn \
   -H "Content-Type: application/json" \
-  -d '{"content": "Python is a programming language created by Guido van Rossum"}'
+  -d '{"content": "Python is a programming language"}'
 
-# Query
-curl -X POST http://localhost:8000/reason \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Who created Python?"}'
-
-# Save
-curl -X POST http://localhost:8000/save
+# Health
+curl -s http://localhost:8000/health
 ```
 
 ## What We're Working Toward
@@ -126,14 +117,13 @@ curl -X POST http://localhost:8000/save
 
 ## Performance Characteristics
 
-Based on testing with sutra-core:
+Storage-server benchmarks (production):
 
-- **Learning**: ~50-200ms per concept (with embeddings)
-- **Query**: ~100ms with 5 concepts, <500ms with 100+ concepts
-- **Memory**: ~0.1KB per concept
-- **Storage**: Rust-backed with memory-mapped files
-- **Scaling**: Tested to 100K+ concepts without GPU
-- **Vector search**: O(log N) with HNSW indexing
+- **Learning**: 0.02ms per concept (57,412/sec)
+- **Query (read)**: <0.01ms via in-memory snapshot
+- **Path finding**: ~1ms for 3-hop BFS (server-side)
+- **Storage**: Single file, memory-mapped, lock-free writes
+- **Vector search**: HNSW O(log N)
 
 ## Key Design Decisions
 

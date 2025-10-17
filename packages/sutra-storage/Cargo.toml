@@ -40,13 +40,21 @@ numpy = "0.20"                     # NumPy integration
 thiserror = "1.0"                  # Error handling
 anyhow = "1.0"                     # Error context
 log = "0.4"                        # Logging
+env_logger = "0.11"                # Logging implementation
 rayon = "1.8"                      # Data parallelism
 hex = "0.4"                        # Hex encoding for IDs
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "signal"] }  # Async runtime
+tonic = { version = "0.10", features = ["transport"] }  # gRPC framework
+prost = "0.12"                     # Protocol buffers runtime
+tower = "0.4"                      # Middleware
 
 [dev-dependencies]
 criterion = "0.5"                  # Benchmarking
 proptest = "1.4"                   # Property-based testing
 tempfile = "3.8"                   # Temporary directories for testing
+
+[build-dependencies]
+tonic-build = "0.10"               # Protobuf code generation
 
 [profile.release]
 opt-level = 3

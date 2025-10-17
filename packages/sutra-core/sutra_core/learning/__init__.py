@@ -13,14 +13,18 @@ This package contains:
 from .adaptive import AdaptiveLearner
 from .associations import AssociationExtractor
 from .associations_parallel import ParallelAssociationExtractor
-from .embeddings import EmbeddingBatchProcessor, create_embedding_processor
 from .entity_cache import EntityCache
+
+# Embeddings (optional, requires torch and sentence-transformers)
+try:
+    from .embeddings import EmbeddingBatchProcessor, create_embedding_processor
+    __all_embeddings__ = ["EmbeddingBatchProcessor", "create_embedding_processor"]
+except ImportError:
+    __all_embeddings__ = []
 
 __all__ = [
     "AssociationExtractor",
     "ParallelAssociationExtractor",
     "AdaptiveLearner",
-    "EmbeddingBatchProcessor",
-    "create_embedding_processor",
     "EntityCache",
-]
+] + __all_embeddings__

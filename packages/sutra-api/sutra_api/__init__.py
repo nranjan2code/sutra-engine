@@ -7,7 +7,8 @@ Provides HTTP endpoints for learning, reasoning, and knowledge management.
 __version__ = "1.0.0"
 
 from .config import settings
-from .dependencies import get_ai, get_uptime
+# Minimal version: dependencies imported directly in endpoints
+from .dependencies import get_uptime
 from .models import (
     AssociationType,
     BatchLearnRequest,
@@ -32,7 +33,6 @@ __all__ = [
     # Config
     "settings",
     # Dependencies
-    "get_ai",
     "get_uptime",
     # Models
     "AssociationType",

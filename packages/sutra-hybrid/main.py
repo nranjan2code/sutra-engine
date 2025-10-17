@@ -99,9 +99,10 @@ Examples:
     logger.info(f"Storage path: {storage_path.absolute()}")
     logger.info(f"Starting Sutra AI API server on {args.host}:{args.port}")
 
-    # Initialize AI instance
-    ai = SutraAI(storage_path=str(storage_path))
-    logger.info("SutraAI instance initialized")
+    # Initialize AI instance (gRPC)
+    storage_server = os.environ.get("SUTRA_STORAGE_SERVER", "storage-server:50051")
+    ai = SutraAI(storage_server=storage_server)
+    logger.info("SutraAI (gRPC) instance initialized")
 
     # Create app with pre-configured AI instance
     app = create_app(ai_instance=ai)

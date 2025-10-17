@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import ReactFlow, {
   Node,
   Edge,
@@ -14,7 +14,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material'
-import type { ReasoningResult, ReasoningPath } from '../types/api'
+import type { ReasoningResult } from '../types/api'
 
 // Minimal concept node
 function ConceptNode({ data }: { data: { label: string; isAnswer?: boolean } }) {

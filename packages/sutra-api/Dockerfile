@@ -1,0 +1,74 @@
+# Minimal Sutra API - Thin gRPC Proxy (Target: 50-80MB)
+# Build from monorepo root: docker build -f packages/sutra-api/Dockerfile .
+
+# Stage 1: Builder
+FROM python:3.11-alpine AS builder
+
+WORKDIR /build
+
+# Install build tools for protobuf and grpc
+RUN apk add --no-cache gcc musl-dev libffi-dev protobuf-dev
+
+# Copy only storage-client package
+COPY packages/sutra-storage-client ./packages/sutra-storage-client
+
+# (Skipping grpcio-tools and proto generation; using checked-in generated files)
+
+# Create minimal requirements (NO sutra-core, NO sutra-hybrid!)
+RUN cat > api-requirements.txt <<EOF
+typing_extensions>=4.12.0
+grpcio>=1.60.0
+protobuf>=4.25.0
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-multipart>=0.0.6
+EOF
+
+# Install minimal packages
+RUN pip install --no-cache-dir --user -r api-requirements.txt && \
+    pip install --no-cache-dir --user ./packages/sutra-storage-client && \
+    find /root/.local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+
+# Stage 2: Runtime
+FROM python:3.11-alpine
+
+# Install runtime dependencies (minimal!)
+RUN apk add --no-cache curl libstdc++
+
+# Install critical Python deps system-wide to avoid user-site issues
+RUN pip install --no-cache-dir typing_extensions>=4.12.0 grpcio>=1.60.0 protobuf>=4.25.0
+
+# Create non-root user
+RUN adduser --disabled-password --gecos '' --uid 1000 sutra
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /root/.local /home/sutra/.local
+
+# Copy ONLY API code (no sutra-core, no sutra-hybrid!)
+COPY packages/sutra-api/sutra_api ./sutra_api
+
+# Switch to non-root user
+USER sutra
+
+# Add local bin to PATH and ensure user site-packages is importable
+ENV PATH=/home/sutra/.local/bin:$PATH \
+    PYTHONPATH=/home/sutra/.local/lib/python3.11/site-packages
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    SUTRA_STORAGE_MODE=server \
+    SUTRA_STORAGE_SERVER=storage-server:50051
+
+# Run application
+CMD ["uvicorn", "sutra_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

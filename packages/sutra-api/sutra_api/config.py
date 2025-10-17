@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # Storage Configuration
     storage_path: str = "./api_knowledge"
+    storage_server: str = "storage-server:50051"  # gRPC storage server address
     auto_save: bool = True
     save_interval_seconds: int = 300  # 5 minutes
 

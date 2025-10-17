@@ -9,6 +9,7 @@ Orchestrates all reasoning components to provide AI-level capabilities:
 """
 
 import logging
+import os
 import threading
 import time
 from collections import OrderedDict
@@ -24,13 +25,18 @@ from ..graph.concepts import AssociationType
 from ..learning.adaptive import AdaptiveLearner
 from ..learning.associations import AssociationExtractor
 from ..learning.associations_parallel import ParallelAssociationExtractor
-from ..learning.embeddings import EmbeddingBatchProcessor
 from ..learning.entity_cache import EntityCache
 from ..utils.nlp import TextProcessor
 from ..utils.text import extract_words
 from .mppa import ConsensusResult, MultiPathAggregator
 from .paths import PathFinder
 from .query import QueryProcessor
+
+# Optional embedding support
+try:
+    from ..learning.embeddings import EmbeddingBatchProcessor
+except ImportError:
+    EmbeddingBatchProcessor = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -147,8 +153,40 @@ class ReasoningEngine:
         except (ImportError, OSError) as e:
             logger.warning(f"NLP processor unavailable: {e}")
 
-        # Initialize storage backend
-        if use_rust_storage:
+        # Initialize storage backend based on SUTRA_STORAGE_MODE
+        storage_mode = os.environ.get("SUTRA_STORAGE_MODE", "local")
+        
+        if storage_mode == "server":
+            # Distributed mode: use gRPC to connect to storage server
+            try:
+                from ..storage import GrpcStorageAdapter
+                
+                # Use EmbeddingGemma dimension (768) for HNSW
+                vector_dim = 768
+                server_address = os.environ.get("SUTRA_STORAGE_SERVER", "storage-server:50051")
+                
+                self.storage = GrpcStorageAdapter(
+                    server_address=server_address,
+                    vector_dimension=vector_dim,
+                )
+                logger.info(
+                    f"gRPC storage connected to {server_address} (dim={vector_dim})"
+                )
+                
+                # Get concept count from server
+                if self.storage:
+                    stats = self.storage.stats()
+                    concept_count = stats.get("concepts", 0)
+                    if concept_count > 0:
+                        logger.info(f"Loaded {concept_count} concepts from storage server")
+                
+                use_rust_storage = True  # Treat gRPC as "storage available"
+            except Exception as e:
+                logger.error(f"Failed to connect to storage server: {e}")
+                raise RuntimeError(f"Storage server connection required but failed: {e}")
+        
+        elif use_rust_storage:
+            # Local mode: use direct Rust storage
             try:
                 from ..storage import RustStorageAdapter
 
@@ -171,7 +209,7 @@ class ReasoningEngine:
 
             except ImportError as e:
                 logger.warning(
-                    f"Rust storage not available: {e}. Using in-memory dicts."
+                    f"Rust storage not available: {e}."
                 )
                 use_rust_storage = False
 
@@ -179,8 +217,8 @@ class ReasoningEngine:
 
         # Initialize batch embedding processor (optional for faster learning)
         self.enable_batch_embeddings = enable_batch_embeddings
-        self.embedding_batch_processor: Optional[EmbeddingBatchProcessor] = None
-        if enable_batch_embeddings:
+        self.embedding_batch_processor: Optional[EmbeddingBatchProcessor] = None  # type: ignore
+        if enable_batch_embeddings and EmbeddingBatchProcessor is not None:
             try:
                 self.embedding_batch_processor = EmbeddingBatchProcessor(
                     model_name=embedding_model,
@@ -195,6 +233,9 @@ class ReasoningEngine:
             except Exception as e:
                 logger.warning(f"Batch embedding processor unavailable: {e}")
                 self.enable_batch_embeddings = False
+        elif enable_batch_embeddings:
+            logger.warning("Batch embeddings requested but torch/sentence-transformers not available")
+            self.enable_batch_embeddings = False
 
         # Initialize entity cache (optional for high-accuracy entity extraction)
         self.enable_entity_cache = enable_entity_cache

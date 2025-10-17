@@ -1,112 +1,97 @@
 """
-Dependency injection for FastAPI endpoints.
+Lightweight dependency injection for gRPC-based API.
 
-Provides shared instances and dependency functions using FastAPI app.state
-instead of global variables for better testability and multi-worker support.
+This version uses only the storage-client for gRPC communication.
+No local reasoning engine or heavy ML dependencies.
 """
 
 import logging
+import os
 import time
-from typing import Optional
 
 from fastapi import FastAPI, Request
-from sutra_core.graph.concepts import AssociationType
-from sutra_core.reasoning import ReasoningEngine
-from sutra_hybrid import SutraAI
-
-from .config import settings
 
 logger = logging.getLogger(__name__)
 
 # Track service start time
 _start_time: float = time.time()
+_storage_client = None
 
 
 def init_dependencies(app: FastAPI) -> None:
-    """Initialize dependencies with embeddings DISABLED for fast dev."""
     """
-    Initialize dependencies and store them in app.state.
-    Called during lifespan startup.
-
+    Initialize gRPC storage client.
+    
     Args:
         app: FastAPI application instance
     """
-    logger.info("Initializing dependencies...")
-
-    # Create SutraAI instance (includes core engine + semantic embeddings)
-    # DISABLED for fast development (embedding models take forever to load)
-    app.state.ai_instance = SutraAI(
-        storage_path=settings.storage_path,
-        enable_semantic=False,  # Hardcoded False for dev speed
-    )
+    global _storage_client
     
-    # Load existing knowledge from disk
+    logger.info("Initializing gRPC storage client...")
+    
     try:
-        app.state.ai_instance.load()
-        stats = app.state.ai_instance.get_stats()
-        logger.info(f"Loaded {stats['total_concepts']} concepts, {stats['total_associations']} associations")
+        from sutra_storage_client import StorageClient
+        
+        server_address = os.environ.get("SUTRA_STORAGE_SERVER", "storage-server:50051")
+        _storage_client = StorageClient(server_address)
+        
+        # Verify connection
+        health = _storage_client.health_check()
+        logger.info(
+            f"Connected to storage server at {server_address} "
+            f"(status: {health['status']}, uptime: {health['uptime_seconds']}s)"
+        )
+        
+        # Get initial stats
+        stats = _storage_client.stats()
+        logger.info(
+            f"Storage contains {stats.get('concepts', 0)} concepts, "
+            f"{stats.get('edges', 0)} edges"
+        )
+        
+        # Store in app state
+        app.state.storage_client = _storage_client
+        
     except Exception as e:
-        logger.info(f"No existing knowledge to load: {e}")
-
-    # The reasoning engine is already initialized inside SutraAI
-    # Access it via ai.engine property
-    logger.info("Dependencies initialized successfully")
+        logger.error(f"Failed to initialize storage client: {e}")
+        raise RuntimeError(f"Storage server connection required but failed: {e}")
 
 
 def shutdown_dependencies(app: FastAPI) -> None:
     """
     Clean up dependencies during shutdown.
-    Called during lifespan shutdown.
-
+    
     Args:
         app: FastAPI application instance
     """
-    if settings.auto_save and hasattr(app.state, "ai_instance"):
-        logger.info("Saving knowledge before shutdown...")
-        app.state.ai_instance.save()
-        logger.info("Knowledge saved")
-
-    # Clean up references
-    if hasattr(app.state, "ai_instance"):
-        delattr(app.state, "ai_instance")
-    if hasattr(app.state, "reasoner_instance"):
-        delattr(app.state, "reasoner_instance")
+    if hasattr(app.state, "storage_client"):
+        try:
+            app.state.storage_client.close()
+            logger.info("Closed storage client connection")
+        except Exception as e:
+            logger.warning(f"Error closing storage client: {e}")
+        
+        delattr(app.state, "storage_client")
 
 
-def get_ai(request: Request) -> SutraAI:
+def get_storage_client(request: Request):
     """
-    Dependency to get SutraAI instance from request state.
-
+    Dependency to get storage client from request state.
+    
     Args:
         request: FastAPI request containing app.state
-
+    
     Returns:
-        SutraAI instance
+        StorageClient instance
     """
-    return request.app.state.ai_instance
+    return request.app.state.storage_client
 
 
 def get_uptime() -> float:
     """
     Get service uptime in seconds.
-
+    
     Returns:
         Uptime in seconds
     """
     return time.time() - _start_time
-
-
-def get_reasoner(request: Request) -> ReasoningEngine:
-    """
-    Dependency to get ReasoningEngine instance from request state.
-
-    The engine is accessed from SutraAI's internal engine.
-
-    Args:
-        request: FastAPI request containing app.state
-
-    Returns:
-        ReasoningEngine instance
-    """
-    ai = request.app.state.ai_instance
-    return ai.engine

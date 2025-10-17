@@ -18,30 +18,23 @@ Sutra AI is a **graph-based reasoning system** with complete explainability. Unl
 
 ## System Architecture
 
-### High-Level Stack
+### High-Level (gRPC-first)
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                   sutra-api (FastAPI)                 │  External Interface
-│              REST API • Rate Limiting • Auth          │
-└────────────────────┬─────────────────────────────────┘
-                     │
-┌────────────────────┴─────────────────────────────────┐
-│                 sutra-hybrid (Python)                 │  Semantic Layer
-│       Embeddings • Multi-Strategy • Audit Trails      │
-└────────────────────┬─────────────────────────────────┘
-                     │
-┌────────────────────┴─────────────────────────────────┐
-│                  sutra-core (Python)                  │  Reasoning Engine
-│  Concepts • Associations • PathFinder • MPPA          │
-└────────────────────┬─────────────────────────────────┘
-                     │
-┌────────────────────┴─────────────────────────────────┐
-│              sutra-storage (Rust/PyO3)                │  Storage Engine
-│  ConcurrentStorage • Memory-Mapped • Lock-Free        │
-│       57K writes/sec • <0.01ms reads                  │
-└──────────────────────────────────────────────────────┘
+┌───────────────┐         gRPC          ┌─────────────────────┐
+│  sutra-api    │ ───────────────────▶  │  storage-server     │
+│  (FastAPI)    │ ◀───────────────────  │  (Rust, gRPC)       │
+└───────────────┘                       └─────────────────────┘
+        ▲                                        ▲
+        │                                        │
+        └──────────── gRPC ──────────────────────┘
+
+┌───────────────┐
+│ sutra-hybrid  │  (embeddings + orchestration)
+└───────────────┘
 ```
+
+Design principle: All graph and vector operations run in the storage server. API and Hybrid never access storage in-process; they use the Python storage-client over gRPC.
 
 **Design Principle:** Only `sutra-api` is external-facing. Core, hybrid, and storage are internal implementation details.
 

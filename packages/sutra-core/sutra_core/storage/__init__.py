@@ -1,10 +1,10 @@
 """
-Sutra storage (Rust-backed only).
+Sutra storage adapters.
 
-This package exposes only the RustStorageAdapter and intentionally drops
-all legacy Python storage implementations and JSON persistence.
+Provides storage adapters for both local (Rust) and distributed (gRPC) deployments.
 """
 
 from .rust_adapter import RustStorageAdapter
+from .grpc_adapter import GrpcStorageAdapter
 
-__all__ = ["RustStorageAdapter"]
+__all__ = ["RustStorageAdapter", "GrpcStorageAdapter"]

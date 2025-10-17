@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""
+Sutra Storage Server
+
+Standalone storage service that all components connect to.
+
+Usage:
+    storage-server [OPTIONS]
+
+Options:
+    --host HOST          Server host (default: 0.0.0.0)
+    --port PORT          Server port (default: 50051)
+    --storage PATH       Storage directory (default: ./knowledge)
+    --reconcile-ms MS    Reconciliation interval (default: 10)
+    --threshold N        Memory threshold for flush (default: 50000)
+"""
+
+import argparse
+import asyncio
+import signal
+import sys
+from pathlib import Path
+
+# Import Rust server wrapper
+try:
+    from sutra_storage import run_storage_server
+except ImportError:
+    print("❌ sutra_storage module not found. Build with:")
+    print("   cd packages/sutra-storage && maturin develop")
+    sys.exit(1)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Sutra Storage Server")
+    parser.add_argument("--host", default="0.0.0.0", help="Server host")
+    parser.add_argument("--port", type=int, default=50051, help="Server port")
+    parser.add_argument("--storage", default="./knowledge", help="Storage path")
+    parser.add_argument("--reconcile-ms", type=int, default=10, help="Reconciliation interval (ms)")
+    parser.add_argument("--threshold", type=int, default=50000, help="Memory threshold")
+    parser.add_argument("--vector-dim", type=int, default=768, help="Vector dimension")
+    return parser.parse_args()
+
+
+async def run_server(args):
+    """Run storage server with graceful shutdown."""
+    # Create storage directory
+    storage_path = Path(args.storage)
+    storage_path.mkdir(parents=True, exist_ok=True)
+    
+    print(f"🚀 Starting Sutra Storage Server")
+    print(f"   Host: {args.host}:{args.port}")
+    print(f"   Storage: {storage_path.absolute()}")
+    print(f"   Reconciliation: {args.reconcile_ms}ms")
+    print(f"   Threshold: {args.threshold} concepts")
+    print()
+    
+    # Setup graceful shutdown
+    stop_event = asyncio.Event()
+    
+    def signal_handler(sig, frame):
+        print("\n⚠️  Shutdown signal received, flushing to disk...")
+        stop_event.set()
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Run server
+    try:
+        await run_storage_server(
+            host=args.host,
+            port=args.port,
+            storage_path=str(storage_path),
+            reconcile_interval_ms=args.reconcile_ms,
+            memory_threshold=args.threshold,
+            vector_dimension=args.vector_dim,
+        )
+    except Exception as e:
+        print(f"❌ Server error: {e}")
+        sys.exit(1)
+
+
+def main():
+    args = parse_args()
+    
+    try:
+        asyncio.run(run_server(args))
+    except KeyboardInterrupt:
+        print("\n✅ Server stopped")
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
