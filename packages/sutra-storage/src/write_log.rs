@@ -86,6 +86,7 @@ impl WriteLog {
     }
     
     /// Append an entry (non-blocking)
+    /// CRITICAL: On overflow, drops OLDEST entry and accepts newest (as documented)
     pub fn append(&self, entry: WriteEntry) -> Result<u64, WriteLogError> {
         let seq = self.sequence.fetch_add(1, Ordering::Relaxed);
         
@@ -94,10 +95,30 @@ impl WriteLog {
                 self.written.fetch_add(1, Ordering::Relaxed);
                 Ok(seq)
             }
-            Err(TrySendError::Full(_)) => {
-                // Backpressure: drop oldest, accept newest
-                self.dropped.fetch_add(1, Ordering::Relaxed);
-                Err(WriteLogError::Full)
+            Err(TrySendError::Full(entry)) => {
+                // Backpressure: evict oldest entry, then retry with newest
+                match self.receiver.try_recv() {
+                    Ok(_evicted) => {
+                        // Successfully evicted oldest, now retry send
+                        match self.sender.try_send(entry) {
+                            Ok(()) => {
+                                self.dropped.fetch_add(1, Ordering::Relaxed);
+                                self.written.fetch_add(1, Ordering::Relaxed);
+                                Ok(seq)
+                            }
+                            Err(_) => {
+                                // Still full after eviction (race), count as dropped
+                                self.dropped.fetch_add(1, Ordering::Relaxed);
+                                Err(WriteLogError::Full)
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Queue empty (race), should not happen but handle gracefully
+                        self.dropped.fetch_add(1, Ordering::Relaxed);
+                        Err(WriteLogError::Full)
+                    }
+                }
             }
             Err(TrySendError::Disconnected(_)) => {
                 Err(WriteLogError::Disconnected)
@@ -311,5 +332,57 @@ mod tests {
             }
             _ => panic!("Expected AddAssociation"),
         }
+    }
+    
+    #[test]
+    fn test_backpressure_drops_oldest() {
+        // CRITICAL: Verify that on overflow, oldest entries are dropped and newest are kept
+        let log = WriteLog::new();
+        
+        // Fill the queue to capacity (100,000 entries)
+        for i in 0..100_000 {
+            let id = ConceptId([(i % 256) as u8; 16]);
+            log.append_concept(id, vec![i as u8], None, 1.0, 0.9).unwrap();
+        }
+        
+        let stats_before = log.stats();
+        assert_eq!(stats_before.written, 100_000);
+        assert_eq!(stats_before.dropped, 0);
+        assert_eq!(stats_before.pending, 100_000);
+        
+        // Now add 1000 more entries - these should trigger backpressure
+        // Each new entry should evict one old entry
+        for i in 100_000..101_000 {
+            let id = ConceptId([(i % 256) as u8; 16]);
+            let _result = log.append_concept(id, vec![i as u8], None, 1.0, 0.9);
+            // Some may succeed (after evicting oldest), some may fail (race conditions)
+            // But the queue should stay around capacity
+        }
+        
+        let stats_after = log.stats();
+        // We should have some dropped entries
+        assert!(stats_after.dropped > 0, "Expected some entries to be dropped");
+        // Queue should be near capacity (allowing for race conditions)
+        assert!(stats_after.pending >= 99_000 && stats_after.pending <= 100_000,
+                "Queue size should stay near capacity, got {}", stats_after.pending);
+        
+        // Drain and verify we have the newest entries (not the oldest)
+        let drained = log.drain_all();
+        
+        // The drained entries should include recent writes
+        // Check that we have entries from the later batches
+        let mut found_new = false;
+        for entry in &drained[..drained.len().min(100)] {
+            if let WriteEntry::AddConcept { content, .. } = entry {
+                let val = content[0];
+                if val >= 200 {
+                    found_new = true;
+                    break;
+                }
+            }
+        }
+        
+        // We should have newer entries (drop-oldest policy working)
+        assert!(found_new, "Expected to find newer entries after backpressure");
     }
 }

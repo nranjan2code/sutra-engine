@@ -8,7 +8,6 @@
 
 use crate::types::{AssociationRecord, ConceptId};
 use arc_swap::ArcSwap;
-use dashmap::DashMap;
 use std::sync::Arc;
 
 /// In-memory concept with co-located edges
@@ -73,10 +72,12 @@ impl ConceptNode {
 }
 
 /// Immutable graph snapshot
+/// CRITICAL: This must be truly immutable - DashMap allows mutation which breaks snapshot semantics
+/// We use im::HashMap for true immutability and zero-contention reads
 #[derive(Debug, Clone)]
 pub struct GraphSnapshot {
-    /// All concepts indexed by ID
-    pub concepts: Arc<DashMap<ConceptId, ConceptNode>>,
+    /// All concepts indexed by ID (immutable map)
+    pub concepts: im::HashMap<ConceptId, ConceptNode>,
     
     /// Snapshot metadata
     pub sequence: u64,
@@ -88,7 +89,7 @@ pub struct GraphSnapshot {
 impl GraphSnapshot {
     pub fn new(sequence: u64) -> Self {
         Self {
-            concepts: Arc::new(DashMap::new()),
+            concepts: im::HashMap::new(),
             sequence,
             timestamp: current_timestamp_us(),
             concept_count: 0,
@@ -98,7 +99,7 @@ impl GraphSnapshot {
     
     /// Get a concept by ID
     pub fn get_concept(&self, id: &ConceptId) -> Option<ConceptNode> {
-        self.concepts.get(id).map(|e| e.value().clone())
+        self.concepts.get(id).cloned()
     }
     
     /// Check if concept exists
@@ -141,8 +142,8 @@ impl GraphSnapshot {
                 continue;
             }
             
-            if let Some(neighbors) = self.concepts.get(&current) {
-                for &neighbor in &neighbors.neighbors {
+            if let Some(node) = self.concepts.get(&current) {
+                for &neighbor in &node.neighbors {
                     if !visited.contains_key(&neighbor) {
                         visited.insert(neighbor, Some(current));
                         
@@ -172,15 +173,15 @@ impl GraphSnapshot {
     
     /// Get all concepts (expensive, for bulk operations)
     pub fn all_concepts(&self) -> Vec<ConceptNode> {
-        self.concepts.iter().map(|e| e.value().clone()).collect()
+        self.concepts.values().cloned().collect()
     }
     
     /// Update stats (should be called after modifications)
     pub fn update_stats(&mut self) {
         self.concept_count = self.concepts.len();
         self.edge_count = self.concepts
-            .iter()
-            .map(|e| e.value().associations.len())
+            .values()
+            .map(|node| node.associations.len())
             .sum();
     }
     
@@ -216,13 +217,9 @@ impl ReadView {
         concepts: std::collections::HashMap<ConceptId, ConceptNode>,
         edges: std::collections::HashMap<ConceptId, Vec<(ConceptId, f32)>>,
     ) -> Self {
-        use std::collections::HashMap;
-        
         let mut snapshot = GraphSnapshot::new(1); // Start at sequence 1 for loaded data
         
-        // Convert HashMap to DashMap and populate concept nodes
-        let mut concept_nodes: HashMap<ConceptId, ConceptNode> = HashMap::new();
-        
+        // Build concept nodes with edges
         for (concept_id, mut node) in concepts {
             // Add edges to concept node if they exist
             if let Some(concept_edges) = edges.get(&concept_id) {
@@ -238,11 +235,7 @@ impl ReadView {
                 }
             }
             
-            concept_nodes.insert(concept_id, node);
-        }
-        
-        // Populate DashMap
-        for (concept_id, node) in concept_nodes {
+            // Insert into immutable map
             snapshot.concepts.insert(concept_id, node);
         }
         
@@ -337,7 +330,7 @@ mod tests {
     
     #[test]
     fn test_snapshot_basic() {
-        let snapshot = GraphSnapshot::new(0);
+        let mut snapshot = GraphSnapshot::new(0);
         
         let id = ConceptId([1; 16]);
         let node = ConceptNode::new(id, vec![1, 2, 3], None, 1.0, 0.9, 1000);
@@ -378,7 +371,7 @@ mod tests {
     
     #[test]
     fn test_find_path() {
-        let snapshot = GraphSnapshot::new(0);
+        let mut snapshot = GraphSnapshot::new(0);
         
         let id1 = ConceptId([1; 16]);
         let id2 = ConceptId([2; 16]);

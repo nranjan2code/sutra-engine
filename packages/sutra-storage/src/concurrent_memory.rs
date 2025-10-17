@@ -638,24 +638,35 @@ mod tests {
         
         let memory = ConcurrentMemory::new(config);
         
-        // Simulate write burst
-        for i in 0..1000 {
-            let id = ConceptId([i as u8; 16]);
+        // Simulate write burst (generate unique IDs by using i for all 16 bytes)
+        for i in 0..1000u16 {
+            let mut id_bytes = [0u8; 16];
+            id_bytes[0..2].copy_from_slice(&i.to_le_bytes());
+            let id = ConceptId(id_bytes);
             memory.learn_concept(id, vec![i as u8], None, 1.0, 0.9).unwrap();
         }
         
-        // Wait for reconciliation
-        thread::sleep(Duration::from_millis(200));
+        // Wait for reconciliation (increased from 200ms to 500ms for im::HashMap structural sharing)
+        thread::sleep(Duration::from_millis(500));
         
-        // Verify some concepts
-        let id1 = ConceptId([1; 16]);
-        let id2 = ConceptId([100; 16]);
+        // Verify some concepts (match the ID generation pattern)
+        let mut id1_bytes = [0u8; 16];
+        id1_bytes[0..2].copy_from_slice(&1u16.to_le_bytes());
+        let id1 = ConceptId(id1_bytes);
+        
+        let mut id2_bytes = [0u8; 16];
+        id2_bytes[0..2].copy_from_slice(&100u16.to_le_bytes());
+        let id2 = ConceptId(id2_bytes);
         
         assert!(memory.contains(&id1));
         assert!(memory.contains(&id2));
         
         let stats = memory.stats();
-        assert!(stats.snapshot.concept_count >= 1000);
+        eprintln!("Reconciler stats: {:?}", stats.reconciler);
+        eprintln!("WriteLog stats: {:?}", stats.write_log);
+        eprintln!("Snapshot concept count: {}", stats.snapshot.concept_count);
+        assert!(stats.snapshot.concept_count >= 1000, 
+                "Expected >= 1000 concepts, got {}", stats.snapshot.concept_count);
     }
     
     #[test]

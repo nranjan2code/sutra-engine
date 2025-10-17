@@ -163,18 +163,19 @@ fn reconcile_loop(
             // Load current snapshot
             let current_snapshot = read_view.load();
             
-            // Clone structure (cheap due to Arc)
+            // CRITICAL: Build a truly new immutable snapshot
+            // Clone the entire im::HashMap (cheap due to structural sharing)
             let mut new_snapshot = GraphSnapshot {
-                concepts: Arc::clone(&current_snapshot.concepts),
+                concepts: current_snapshot.concepts.clone(),
                 sequence: current_snapshot.sequence + 1,
                 timestamp: current_timestamp_us(),
                 concept_count: current_snapshot.concept_count,
                 edge_count: current_snapshot.edge_count,
             };
             
-            // Apply batch
+            // Apply batch to the new mutable copy
             for entry in &batch {
-                apply_entry(&new_snapshot, entry);
+                apply_entry(&mut new_snapshot, entry);
             }
             
             // Update stats
@@ -203,7 +204,8 @@ fn reconcile_loop(
 }
 
 /// Apply a single write entry to the snapshot
-fn apply_entry(snapshot: &GraphSnapshot, entry: &WriteEntry) {
+/// CRITICAL: snapshot is now &mut to allow proper immutable updates
+fn apply_entry(snapshot: &mut GraphSnapshot, entry: &WriteEntry) {
     match entry {
         WriteEntry::AddConcept {
             id,
@@ -226,27 +228,31 @@ fn apply_entry(snapshot: &GraphSnapshot, entry: &WriteEntry) {
         }
         
         WriteEntry::AddAssociation { record } => {
-            // Add edge to source concept
-            if let Some(mut source_node) = snapshot.concepts.get_mut(&record.source_id) {
+            // Add edge to source concept (clone-update pattern for immutable map)
+            if let Some(mut source_node) = snapshot.concepts.get(&record.source_id).cloned() {
                 source_node.add_edge(record.target_id, *record);
+                snapshot.concepts.insert(record.source_id, source_node);
             }
             
             // Add reverse edge to target concept (for bidirectional queries)
-            if let Some(mut target_node) = snapshot.concepts.get_mut(&record.target_id) {
+            if let Some(mut target_node) = snapshot.concepts.get(&record.target_id).cloned() {
                 target_node.add_edge(record.source_id, *record);
+                snapshot.concepts.insert(record.target_id, target_node);
             }
         }
         
         WriteEntry::UpdateStrength { id, strength } => {
-            if let Some(mut node) = snapshot.concepts.get_mut(id) {
+            if let Some(mut node) = snapshot.concepts.get(id).cloned() {
                 node.strength = *strength;
+                snapshot.concepts.insert(*id, node);
             }
         }
         
         WriteEntry::RecordAccess { id, timestamp } => {
-            if let Some(mut node) = snapshot.concepts.get_mut(id) {
+            if let Some(mut node) = snapshot.concepts.get(id).cloned() {
                 node.last_accessed = *timestamp;
                 node.access_count += 1;
+                snapshot.concepts.insert(*id, node);
             }
         }
         
@@ -278,7 +284,7 @@ pub fn flush_to_disk(
     let mut writer = BufWriter::new(file);
     
     // Collect data before writing
-    let concepts: Vec<_> = snapshot.concepts.iter().map(|entry| entry.value().clone()).collect();
+    let concepts: Vec<_> = snapshot.concepts.iter().map(|(_id, node)| node.clone()).collect();
     let mut edges = Vec::new();
     let mut vectors = Vec::new();
     
@@ -293,8 +299,9 @@ pub fn flush_to_disk(
         }
         
         // Collect vectors (CRITICAL: vectors must be persisted)
-        if let Some(ref vector) = concept.vector {
-            vectors.push((concept.id, vector.clone()));
+        if let Some(vector) = concept.vector.as_ref() {
+            let v: Vec<f32> = vector.iter().copied().collect();
+            vectors.push((concept.id, v));
         }
     }
     
@@ -367,7 +374,11 @@ fn current_timestamp_us() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::AssociationType;
+    use crate::types::{AssociationType, ConceptId};
+    use crate::write_log::WriteLog;
+    use crate::read_view::ReadView;
+    use std::sync::Arc;
+    use std::thread;
     use std::time::Duration;
     use tempfile::TempDir;
     
