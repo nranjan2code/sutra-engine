@@ -377,12 +377,12 @@ async def get_stats(ai: SutraAI = Depends(get_ai)):
     stats = ai.get_stats()
 
     return SystemStats(
-        total_concepts=stats["total_concepts"],
-        total_associations=stats["total_associations"],
-        total_embeddings=stats["total_embeddings"],
-        embedding_provider=stats["embedding_provider"],
-        embedding_dimension=stats["embedding_dimension"],
-        average_strength=stats["average_strength"],
+        total_concepts=stats.get("total_concepts", 0),
+        total_associations=stats.get("total_associations", 0),
+        total_embeddings=stats.get("total_embeddings", 0),
+        embedding_provider=stats.get("embedding_provider", "none"),
+        embedding_dimension=stats.get("embedding_dimension", 0),
+        average_strength=stats.get("average_strength", 0.0),
         memory_usage_mb=None,  # Could implement memory profiling
     )
 

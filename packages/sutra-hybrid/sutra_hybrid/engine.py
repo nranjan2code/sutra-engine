@@ -526,10 +526,12 @@ class SutraAI:
             "strength": concept.strength,
             "confidence": concept.confidence,
             "created_at": (
-                concept.created_at.isoformat() if concept.created_at else None
+                time.strftime('%Y-%m-%dT%H:%M:%S.%fZ', time.gmtime(concept.created))
+                if hasattr(concept, 'created') and concept.created else None
             ),
             "last_accessed": (
-                concept.last_accessed.isoformat() if concept.last_accessed else None
+                time.strftime('%Y-%m-%dT%H:%M:%S.%fZ', time.gmtime(concept.last_accessed))
+                if hasattr(concept, 'last_accessed') and concept.last_accessed else None
             ),
             "access_count": concept.access_count,
             "associations": associations,

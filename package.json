@@ -1,0 +1,16 @@
+{
+  "name": "sutra-models",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sutra AI - Explainable Graph-Based Reasoning",
+  "scripts": {
+    "dev": "concurrently -n API,CLIENT -c cyan,magenta \"npm run dev:api\" \"npm run dev:client\"",
+    "dev:api": "source venv/bin/activate && cd packages/sutra-api && python -m sutra_api.main",
+    "dev:client": "cd packages/sutra-client && npm run dev",
+    "install:client": "cd packages/sutra-client && npm install",
+    "build:client": "cd packages/sutra-client && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

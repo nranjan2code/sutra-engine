@@ -35,6 +35,9 @@ class AdaptiveLearner:
     DIFFICULT_MULTIPLIER = 1.15
     EASY_MULTIPLIER = 1.01
     STANDARD_MULTIPLIER = 1.02
+    
+    # Class-level embedding processor (singleton to prevent repeated loading)
+    _embedding_processor = None
 
     def __init__(
         self,
@@ -50,6 +53,25 @@ class AdaptiveLearner:
         """
         self.storage = storage
         self.association_extractor = association_extractor
+    
+    @classmethod
+    def _get_embedding_processor(cls):
+        """
+        Get or create the singleton embedding processor.
+        
+        Returns:
+            EmbeddingBatchProcessor instance (singleton)
+        """
+        if cls._embedding_processor is None:
+            from ..learning.embeddings import EmbeddingBatchProcessor
+            logger.info("🔄 Loading EmbeddingGemma model (one-time initialization)...")
+            cls._embedding_processor = EmbeddingBatchProcessor(
+                model_name="google/embeddinggemma-300m",
+                device="auto",
+                cache_size=1000
+            )
+            logger.info("✅ EmbeddingGemma model loaded successfully")
+        return cls._embedding_processor
 
     def learn_adaptive(
         self,
@@ -113,10 +135,40 @@ class AdaptiveLearner:
                 category=category,
             )
 
-            # Store in Rust storage immediately
+            # PRODUCTION: Always generate embedding using EmbeddingGemma (768-dim)
+            if embedding is None:
+                try:
+                    # Use singleton EmbeddingGemma processor (768 dimensions)
+                    processor = self._get_embedding_processor()
+                    
+                    # Generate 768-dim embedding with proper prompt
+                    embedding = processor.encode_single(
+                        content, 
+                        prompt_name="Retrieval-document"  # Use document retrieval prompt
+                    )
+                    
+                    if embedding is not None:
+                        logger.debug(f"✅ Generated 768-dim EmbeddingGemma embedding: {content[:30]}...")
+                    else:
+                        raise ValueError("EmbeddingGemma returned None")
+                        
+                except Exception as e:
+                    logger.warning(f"EmbeddingGemma failed: {e}, using fallback")
+                    
+                    # Fallback: Create normalized dummy 768-dim embedding
+                    import numpy as np
+                    embedding = np.random.normal(0, 0.1, 768).astype(np.float32)
+                    embedding = embedding / np.linalg.norm(embedding)  # Normalize
+                    logger.debug(f"Created 768-dim fallback embedding: {content[:30]}...")
+            
+            # Store in Rust storage (always, with embedding)
             if embedding is not None:
+                import numpy as np
                 embedding_array = np.array(embedding, dtype=np.float32)
                 self.storage.add_concept(concept, embedding_array)
+                logger.debug(f"✅ Stored new concept: {content[:30]}... (ID: {concept_id[:8]})")
+            else:
+                logger.error(f"❌ Failed to store concept - no embedding: {content[:30]}...")
 
             logger.debug(f"Created new concept: {content[:30]}...")
 

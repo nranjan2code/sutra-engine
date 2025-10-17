@@ -6,8 +6,6 @@
 
 use crate::read_view::{ConceptNode, GraphSnapshot, ReadView};
 use crate::write_log::{WriteEntry, WriteLog};
-use crate::types::ConceptRecord;
-use crate::mmap_store::MmapStore;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -258,40 +256,103 @@ fn apply_entry(snapshot: &GraphSnapshot, entry: &WriteEntry) {
     }
 }
 
-/// Flush snapshot to disk segment (simplified)
+/// PRODUCTION: Flush snapshot to disk with complete SUTRA binary format including vectors
 pub fn flush_to_disk(
     snapshot: &GraphSnapshot,
     base_path: &PathBuf,
     _segment_id: u32,
 ) -> anyhow::Result<()> {
-    // Single-file storage: storage.dat
+    use std::fs::File;
+    use std::io::{BufWriter, Write};
+    
+    // Single-file storage: storage.dat with SUTRA binary format
     let path = base_path.join("storage.dat");
-    let mut store = MmapStore::open(&path, 256 * 1024 * 1024)?; // 256MB initial
-
-    // Write all concepts and associations
-    for entry in snapshot.concepts.iter() {
-        let node = entry.value();
-
-        let record = ConceptRecord::new(
-            node.id,
-            0,
-            0,
-            0,
-        );
-
-        // Use raw bytes (no string conversion)
-        let content: Option<&[u8]> = Some(&node.content);
-        let vector: Option<&[f32]> = node.vector.as_ref().map(|v| v.as_ref());
-
-        store.append_concept_full(record, content, vector)?;
-
-        // Append co-located associations for source node
-        for assoc in &node.associations {
-            store.append_association(assoc)?;
+    
+    // Create backup of existing file if it exists
+    if path.exists() {
+        let backup_path = base_path.join("storage.dat.backup");
+        std::fs::copy(&path, &backup_path)?;
+    }
+    
+    let file = File::create(&path)?;
+    let mut writer = BufWriter::new(file);
+    
+    // Collect data before writing
+    let concepts: Vec<_> = snapshot.concepts.iter().map(|entry| entry.value().clone()).collect();
+    let mut edges = Vec::new();
+    let mut vectors = Vec::new();
+    
+    // Collect all edges and vectors
+    for concept in &concepts {
+        // Collect edges
+        for (i, neighbor) in concept.neighbors.iter().enumerate() {
+            if i < concept.associations.len() {
+                let confidence = concept.associations[i].confidence;
+                edges.push((concept.id, *neighbor, confidence));
+            }
+        }
+        
+        // Collect vectors (CRITICAL: vectors must be persisted)
+        if let Some(ref vector) = concept.vector {
+            vectors.push((concept.id, vector.clone()));
         }
     }
-
-    store.sync()?;
+    
+    // Write SUTRA binary format header (64 bytes) - VERSION 2 with vectors
+    writer.write_all(b"SUTRADAT")?; // Magic bytes (8 bytes)
+    writer.write_all(&2u32.to_le_bytes())?; // Version 2 - includes vectors (4 bytes)
+    writer.write_all(&(concepts.len() as u32).to_le_bytes())?; // Concept count (4 bytes)
+    writer.write_all(&(edges.len() as u32).to_le_bytes())?; // Edge count (4 bytes)
+    writer.write_all(&(vectors.len() as u32).to_le_bytes())?; // Vector count (4 bytes)
+    writer.write_all(&current_timestamp_us().to_le_bytes())?; // Timestamp (8 bytes)
+    writer.write_all(&[0u8; 32])?; // Reserved (32 bytes) = Total 64 bytes
+    
+    log::info!("📄 Writing SUTRA binary format v2: {} concepts, {} edges, {} vectors", 
+               concepts.len(), edges.len(), vectors.len());
+    
+    // Write concepts section (metadata only)
+    for concept in &concepts {
+        // Concept header (36 bytes): ID(16) + content_len(4) + strength(4) + confidence(4) + access_count(4) + created(4)
+        writer.write_all(&concept.id.0)?; // ID (16 bytes)
+        writer.write_all(&(concept.content.len() as u32).to_le_bytes())?; // Content length (4 bytes)
+        writer.write_all(&concept.strength.to_le_bytes())?; // Strength (4 bytes)
+        writer.write_all(&concept.confidence.to_le_bytes())?; // Confidence (4 bytes)
+        writer.write_all(&concept.access_count.to_le_bytes())?; // Access count (4 bytes)
+        writer.write_all(&(concept.created as u32).to_le_bytes())?; // Created timestamp (4 bytes)
+        
+        // Content data (variable length)
+        writer.write_all(&concept.content)?;
+    }
+    
+    // Write edges section
+    for (source_id, target_id, confidence) in &edges {
+        writer.write_all(&source_id.0)?; // Source ID (16 bytes)
+        writer.write_all(&target_id.0)?; // Target ID (16 bytes)
+        writer.write_all(&confidence.to_le_bytes())?; // Confidence (4 bytes)
+    }
+    
+    // PRODUCTION: Write vectors section (NEW in v2)
+    for (concept_id, vector) in &vectors {
+        writer.write_all(&concept_id.0)?; // Concept ID (16 bytes)
+        writer.write_all(&(vector.len() as u32).to_le_bytes())?; // Vector dimension (4 bytes)
+        
+        // Write vector data (dimension * 4 bytes for f32)
+        for &component in vector.iter() {
+            writer.write_all(&component.to_le_bytes())?; // f32 component (4 bytes)
+        }
+    }
+    
+    // Ensure data is written to disk
+    writer.flush()?;
+    drop(writer); // Close file
+    
+    // Sync to disk
+    let file = File::open(&path)?;
+    file.sync_all()?;
+    
+    let file_size_mb = path.metadata()?.len() as f64 / (1024.0 * 1024.0);
+    log::info!("✅ PRODUCTION: Wrote {:.2} MB to storage.dat (v2 with {} vectors)", file_size_mb, vectors.len());
+    
     Ok(())
 }
 

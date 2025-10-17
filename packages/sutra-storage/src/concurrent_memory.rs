@@ -65,9 +65,34 @@ pub struct ConcurrentMemory {
 
 impl ConcurrentMemory {
     /// Create and start a new concurrent memory system
+    /// PRODUCTION: Now properly loads existing data from storage.dat
     pub fn new(config: ConcurrentConfig) -> Self {
         let write_log = Arc::new(WriteLog::new());
-        let read_view = Arc::new(ReadView::new());
+        let mut read_view = Arc::new(ReadView::new());
+        let mut vectors = HashMap::new();
+        
+        // CRITICAL FIX: Load existing data from storage.dat if it exists
+        let storage_file = config.storage_path.join("storage.dat");
+        if storage_file.exists() {
+            match Self::load_existing_data(&storage_file, &mut vectors, &config) {
+                Ok((loaded_concepts, loaded_edges)) => {
+                    // Create ReadView with loaded data
+                    read_view = Arc::new(ReadView::from_loaded_data(loaded_concepts, loaded_edges));
+                    log::info!(
+                        "✅ PRODUCTION STARTUP: Loaded {} concepts and {} edges from {}", 
+                        read_view.load().concept_count(),
+                        read_view.load().edge_count(),
+                        storage_file.display()
+                    );
+                },
+                Err(e) => {
+                    log::error!("⚠️ Failed to load existing storage, starting fresh: {}", e);
+                    // Continue with empty storage - don't crash the system
+                }
+            }
+        } else {
+            log::info!("🆕 No existing storage found, starting with fresh storage at {}", storage_file.display());
+        }
         
         let reconciler_config = ReconcilerConfig {
             reconcile_interval_ms: config.reconcile_interval_ms,
@@ -89,9 +114,182 @@ impl ConcurrentMemory {
             write_log,
             read_view,
             reconciler,
-            vectors: Arc::new(RwLock::new(HashMap::new())),
+            vectors: Arc::new(RwLock::new(vectors)),
             config,
         }
+    }
+    
+    /// PRODUCTION: Load existing data from storage.dat with complete binary parser including vectors
+    fn load_existing_data(
+        storage_file: &std::path::Path,
+        vectors: &mut HashMap<ConceptId, Vec<f32>>,
+        config: &ConcurrentConfig,
+    ) -> anyhow::Result<(HashMap<ConceptId, ConceptNode>, HashMap<ConceptId, Vec<(ConceptId, f32)>>)> {
+        use crate::read_view::ConceptNode;
+        use std::fs::File;
+        use std::io::{BufReader, Read};
+        
+        log::info!("🔄 PRODUCTION: Loading existing storage from {}", storage_file.display());
+        
+        // Check file size
+        let file_size = std::fs::metadata(storage_file)?.len();
+        log::info!("📁 Storage file size: {:.1} MB", file_size as f64 / 1024.0 / 1024.0);
+        
+        let mut concepts = HashMap::new();
+        let mut edges = HashMap::new();
+        
+        let file = File::open(storage_file)?;
+        let mut reader = BufReader::new(file);
+        
+        // Read file header (64 bytes)
+        let mut header_buffer = vec![0u8; 64];
+        reader.read_exact(&mut header_buffer)?;
+        
+        // Parse header
+        let magic_bytes = &header_buffer[0..8];
+        
+        if magic_bytes != b"SUTRADAT" {
+            anyhow::bail!("Invalid storage format: expected SUTRADAT magic bytes");
+        }
+        
+        let version = u32::from_le_bytes([header_buffer[8], header_buffer[9], header_buffer[10], header_buffer[11]]);
+        let concept_count = u32::from_le_bytes([header_buffer[12], header_buffer[13], header_buffer[14], header_buffer[15]]) as usize;
+        let edge_count = u32::from_le_bytes([header_buffer[16], header_buffer[17], header_buffer[18], header_buffer[19]]) as usize;
+        let vector_count = u32::from_le_bytes([header_buffer[20], header_buffer[21], header_buffer[22], header_buffer[23]]) as usize;
+        
+        if version != 2 {
+            anyhow::bail!("Unsupported storage version: {}. Expected version 2.", version);
+        }
+        
+        log::info!("✅ SUTRA binary format v{}: {} concepts, {} edges, {} vectors", 
+                   version, concept_count, edge_count, vector_count);
+        
+        // Parse concepts section
+        for i in 0..concept_count {
+            // Read concept header (36 bytes): ID(16) + content_len(4) + strength(4) + confidence(4) + access_count(4) + created(4)
+            let mut concept_header = vec![0u8; 36];
+            if reader.read_exact(&mut concept_header).is_err() {
+                log::warn!("Failed to read concept {} header", i);
+                break;
+            }
+            
+            let mut id_bytes = [0u8; 16];
+            id_bytes.copy_from_slice(&concept_header[0..16]);
+            let id = ConceptId(id_bytes);
+            
+            let content_len = u32::from_le_bytes([concept_header[16], concept_header[17], concept_header[18], concept_header[19]]) as usize;
+            let strength = f32::from_le_bytes([concept_header[20], concept_header[21], concept_header[22], concept_header[23]]);
+            let confidence = f32::from_le_bytes([concept_header[24], concept_header[25], concept_header[26], concept_header[27]]);
+            let access_count = u32::from_le_bytes([concept_header[28], concept_header[29], concept_header[30], concept_header[31]]);
+            let created = u64::from_le_bytes([
+                concept_header[32], concept_header[33], concept_header[34], concept_header[35],
+                0, 0, 0, 0 // Using 4 bytes for timestamp
+            ]);
+            
+            // Read content
+            let mut content_buffer = vec![0u8; content_len];
+            if reader.read_exact(&mut content_buffer).is_err() {
+                log::warn!("Failed to read concept {} content", i);
+                break;
+            }
+            
+            let node = ConceptNode {
+                id,
+                content: Arc::from(content_buffer),
+                vector: None, // Will be populated from vectors section
+                strength,
+                confidence,
+                access_count,
+                last_accessed: current_timestamp_us(),
+                created,
+                neighbors: Vec::new(),
+                associations: Vec::new(),
+            };
+            
+            concepts.insert(id, node);
+        }
+        
+        // Parse edges section
+        for i in 0..edge_count {
+            let mut edge_data = vec![0u8; 36]; // source_id(16) + target_id(16) + confidence(4)
+            if reader.read_exact(&mut edge_data).is_err() {
+                log::warn!("Failed to read edge {}", i);
+                break;
+            }
+            
+            let mut source_bytes = [0u8; 16];
+            source_bytes.copy_from_slice(&edge_data[0..16]);
+            let source_id = ConceptId(source_bytes);
+            
+            let mut target_bytes = [0u8; 16];
+            target_bytes.copy_from_slice(&edge_data[16..32]);
+            let target_id = ConceptId(target_bytes);
+            
+            let confidence = f32::from_le_bytes([edge_data[32], edge_data[33], edge_data[34], edge_data[35]]);
+            
+            edges.entry(source_id)
+                .or_insert_with(Vec::new)
+                .push((target_id, confidence));
+        }
+        
+        // PRODUCTION: Parse vectors section (CRITICAL for search functionality)
+        let mut vectors_loaded = 0;
+        for i in 0..vector_count {
+            // Read vector header: concept_id(16) + dimension(4)
+            let mut vector_header = vec![0u8; 20];
+            if reader.read_exact(&mut vector_header).is_err() {
+                log::warn!("Failed to read vector {} header", i);
+                break;
+            }
+            
+            let mut id_bytes = [0u8; 16];
+            id_bytes.copy_from_slice(&vector_header[0..16]);
+            let concept_id = ConceptId(id_bytes);
+            
+            let dimension = u32::from_le_bytes([vector_header[16], vector_header[17], vector_header[18], vector_header[19]]) as usize;
+            
+            // Validate dimension matches expected
+            if dimension != config.vector_dimension {
+                log::warn!("Vector {} dimension mismatch: expected {}, got {}", i, config.vector_dimension, dimension);
+                // Skip this vector by reading and discarding
+                let mut discard_buffer = vec![0u8; dimension * 4];
+                let _ = reader.read_exact(&mut discard_buffer);
+                continue;
+            }
+            
+            // Read vector components
+            let mut vector_data = Vec::with_capacity(dimension);
+            for j in 0..dimension {
+                let mut component_bytes = [0u8; 4];
+                if reader.read_exact(&mut component_bytes).is_err() {
+                    log::warn!("Failed to read vector {} component {}", i, j);
+                    break;
+                }
+                let component = f32::from_le_bytes(component_bytes);
+                vector_data.push(component);
+            }
+            
+            // Only store if we read the complete vector
+            if vector_data.len() == dimension {
+                vectors.insert(concept_id, vector_data);
+                
+                // Also update the concept node with vector reference
+                if let Some(concept_node) = concepts.get_mut(&concept_id) {
+                    concept_node.vector = Some(vectors[&concept_id].clone().into());
+                }
+                
+                vectors_loaded += 1;
+            }
+        }
+        
+        log::info!("✅ PRODUCTION LOADER: {} concepts, {} edge groups, {} vectors loaded", 
+                   concepts.len(), edges.len(), vectors_loaded);
+        
+        if vectors_loaded != vector_count {
+            log::warn!("⚠️ Vector count mismatch: expected {}, loaded {}", vector_count, vectors_loaded);
+        }
+        
+        Ok((concepts, edges))
     }
     
     // ========================

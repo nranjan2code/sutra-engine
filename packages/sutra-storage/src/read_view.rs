@@ -183,6 +183,16 @@ impl GraphSnapshot {
             .map(|e| e.value().associations.len())
             .sum();
     }
+    
+    /// Get concept count
+    pub fn concept_count(&self) -> usize {
+        self.concept_count
+    }
+    
+    /// Get edge count
+    pub fn edge_count(&self) -> usize {
+        self.edge_count
+    }
 }
 
 /// Read view with atomic snapshot swapping
@@ -198,6 +208,53 @@ impl ReadView {
         
         Self {
             snapshot: ArcSwap::from_pointee(initial),
+        }
+    }
+    
+    /// PRODUCTION: Create ReadView from loaded storage data
+    pub fn from_loaded_data(
+        concepts: std::collections::HashMap<ConceptId, ConceptNode>,
+        edges: std::collections::HashMap<ConceptId, Vec<(ConceptId, f32)>>,
+    ) -> Self {
+        use std::collections::HashMap;
+        
+        let mut snapshot = GraphSnapshot::new(1); // Start at sequence 1 for loaded data
+        
+        // Convert HashMap to DashMap and populate concept nodes
+        let mut concept_nodes: HashMap<ConceptId, ConceptNode> = HashMap::new();
+        
+        for (concept_id, mut node) in concepts {
+            // Add edges to concept node if they exist
+            if let Some(concept_edges) = edges.get(&concept_id) {
+                for (target_id, confidence) in concept_edges {
+                    // Create association record
+                    let assoc = crate::types::AssociationRecord::new(
+                        concept_id,
+                        *target_id,
+                        crate::types::AssociationType::Semantic,
+                        *confidence,
+                    );
+                    node.add_edge(*target_id, assoc);
+                }
+            }
+            
+            concept_nodes.insert(concept_id, node);
+        }
+        
+        // Populate DashMap
+        for (concept_id, node) in concept_nodes {
+            snapshot.concepts.insert(concept_id, node);
+        }
+        
+        // Update statistics
+        snapshot.update_stats();
+        snapshot.timestamp = current_timestamp_us();
+        
+        log::info!("🔄 ReadView created from loaded data: {} concepts, {} edges", 
+                  snapshot.concept_count, snapshot.edge_count);
+        
+        Self {
+            snapshot: ArcSwap::from_pointee(snapshot),
         }
     }
     

@@ -23,6 +23,7 @@ _start_time: float = time.time()
 
 
 def init_dependencies(app: FastAPI) -> None:
+    """Initialize dependencies with embeddings DISABLED for fast dev."""
     """
     Initialize dependencies and store them in app.state.
     Called during lifespan startup.
@@ -33,10 +34,19 @@ def init_dependencies(app: FastAPI) -> None:
     logger.info("Initializing dependencies...")
 
     # Create SutraAI instance (includes core engine + semantic embeddings)
+    # DISABLED for fast development (embedding models take forever to load)
     app.state.ai_instance = SutraAI(
         storage_path=settings.storage_path,
-        enable_semantic=settings.use_semantic_embeddings,
+        enable_semantic=False,  # Hardcoded False for dev speed
     )
+    
+    # Load existing knowledge from disk
+    try:
+        app.state.ai_instance.load()
+        stats = app.state.ai_instance.get_stats()
+        logger.info(f"Loaded {stats['total_concepts']} concepts, {stats['total_associations']} associations")
+    except Exception as e:
+        logger.info(f"No existing knowledge to load: {e}")
 
     # The reasoning engine is already initialized inside SutraAI
     # Access it via ai.engine property
