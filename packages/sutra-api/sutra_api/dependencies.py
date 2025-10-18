@@ -1,8 +1,8 @@
 """
-Lightweight dependency injection for gRPC-based API.
+Dependency injection for custom binary protocol storage client.
 
-This version uses only the storage-client for gRPC communication.
-No local reasoning engine or heavy ML dependencies.
+Replaced gRPC with custom binary protocol for better performance.
+Storage remains a separate service (distributed architecture maintained).
 """
 
 import logging
@@ -20,41 +20,32 @@ _storage_client = None
 
 def init_dependencies(app: FastAPI) -> None:
     """
-    Initialize gRPC storage client.
+    Initialize storage client using custom binary protocol.
     
     Args:
         app: FastAPI application instance
     """
     global _storage_client
     
-    logger.info("Initializing gRPC storage client...")
+    logger.info("Initializing storage client (custom binary protocol)...")
     
     try:
+        # Import TCP storage client
         from sutra_storage_client import StorageClient
         
         server_address = os.environ.get("SUTRA_STORAGE_SERVER", "storage-server:50051")
+        logger.info(f"Connecting to storage server at {server_address}")
+        
+        # Create storage client
         _storage_client = StorageClient(server_address)
-        
-        # Verify connection
-        health = _storage_client.health_check()
-        logger.info(
-            f"Connected to storage server at {server_address} "
-            f"(status: {health['status']}, uptime: {health['uptime_seconds']}s)"
-        )
-        
-        # Get initial stats
-        stats = _storage_client.stats()
-        logger.info(
-            f"Storage contains {stats.get('concepts', 0)} concepts, "
-            f"{stats.get('edges', 0)} edges"
-        )
+        logger.info("Successfully connected to storage server")
         
         # Store in app state
         app.state.storage_client = _storage_client
         
     except Exception as e:
         logger.error(f"Failed to initialize storage client: {e}")
-        raise RuntimeError(f"Storage server connection required but failed: {e}")
+        raise RuntimeError(f"Storage client initialization failed: {e}")
 
 
 def shutdown_dependencies(app: FastAPI) -> None:
@@ -66,10 +57,11 @@ def shutdown_dependencies(app: FastAPI) -> None:
     """
     if hasattr(app.state, "storage_client"):
         try:
-            app.state.storage_client.close()
-            logger.info("Closed storage client connection")
+            # Flush any pending writes
+            app.state.storage_client.flush()
+            logger.info("Flushed storage and closed connection")
         except Exception as e:
-            logger.warning(f"Error closing storage client: {e}")
+            logger.warning(f"Error flushing storage: {e}")
         
         delattr(app.state, "storage_client")
 

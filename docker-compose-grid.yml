@@ -7,7 +7,7 @@ services:
   storage-server:
     build:
       context: .
-      dockerfile: ./packages/sutra-storage/Dockerfile
+      dockerfile: Dockerfile.test-storage
     image: sutra-storage-server:latest
     container_name: sutra-storage
     ports:
@@ -23,7 +23,7 @@ services:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -33,7 +33,7 @@ services:
   grid-event-storage:
     build:
       context: .
-      dockerfile: ./packages/sutra-storage/Dockerfile
+      dockerfile: Dockerfile.test-storage
     image: sutra-storage-server:latest
     container_name: sutra-grid-events
     ports:
@@ -49,7 +49,7 @@ services:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -68,19 +68,20 @@ services:
     container_name: sutra-grid-master
     ports:
       - "7001:7001"  # HTTP binary distribution
-      - "7002:7002"  # gRPC agent connections
+      - "7002:7002"  # TCP agent connections
     environment:
       - RUST_LOG=info
       - GRID_MASTER_HOST=0.0.0.0
-      - GRID_MASTER_PORT=7000
-      - EVENT_STORAGE=http://grid-event-storage:50051
+      - GRID_MASTER_TCP_PORT=7002
+      - GRID_MASTER_HTTP_PORT=7001
+      - EVENT_STORAGE=grid-event-storage:50051
     depends_on:
       - grid-event-storage
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:7000"]
+      test: ["CMD", "nc", "-z", "localhost", "7002"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -101,8 +102,8 @@ services:
       - RUST_LOG=info
       - GRID_AGENT_HOST=0.0.0.0
       - GRID_AGENT_PORT=8001
-      - GRID_MASTER_ADDRESS=grid-master:7000
-      - EVENT_STORAGE=http://grid-event-storage:50051
+      - GRID_MASTER_ADDRESS=grid-master:7002
+      - EVENT_STORAGE=grid-event-storage:50051
       - AGENT_ID=agent-001
       - MAX_STORAGE_NODES=5
     depends_on:
@@ -112,7 +113,7 @@ services:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:8001"]
+      test: ["CMD", "nc", "-z", "grid-master", "7002"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -133,8 +134,8 @@ services:
       - RUST_LOG=info
       - GRID_AGENT_HOST=0.0.0.0
       - GRID_AGENT_PORT=8001
-      - GRID_MASTER_ADDRESS=grid-master:7000
-      - EVENT_STORAGE=http://grid-event-storage:50051
+      - GRID_MASTER_ADDRESS=grid-master:7002
+      - EVENT_STORAGE=grid-event-storage:50051
       - AGENT_ID=agent-002
       - MAX_STORAGE_NODES=5
     depends_on:
@@ -144,7 +145,7 @@ services:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:8001"]
+      test: ["CMD", "nc", "-z", "grid-master", "7002"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -225,7 +226,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - ENVIRONMENT=production
       - SUTRA_STORAGE_SERVER=storage-server:50051
-      - SUTRA_GRID_MASTER=grid-master:7000
+      - SUTRA_GRID_MASTER=grid-master:7001
       - PORT=9000
     depends_on:
       - storage-server

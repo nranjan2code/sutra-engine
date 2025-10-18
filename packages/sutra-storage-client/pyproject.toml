@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sutra-storage-client"
-version = "1.0.0"
-description = "gRPC client for Sutra Storage Server"
+version = "2.0.0"
+description = "TCP client for Sutra Storage Server (msgpack protocol)"
 readme = "README.md"
 authors = [
     {name = "Sutra AI Team", email = "team@sutra-ai.dev"}
@@ -23,9 +23,7 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "grpcio>=1.60.0",
-    "protobuf>=4.25.0",
-    "numpy>=1.24.0",
+    "msgpack>=1.0.0",
 ]
 
 [project.urls]

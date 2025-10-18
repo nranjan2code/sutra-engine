@@ -1,0 +1,45 @@
+# Test Dockerfile - Storage Server with Custom Binary Protocol
+FROM rustlang/rust:nightly-slim as builder
+
+WORKDIR /build
+
+# Copy protocol package
+COPY packages/sutra-protocol packages/sutra-protocol
+
+# Copy storage package
+COPY packages/sutra-storage packages/sutra-storage
+
+# Build storage server (without Python bindings)
+WORKDIR /build/packages/sutra-storage
+RUN cargo build --release --bin storage-server
+
+# Runtime image
+FROM debian:bookworm-slim
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary
+COPY --from=builder /build/packages/sutra-storage/target/release/storage-server /usr/local/bin/
+
+# Create data directory
+RUN mkdir -p /data
+
+# Set environment variables
+ENV STORAGE_PATH=/data/storage.dat
+ENV STORAGE_HOST=0.0.0.0
+ENV STORAGE_PORT=50051
+ENV RUST_LOG=info
+
+# Expose port
+EXPOSE 50051
+
+# Health check (TCP connection test)
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s \
+  CMD nc -z localhost 50051 || exit 1
+
+# Run storage server
+CMD ["storage-server"]

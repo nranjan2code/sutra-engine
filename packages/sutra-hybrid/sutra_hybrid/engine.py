@@ -1,8 +1,7 @@
 """
-SutraAI - Hybrid service using gRPC-only architecture.
+SutraAI - Hybrid service using TCP storage client (no gRPC).
 
-This implementation removes any direct sutra-core dependency.
-All graph/storage operations are done via gRPC to the storage server.
+All graph/storage operations are done via the TCP storage server.
 Local component focuses on embeddings and orchestration only.
 """
 
@@ -33,11 +32,11 @@ logger = logging.getLogger(__name__)
 
 class SutraAI:
     """
-    Hybrid AI orchestrator (embeddings + storage via gRPC).
+    Hybrid AI orchestrator (embeddings + storage via TCP).
 
     Responsibilities:
     - Generate embeddings for learn/query
-    - Forward learn/graph ops to storage via gRPC
+    - Forward learn/graph ops to storage via TCP client
     - Build explainable results using available signals
     """
 
@@ -52,7 +51,8 @@ class SutraAI:
         self._explainer = ExplanationGenerator()
         self._query_cache: Dict[str, ExplainableResult] = {}
         logger.info(
-            f"Initialized SutraAI (gRPC) with embeddings={self._embedding_provider.get_name()}"
+            "Initialized SutraAI (TCP) with embeddings=%s",
+            self._embedding_provider.get_name(),
         )
 
     def _init_embeddings(self, use_semantic: bool) -> EmbeddingProvider:
@@ -62,8 +62,7 @@ class SutraAI:
             except ImportError:
                 logger.warning("sentence-transformers not available, using TF-IDF")
                 return TfidfEmbedding()
-        else:
-            return TfidfEmbedding()
+        return TfidfEmbedding()
 
     def _content_id(self, content: str) -> str:
         return hashlib.sha1(content.encode("utf-8")).hexdigest()[:16]
@@ -184,7 +183,7 @@ class SutraAI:
             reasoning_method="semantic_only",
             semantic_boost_used=semantic_boost and self.enable_semantic,
             paths_explored=1 if reasoning_paths else 0,
-            storage_path="grpc://storage-server",
+            storage_path="tcp://storage-server",
         )
 
         explanation_text = None
@@ -251,7 +250,7 @@ class SutraAI:
             "total_associations": s.get("edges", 0),
             "total_embeddings": None,
             "embedding_coverage": None,
-            "storage_path": "grpc://storage-server",
+            "storage_path": "tcp://storage-server",
             "semantic_enabled": self.enable_semantic,
             "embedding_provider": self._embedding_provider.get_name(),
             "version": "2.0.0",

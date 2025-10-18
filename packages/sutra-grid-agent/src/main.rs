@@ -3,18 +3,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::process::Command;
-use tonic::transport::Channel;
+use tokio::net::{TcpListener, TcpStream};
 use chrono::Utc;
 use sutra_grid_events::{EventEmitter, GridEvent};
-
-// Include generated protobuf code
-pub mod grid {
-    tonic::include_proto!("grid");
-}
-
-pub mod agent {
-    tonic::include_proto!("agent");
-}
+use sutra_protocol::{GridMessage, GridResponse, send_message, recv_message};
 
 // ===== Configuration =====
 
@@ -74,137 +66,94 @@ struct StorageProcess {
 #[derive(Clone)]
 struct Agent {
     config: Config,
-    master_client: grid::grid_master_client::GridMasterClient<Channel>,
+    master_endpoint: String,
     storage_processes: Arc<RwLock<HashMap<String, StorageProcess>>>,
     next_port: Arc<RwLock<u32>>,
     events: Option<EventEmitter>,
 }
 
-// ===== Agent gRPC Service (receives commands from Master) =====
-
-#[tonic::async_trait]
-impl agent::grid_agent_server::GridAgent for Agent {
-    async fn spawn_node(
-        &self,
-        request: tonic::Request<agent::SpawnNodeRequest>,
-    ) -> Result<tonic::Response<agent::SpawnNodeResponse>, tonic::Status> {
-        let req = request.into_inner();
-        
-        log::info!("📨 Received spawn request from Master: {}", req.node_id);
-        
-        match self.spawn_storage_node(req.node_id.clone()).await {
-            Ok((port, pid)) => {
-                log::info!("✅ Spawned node {} (Port: {}, PID: {})", req.node_id, port, pid);
-                Ok(tonic::Response::new(agent::SpawnNodeResponse {
-                    success: true,
-                    node_id: req.node_id,
-                    port,
-                    pid,
-                    error_message: String::new(),
-                }))
-            }
-            Err(e) => {
-                log::error!("❌ Failed to spawn {}: {}", req.node_id, e);
-                Ok(tonic::Response::new(agent::SpawnNodeResponse {
-                    success: false,
-                    node_id: req.node_id,
-                    port: 0,
-                    pid: 0,
-                    error_message: e.to_string(),
-                }))
-            }
-        }
-    }
-    
-    async fn stop_node(
-        &self,
-        request: tonic::Request<agent::StopNodeRequest>,
-    ) -> Result<tonic::Response<agent::StopNodeResponse>, tonic::Status> {
-        let req = request.into_inner();
-        
-        log::info!("🛑 Received stop request: {}", req.node_id);
-        
-        match self.stop_storage_node(&req.node_id).await {
-            Ok(_) => {
-                log::info!("✅ Storage node {} stopped successfully", req.node_id);
-                Ok(tonic::Response::new(agent::StopNodeResponse {
-                    success: true,
-                    error_message: String::new(),
-                }))
-            }
-            Err(e) => {
-                log::error!("❌ Failed to stop node {}: {}", req.node_id, e);
-                Ok(tonic::Response::new(agent::StopNodeResponse {
-                    success: false,
-                    error_message: e.to_string(),
-                }))
-            }
-        }
-    }
-    
-    async fn get_node_status(
-        &self,
-        request: tonic::Request<agent::NodeStatusRequest>,
-    ) -> Result<tonic::Response<agent::NodeStatusResponse>, tonic::Status> {
-        let req = request.into_inner();
-        
-        let processes = self.storage_processes.read().await;
-        if let Some(process) = processes.get(&req.node_id) {
-            Ok(tonic::Response::new(agent::NodeStatusResponse {
-                node_id: process.node_id.clone(),
-                status: "running".to_string(),
-                pid: process.pid,
-                port: process.port,
-                storage_path: process.storage_path.clone(),
-                started_at: process.started_at,
-                restart_count: process.restart_count,
-            }))
-        } else {
-            Err(tonic::Status::not_found("Node not found"))
-        }
-    }
-    
-    async fn list_nodes(
-        &self,
-        _request: tonic::Request<agent::ListNodesRequest>,
-    ) -> Result<tonic::Response<agent::ListNodesResponse>, tonic::Status> {
-        let processes = self.storage_processes.read().await;
-        
-        let nodes: Vec<agent::NodeStatusResponse> = processes.values().map(|p| {
-            agent::NodeStatusResponse {
-                node_id: p.node_id.clone(),
-                status: "running".to_string(),
-                pid: p.pid,
-                port: p.port,
-                storage_path: p.storage_path.clone(),
-                started_at: p.started_at,
-                restart_count: p.restart_count,
-            }
-        }).collect();
-        
-        Ok(tonic::Response::new(agent::ListNodesResponse { nodes }))
-    }
-}
+// ===== Agent Command Handlers (receives commands from Master via TCP) =====
 
 impl Agent {
-    async fn new(config: Config, events: Option<EventEmitter>) -> anyhow::Result<Self> {
-        log::info!("🔌 Connecting to Master at {}", config.agent.master_host);
-        
-        let master_client = grid::grid_master_client::GridMasterClient::connect(
-            format!("http://{}", config.agent.master_host)
-        ).await?;
-        
-        log::info!("✅ Connected to Master");
+    /// Handle incoming commands from Master via TCP
+    async fn handle_command(&self, msg: GridMessage) -> GridResponse {
+        match msg {
+            GridMessage::SpawnStorageNode { agent_id, storage_path, memory_limit_mb, port } => {
+                log::info!("📨 Received spawn request: path={}, port={}", storage_path, port);
+                
+                // Generate node ID
+                let node_id = format!("node-{}-{}", agent_id, port);
+                
+                match self.spawn_storage_node(node_id.clone()).await {
+                    Ok((actual_port, pid)) => {
+                        log::info!("✅ Spawned node {} (Port: {}, PID: {})", node_id, actual_port, pid);
+                        GridResponse::SpawnStorageNodeOk {
+                            node_id,
+                            endpoint: format!("localhost:{}", actual_port),
+                            success: true,
+                            error_message: None,
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("❌ Failed to spawn node: {}", e);
+                        GridResponse::SpawnStorageNodeOk {
+                            node_id,
+                            endpoint: String::new(),
+                            success: false,
+                            error_message: Some(e.to_string()),
+                        }
+                    }
+                }
+            }
+            GridMessage::StopStorageNode { agent_id:_, node_id } => {
+                log::info!("🛑 Received stop request: {}", node_id);
+                
+                match self.stop_storage_node(&node_id).await {
+                    Ok(_) => {
+                        log::info!("✅ Storage node {} stopped successfully", node_id);
+                        GridResponse::StopStorageNodeOk {
+                            success: true,
+                            error_message: None,
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("❌ Failed to stop node {}: {}", node_id, e);
+                        GridResponse::StopStorageNodeOk {
+                            success: false,
+                            error_message: Some(e.to_string()),
+                        }
+                    }
+                }
+            }
+            GridMessage::GetStorageNodeStatus { node_id } => {
+                let processes = self.storage_processes.read().await;
+                if let Some(process) = processes.get(&node_id) {
+                    GridResponse::GetStorageNodeStatusOk {
+                        node_id: process.node_id.clone(),
+                        status: "running".to_string(),
+                        pid: process.pid,
+                        endpoint: format!("localhost:{}", process.port),
+                    }
+                } else {
+                    GridResponse::Error { message: "Node not found".to_string() }
+                }
+            }
+            _ => GridResponse::Error { message: "Unsupported command".to_string() },
+        }
+    }
+    
+    fn new(config: Config, events: Option<EventEmitter>) -> Self {
+        log::info!("🔌 Agent initialized for Master at {}", config.agent.master_host);
         
         let next_port = config.storage.default_port_range_start;
         
-        Ok(Self {
+        Self {
+            master_endpoint: config.agent.master_host.clone(),
             config,
-            master_client,
             storage_processes: Arc::new(RwLock::new(HashMap::new())),
             next_port: Arc::new(RwLock::new(next_port)),
             events,
-        })
+        }
     }
     
     /// Spawn a storage node process
@@ -417,7 +366,7 @@ impl Agent {
         }
     }
     
-    async fn register(&mut self) -> anyhow::Result<()> {
+    async fn register(&self) -> anyhow::Result<()> {
         log::info!("📝 Registering with Master...");
         
         let hostname = hostname::get()?
@@ -426,7 +375,7 @@ impl Agent {
         
         let agent_endpoint = format!("{}:{}", hostname, self.config.agent.agent_port);
         
-        let request = grid::AgentInfo {
+        let message = GridMessage::RegisterAgent {
             agent_id: self.config.agent.agent_id.clone(),
             hostname: hostname.clone(),
             platform: self.config.agent.platform.clone(),
@@ -435,23 +384,35 @@ impl Agent {
             agent_endpoint,
         };
         
-        let response = self.master_client.register_agent(request).await?;
-        let result = response.into_inner();
+        // Connect to master and send registration
+        let mut stream = TcpStream::connect(&self.master_endpoint).await?;
+        stream.set_nodelay(true)?;
         
-        if result.success {
-            log::info!(
-                "✅ Registered with Master (Master v{}, Agent: {}, Host: {})",
-                result.master_version,
-                self.config.agent.agent_id,
-                hostname
-            );
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("Registration failed: {}", result.error_message))
+        send_message(&mut stream, &message).await?;
+        let response: GridResponse = recv_message(&mut stream).await?;
+        
+        match response {
+            GridResponse::RegisterAgentOk { success, master_version, error_message } => {
+                if success {
+                    log::info!(
+                        "✅ Registered with Master (Master v{}, Agent: {}, Host: {})",
+                        master_version,
+                        self.config.agent.agent_id,
+                        hostname
+                    );
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!("Registration failed: {:?}", error_message))
+                }
+            }
+            GridResponse::Error { message } => {
+                Err(anyhow::anyhow!("Registration error: {}", message))
+            }
+            _ => Err(anyhow::anyhow!("Unexpected response from master")),
         }
     }
     
-    async fn heartbeat_loop(mut self) {
+    async fn heartbeat_loop(self) {
         let interval_secs = self.config.monitoring.heartbeat_interval_secs;
         let mut interval = tokio::time::interval(
             tokio::time::Duration::from_secs(interval_secs)
@@ -466,49 +427,61 @@ impl Agent {
             
             let node_count = self.storage_processes.read().await.len() as u32;
             
-            let request = grid::HeartbeatRequest {
+            let message = GridMessage::Heartbeat {
                 agent_id: self.config.agent.agent_id.clone(),
                 storage_node_count: node_count,
                 timestamp: current_timestamp(),
             };
             
-            match self.master_client.heartbeat(request).await {
-                Ok(response) => {
-                    heartbeat_count += 1;
-                    let ack = response.into_inner();
-                    
-                    if heartbeat_count % 12 == 0 {  // Log every minute (12 * 5s)
-                        log::info!(
-                            "💓 Heartbeat #{} acknowledged (Master time: {})",
-                            heartbeat_count,
-                            ack.timestamp
-                        );
-                    } else {
-                        log::debug!("💓 Heartbeat #{} sent", heartbeat_count);
+            // Send heartbeat via TCP
+            match TcpStream::connect(&self.master_endpoint).await {
+                Ok(mut stream) => {
+                    if let Err(e) = stream.set_nodelay(true) {
+                        log::error!("Failed to set nodelay: {}", e);
+                        continue;
                     }
-                }
-                Err(e) => {
-                    log::error!("❌ Heartbeat failed: {}", e);
-                    log::warn!("⚠️  Connection to Master lost, will retry...");
                     
-                    // Try to reconnect
-                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                    
-                    match grid::grid_master_client::GridMasterClient::connect(
-                        format!("http://{}", self.config.agent.master_host)
-                    ).await {
-                        Ok(new_client) => {
-                            log::info!("✅ Reconnected to Master");
-                            self.master_client = new_client;
-                            
-                            // Re-register
-                            if let Err(e) = self.register().await {
-                                log::error!("❌ Re-registration failed: {}", e);
+                    match send_message(&mut stream, &message).await {
+                        Ok(_) => {
+                            match recv_message::<GridResponse>(&mut stream).await {
+                                Ok(GridResponse::HeartbeatOk { acknowledged, timestamp }) => {
+                                    heartbeat_count += 1;
+                                    
+                                    if heartbeat_count % 12 == 0 {  // Log every minute (12 * 5s)
+                                        log::info!(
+                                            "💓 Heartbeat #{} acknowledged (Master time: {})",
+                                            heartbeat_count,
+                                            timestamp
+                                        );
+                                    } else {
+                                        log::debug!("💓 Heartbeat #{} sent", heartbeat_count);
+                                    }
+                                }
+                                Ok(_) => {
+                                    log::warn!("Unexpected heartbeat response");
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to read heartbeat response: {}", e);
+                                }
                             }
                         }
                         Err(e) => {
-                            log::error!("❌ Reconnection failed: {}", e);
+                            log::error!("Failed to send heartbeat: {}", e);
                         }
+                    }
+                }
+                Err(e) => {
+                    log::error!("❌ Heartbeat connection failed: {}", e);
+                    log::warn!("⚠️  Connection to Master lost, will retry...");
+                    
+                    // Wait before retry
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                    
+                    // Try to re-register
+                    if let Err(e) = self.register().await {
+                        log::error!("❌ Re-registration failed: {}", e);
+                    } else {
+                        log::info!("✅ Successfully re-registered with Master");
                     }
                 }
             }
@@ -541,7 +514,7 @@ async fn main() -> anyhow::Result<()> {
     
     // Initialize event storage connection (optional)
     let event_storage = std::env::var("EVENT_STORAGE")
-        .unwrap_or_else(|_| "http://localhost:50052".to_string());
+        .unwrap_or_else(|_| "localhost:50052".to_string());
     
     let events = match sutra_grid_events::init_events(event_storage.clone()).await {
         Ok(events) => {
@@ -555,27 +528,49 @@ async fn main() -> anyhow::Result<()> {
     };
     
     // Create agent
-    let mut agent = Agent::new(config, events).await?;
+    let agent = Agent::new(config, events);
     
     // Register with Master
     agent.register().await?;
     
-    // Agent is now cloneable, prepare for concurrent tasks
+    // Agent port for receiving commands from Master
     let agent_port = agent.config.agent.agent_port;
-    let agent_addr = format!("0.0.0.0:{}", agent_port).parse()?;
+    let agent_addr = format!("0.0.0.0:{}", agent_port);
     
-    log::info!("📻 Starting Agent gRPC server on port {}...", agent_port);
+    log::info!("📻 Starting Agent TCP server on port {}...", agent_port);
     
-    // Start Agent gRPC server (receives commands from Master)
-    let agent_service = agent.clone();
-    let grpc_server = tokio::spawn(async move {
-        tonic::transport::Server::builder()
-            .add_service(agent::grid_agent_server::GridAgentServer::new(agent_service))
-            .serve(agent_addr)
-            .await
+    // Start Agent TCP server (receives commands from Master)
+    let tcp_listener = TcpListener::bind(&agent_addr).await?;
+    log::info!("✅ Agent TCP server listening on {}", agent_addr);
+    
+    let command_agent = agent.clone();
+    tokio::spawn(async move {
+        loop {
+            match tcp_listener.accept().await {
+                Ok((mut stream, addr)) => {
+                    log::debug!("Master connected from {}", addr);
+                    let agent = command_agent.clone();
+                    
+                    tokio::spawn(async move {
+                        match recv_message::<GridMessage>(&mut stream).await {
+                            Ok(msg) => {
+                                let response = agent.handle_command(msg).await;
+                                if let Err(e) = send_message(&mut stream, &response).await {
+                                    log::error!("Failed to send response: {}", e);
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("Failed to receive command: {}", e);
+                            }
+                        }
+                    });
+                }
+                Err(e) => {
+                    log::error!("Failed to accept connection: {}", e);
+                }
+            }
+        }
     });
-    
-    log::info!("✅ Agent gRPC server started on port {}", agent_port);
     
     // Start storage node monitor
     let monitor_agent = agent.clone();

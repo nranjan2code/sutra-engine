@@ -1,4 +1,4 @@
-# Minimal Sutra Hybrid - gRPC-only orchestrator (Target: ~250-350MB)
+# Minimal Sutra Hybrid - TCP protocol orchestrator (Target: ~250-350MB)
 # Build from monorepo root: docker build -f packages/sutra-hybrid/Dockerfile .
 
 # Stage 1: Builder
@@ -11,12 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy storage-client for gRPC
+# Copy TCP storage client
 COPY packages/sutra-storage-client ./packages/sutra-storage-client
 # Copy NLG package (no-LLM grounded NLG)
 COPY packages/sutra-nlg ./packages/sutra-nlg
-
-# (Skipping grpcio-tools and proto generation; using checked-in generated files)
 
 # Requirements (no sutra-core)
 RUN cat > hybrid-requirements.txt <<EOF
@@ -27,8 +25,7 @@ fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
-grpcio>=1.60.0
-protobuf>=4.25.0
+msgpack>=1.0.0
 EOF
 
 # Install
@@ -48,7 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install typing_extensions system-wide
-RUN pip install --no-cache-dir typing_extensions>=4.12.0 grpcio>=1.60.0 protobuf>=4.25.0
+RUN pip install --no-cache-dir typing_extensions>=4.12.0 msgpack>=1.0.0
 
 # Create non-root user
 RUN useradd -m -u 1000 sutra

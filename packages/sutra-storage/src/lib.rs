@@ -30,6 +30,13 @@ mod reconciler;
 mod concurrent_memory;
 mod mmap_store;
 
+// Python bindings (OPTIONAL - conditional compilation)
+#[cfg(feature = "python-bindings")]
+mod python_concurrent;
+
+// TCP server for distributed architecture
+pub mod tcp_server;
+
 pub use types::{
     ConceptId, AssociationId, AssociationType, ConceptRecord, AssociationRecord,
     SegmentHeader, GraphPath,
@@ -52,9 +59,9 @@ pub use read_view::{ReadView, GraphSnapshot, ConceptNode};
 pub use reconciler::{Reconciler, ReconcilerConfig, ReconcilerStats};
 pub use mmap_store::{MmapStore, MmapStats};
 
-// Re-export Python bindings
-// TODO: Uncomment when ready
-// pub use python::*;
+// Re-export Python bindings (conditional)
+#[cfg(feature = "python-bindings")]
+pub use python_concurrent::*;
 
 /// Version of the storage format
 pub const STORAGE_VERSION: u32 = 1;

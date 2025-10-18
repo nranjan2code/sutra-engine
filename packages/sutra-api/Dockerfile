@@ -1,4 +1,4 @@
-# Minimal Sutra API - Thin gRPC Proxy (Target: 50-80MB)
+# Minimal Sutra API - TCP Storage Client (Target: 50-80MB)
 # Build from monorepo root: docker build -f packages/sutra-api/Dockerfile .
 
 # Stage 1: Builder
@@ -6,19 +6,16 @@ FROM python:3.11-alpine AS builder
 
 WORKDIR /build
 
-# Install build tools for protobuf and grpc
-RUN apk add --no-cache gcc musl-dev libffi-dev protobuf-dev
+# Install build tools
+RUN apk add --no-cache gcc musl-dev libffi-dev
 
 # Copy only storage-client package
 COPY packages/sutra-storage-client ./packages/sutra-storage-client
 
-# (Skipping grpcio-tools and proto generation; using checked-in generated files)
-
 # Create minimal requirements (NO sutra-core, NO sutra-hybrid!)
 RUN cat > api-requirements.txt <<EOF
 typing_extensions>=4.12.0
-grpcio>=1.60.0
-protobuf>=4.25.0
+msgpack>=1.0.0
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 pydantic>=2.0.0
@@ -38,7 +35,7 @@ FROM python:3.11-alpine
 RUN apk add --no-cache curl libstdc++
 
 # Install critical Python deps system-wide to avoid user-site issues
-RUN pip install --no-cache-dir typing_extensions>=4.12.0 grpcio>=1.60.0 protobuf>=4.25.0
+RUN pip install --no-cache-dir typing_extensions>=4.12.0 msgpack>=1.0.0
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' --uid 1000 sutra

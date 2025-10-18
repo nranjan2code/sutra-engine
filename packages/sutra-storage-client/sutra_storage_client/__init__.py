@@ -1,10 +1,10 @@
 """
 Sutra Storage Client
 
-Production-ready gRPC client for Sutra Storage Server.
+Production-ready TCP client for Sutra Storage Server (msgpack protocol).
 """
 
-from .client import StorageClient
+from .client_tcp import StorageClient
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __all__ = ["StorageClient"]

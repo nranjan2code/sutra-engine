@@ -1,33 +1,30 @@
 use crate::events::GridEvent;
 use tokio::sync::mpsc;
-use tonic::transport::Channel;
+use tokio::net::TcpStream;
+use sutra_protocol::{StorageMessage, StorageResponse, send_message, recv_message};
 
-// Generated from storage.proto
-mod storage {
-    tonic::include_proto!("sutra.storage");
-}
-
-use storage::storage_service_client::StorageServiceClient;
-
-/// Event emitter that writes Grid events to Sutra Storage
+/// Event emitter that writes Grid events to Sutra Storage via TCP
 #[derive(Clone)]
 pub struct EventEmitter {
     tx: mpsc::UnboundedSender<GridEvent>,
 }
 
 impl EventEmitter {
-    /// Create a new event emitter connected to a storage server
-    pub async fn new(storage_endpoint: String) -> Result<Self, Box<dyn std::error::Error>> {
+    /// Create a new event emitter connected to a storage server via TCP
+    pub async fn new(storage_endpoint: String) -> anyhow::Result<Self> {
         let (tx, rx) = mpsc::unbounded_channel();
         
-        // Connect to storage server
-        let client = StorageServiceClient::connect(storage_endpoint.clone()).await?;
+        // Connect to storage server via TCP
+        log::info!("📊 Connecting Grid event emitter to storage: {}", storage_endpoint);
+        let stream = TcpStream::connect(&storage_endpoint).await?;
+        stream.set_nodelay(true)?; // Disable Nagle for low latency
         
-        log::info!("📊 Grid event emitter connected to storage: {}", storage_endpoint);
+        log::info!("✅ Grid event emitter connected to storage: {}", storage_endpoint);
         
         // Spawn background worker to process events
+        let storage_endpoint_clone = storage_endpoint.clone();
         tokio::spawn(async move {
-            event_worker(client, rx).await;
+            event_worker(stream, storage_endpoint_clone, rx).await;
         });
         
         Ok(EventEmitter { tx })
@@ -50,25 +47,45 @@ impl EventEmitter {
 
 /// Background worker that processes events and writes to storage
 async fn event_worker(
-    mut client: StorageServiceClient<Channel>,
+    mut stream: TcpStream,
+    storage_endpoint: String,
     mut rx: mpsc::UnboundedReceiver<GridEvent>,
 ) {
     log::info!("🔄 Event worker started");
     
     while let Some(event) = rx.recv().await {
-        if let Err(e) = write_event_to_storage(&mut client, &event).await {
-            log::error!("Failed to write event to storage: {}", e);
+        // Try to write event, reconnect on failure
+        if let Err(e) = write_event_to_storage(&mut stream, &event).await {
+            log::error!("Failed to write event to storage: {} - attempting reconnect", e);
+            
+            // Try to reconnect
+            match TcpStream::connect(&storage_endpoint).await {
+                Ok(new_stream) => {
+                    if let Ok(_) = new_stream.set_nodelay(true) {
+                        stream = new_stream;
+                        log::info!("✅ Event worker reconnected to storage");
+                        
+                        // Retry writing event
+                        if let Err(e) = write_event_to_storage(&mut stream, &event).await {
+                            log::error!("Failed to write event after reconnect: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to reconnect to storage: {}", e);
+                }
+            }
         }
     }
     
     log::warn!("Event worker stopped");
 }
 
-/// Write a single event to storage as concept + associations
+/// Write a single event to storage as concept + associations via TCP
 async fn write_event_to_storage(
-    client: &mut StorageServiceClient<Channel>,
+    stream: &mut TcpStream,
     event: &GridEvent,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> anyhow::Result<()> {
     // Generate unique event ID
     let event_id = format!("event-{}-{}", event.event_type(), event.timestamp().timestamp_micros());
     
@@ -76,7 +93,7 @@ async fn write_event_to_storage(
     let event_json = serde_json::to_string(event)?;
     
     // Learn event as concept
-    let learn_req = storage::LearnConceptRequest {
+    let learn_msg = StorageMessage::LearnConcept {
         concept_id: event_id.clone(),
         content: event_json,
         embedding: vec![], // TODO: Add embeddings for semantic search
@@ -84,31 +101,34 @@ async fn write_event_to_storage(
         confidence: 1.0,
     };
     
-    client.learn_concept(learn_req).await?;
+    send_message(stream, &learn_msg).await?;
+    let _resp: StorageResponse = recv_message(stream).await?;
     
     // Create associations for queryability
     let primary_id = event.primary_id();
     
     // Association: entity -> event_type -> event
-    let assoc_req = storage::LearnAssociationRequest {
+    let assoc_msg = StorageMessage::LearnAssociation {
         source_id: primary_id.clone(),
         target_id: event_id.clone(),
         assoc_type: event_type_to_int(event.event_type()),
         confidence: 1.0,
     };
     
-    client.learn_association(assoc_req).await?;
+    send_message(stream, &assoc_msg).await?;
+    let _resp: StorageResponse = recv_message(stream).await?;
     
     // Association: event -> timestamp (for temporal queries)
     let timestamp_id = format!("ts-{}", event.timestamp().timestamp());
-    let ts_assoc = storage::LearnAssociationRequest {
+    let ts_assoc = StorageMessage::LearnAssociation {
         source_id: event_id.clone(),
         target_id: timestamp_id,
         assoc_type: 999, // TEMPORAL association type
         confidence: 1.0,
     };
     
-    client.learn_association(ts_assoc).await?;
+    send_message(stream, &ts_assoc).await?;
+    let _resp: StorageResponse = recv_message(stream).await?;
     
     log::debug!("📝 Wrote event: {} -> {}", primary_id, event.event_type());
     
@@ -154,8 +174,8 @@ mod tests {
     #[tokio::test]
     async fn test_emitter_creation() {
         // This would fail without a real storage server, so we just test the type
-        let result = EventEmitter::new("http://localhost:50051".to_string()).await;
-        // Expected to fail in test environment
+        let result = EventEmitter::new("localhost:50051".to_string()).await;
+        // Expected to fail in test environment (no server running)
         assert!(result.is_err() || result.is_ok());
     }
 }

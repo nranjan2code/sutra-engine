@@ -28,9 +28,8 @@ class Settings(BaseSettings):
     reload: bool = False
     workers: int = 1
 
-    # Storage Configuration
-    storage_path: str = "./api_knowledge"
-    storage_server: str = "storage-server:50051"  # gRPC storage server address
+    # Storage Configuration (Custom Binary Protocol)
+    storage_server: str = "storage-server:50051"  # Storage server address
     auto_save: bool = True
     save_interval_seconds: int = 300  # 5 minutes
 

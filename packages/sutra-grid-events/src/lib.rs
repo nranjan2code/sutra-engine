@@ -62,7 +62,7 @@ pub use events::GridEvent;
 pub use emitter::EventEmitter;
 
 /// Initialize event emission for a Grid component
-pub async fn init_events(storage_endpoint: String) -> Result<EventEmitter, Box<dyn std::error::Error>> {
+pub async fn init_events(storage_endpoint: String) -> anyhow::Result<EventEmitter> {
     EventEmitter::new(storage_endpoint).await
 }
 

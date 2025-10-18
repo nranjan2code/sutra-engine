@@ -42,17 +42,15 @@ COPY --from=frontend-builder --chown=sutra:sutra /build/dist /app/build
 # Copy Python backend
 COPY --chown=sutra:sutra packages/sutra-control/backend/ /app/backend/
 
-# Copy gRPC client (needed for internal communication)
-COPY --chown=sutra:sutra packages/sutra-storage-client/ /app/sutra_storage_client/
+# No gRPC client needed; backend talks to REST APIs
 
 # Switch to non-root user
 USER sutra
 
-# Set Python path for gRPC client
+# Set Python path
 ENV PYTHONPATH=/app:$PYTHONPATH \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    SUTRA_GRID_MASTER=grid-master:7000
+    PYTHONDONTWRITEBYTECODE=1
 
 # Security: Remove docs in production
 ENV ENVIRONMENT=production
