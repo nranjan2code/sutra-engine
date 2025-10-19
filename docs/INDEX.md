@@ -73,6 +73,14 @@ Version 2.0 | Last Updated: 2025-10-19
 - Natural language observability
 - Integration examples
 
+### [Unified Learning Architecture](UNIFIED_LEARNING_ARCHITECTURE.md) 🔥
+**Storage server as learning authority** (Implemented 2025-10-19)
+- Single source of truth design
+- Storage server learning pipeline
+- TCP client implementation
+- Migration from distributed logic
+- Benefits and verification
+
 ---
 
 ## 🏗️ Architecture & Deployment
@@ -161,8 +169,10 @@ Version 2.0 | Last Updated: 2025-10-19
 
 #### Understand the architecture
 1. [WARP.md](../WARP.md) - Complete architecture
-2. [Production Guide](PRODUCTION_GUIDE.md) - Architecture overview
-3. [README](../README.md) - High-level overview
+2. [Unified Learning Architecture](UNIFIED_LEARNING_ARCHITECTURE.md) - 🔥 NEW unified learning design
+3. [Production Guide](PRODUCTION_GUIDE.md) - Architecture overview
+4. [README](../README.md) - High-level overview
+5. [ARCHITECTURE.md](../ARCHITECTURE.md) - Updated technical details
 
 #### Troubleshoot issues
 1. [Quick Reference](QUICK_REFERENCE.md) - Troubleshooting section

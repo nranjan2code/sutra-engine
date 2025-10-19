@@ -31,6 +31,17 @@ pub struct JobResponse {
 
 pub type SharedIngester = Arc<Mutex<BulkIngester>>;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BulkIngestRequest {
+    pub contents: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BulkIngestResponse {
+    pub concept_ids: Vec<String>,
+    pub count: usize,
+}
+
 pub async fn create_server(ingester: BulkIngester) -> Router {
     let shared_ingester = Arc::new(Mutex::new(ingester));
     
@@ -40,6 +51,7 @@ pub async fn create_server(ingester: BulkIngester) -> Router {
         .route("/jobs/:id", get(get_job))
         .route("/jobs", get(list_jobs))
         .route("/adapters", get(list_adapters))
+        .route("/bulk/ingest", post(bulk_ingest))
         .layer(CorsLayer::permissive())
         .with_state(shared_ingester)
 }
@@ -147,6 +159,33 @@ async fn list_adapters(
             })).into_response()
         }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
+}
+
+async fn bulk_ingest(
+    State(ingester): State<SharedIngester>,
+    Json(payload): Json<BulkIngestRequest>,
+) -> impl IntoResponse {
+    // Get storage address without holding lock across await
+    let addr = match ingester.lock() {
+        Ok(ing) => ing.storage_server_address(),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    // Build concepts
+    let concepts: Vec<crate::storage::Concept> = payload.contents.into_iter().map(|c| crate::storage::Concept {
+        content: c,
+        metadata: std::collections::HashMap::new(),
+        embedding: None,
+    }).collect();
+
+    // Call storage directly
+    match crate::storage::TcpStorageClient::new(&addr).await {
+        Ok(mut client) => match client.batch_learn_concepts(concepts).await {
+            Ok(concept_ids) => ResponseJson(BulkIngestResponse { count: concept_ids.len(), concept_ids }).into_response(),
+            Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({"error": e.to_string()}))).into_response(),
+        },
+        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({"error": format!("connect failed: {}", e)}))).into_response(),
     }
 }
 

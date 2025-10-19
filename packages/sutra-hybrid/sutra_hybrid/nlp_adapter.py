@@ -29,23 +29,30 @@ class OllamaNLPProcessor:
 
     def __init__(
         self,
-        model_name: str = "granite-embedding:30m",
+        model_name: str = "nomic-embed-text",
         ollama_url: str = None,
     ):
         """
-        Initialize Ollama NLP processor.
+        Initialize Ollama NLP processor - PRODUCTION: nomic-embed-text only.
 
         Args:
-            model_name: Ollama model name for embeddings
+            model_name: Ollama model name (default: nomic-embed-text for 768-d)
             ollama_url: Ollama service URL (uses environment variable if None)
         """
+        # PRODUCTION: Enforce nomic-embed-text for 768-dimensional embeddings
+        if model_name != "nomic-embed-text":
+            raise ValueError(
+                f"PRODUCTION REQUIREMENT: Only nomic-embed-text (768-d) is supported. "
+                f"Got: {model_name}. Update SUTRA_EMBEDDING_MODEL environment variable."
+            )
+        
         self.ollama_embedding = OllamaEmbedding(
             model_name=model_name,
             ollama_url=ollama_url
         )
         self.model_name = model_name
         
-        logger.info(f"Initialized OllamaNLPProcessor with {model_name}")
+        logger.info(f"✅ PRODUCTION: Initialized OllamaNLPProcessor with {model_name} (768-d)")
 
     def get_embedding(self, text: str) -> Optional[np.ndarray]:
         """

@@ -10,7 +10,7 @@ WORKDIR /build
 RUN apk add --no-cache gcc musl-dev libffi-dev
 
 # Copy only storage-client package
-COPY packages/sutra-storage-client ./packages/sutra-storage-client
+COPY packages/sutra-storage-client-tcp ./packages/sutra-storage-client-tcp
 
 # Create minimal requirements (NO sutra-core, NO sutra-hybrid!)
 RUN cat > api-requirements.txt <<EOF
@@ -25,7 +25,7 @@ EOF
 
 # Install minimal packages
 RUN pip install --no-cache-dir --user -r api-requirements.txt && \
-    pip install --no-cache-dir --user ./packages/sutra-storage-client && \
+    pip install --no-cache-dir --user ./packages/sutra-storage-client-tcp && \
     find /root/.local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 # Stage 2: Runtime

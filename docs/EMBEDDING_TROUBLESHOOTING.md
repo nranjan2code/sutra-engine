@@ -95,7 +95,105 @@ def stats(self):
 
 ---
 
-### 4. "list indices must be integers or slices, not str"
+### 4. "Same Answer for All Questions" (Zero Embeddings)
+
+**Status:** ✅ **FIXED** (2025-10-19) - Unified learning architecture prevents this
+
+**Symptoms:**
+```
+Every query returns the same answer, regardless of the question
+Vector search appears to work but returns wrong concepts
+Storage stats show: "total_embeddings": 0
+```
+
+**Historical Root Cause (Pre-2025-10-19):** 
+Concepts were learned without embeddings because only the Hybrid service generated embeddings. API and Bulk Ingester services learned concepts directly without embeddings, causing semantic search to fail.
+
+**Current Architecture (Post-2025-10-19):**
+- ✅ Storage server owns the complete learning pipeline
+- ✅ Embedding generation happens automatically for ALL services
+- ✅ API, Hybrid, Bulk Ingester all use the same unified learning path
+- ✅ Bug cannot occur unless Ollama is misconfigured
+
+**Diagnosis:**
+```bash
+# Check embedding count
+curl -s http://localhost:8000/stats | jq '.total_embeddings'
+# Expected: > 0 (should match concept count)
+# If 0: System is non-functional
+
+# Check if Ollama is working
+curl -s http://localhost:8001/health | jq '.embedding_model'
+# Expected: "granite-embedding:30m" or similar
+# If null/none: Embeddings disabled
+```
+
+**Fix:**
+
+1. **Clean old data without embeddings:**
+```bash
+# Stop services
+docker stop sutra-storage sutra-api sutra-hybrid sutra-client
+
+# Remove storage volume
+docker rm -f sutra-storage
+docker volume rm sutra-models_storage-data
+
+# Restart with fresh storage
+docker-compose -f docker-compose-grid.yml up -d storage-server sutra-api sutra-hybrid sutra-client
+```
+
+2. **Learn via Hybrid service (has embeddings):**
+```bash
+# Use /sutra/learn endpoint (NOT /learn)
+curl -X POST http://localhost:8001/sutra/learn \
+  -H "Content-Type: application/json" \
+  -d '{"text": "The Eiffel Tower is in Paris, France"}'
+
+# Learn multiple diverse facts
+curl -X POST http://localhost:8001/sutra/learn \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Tokyo is the capital of Japan"}'
+```
+
+3. **Verify embeddings generated:**
+```bash
+curl -s http://localhost:8000/stats | jq '{concepts: .total_concepts, embeddings: .total_embeddings}'
+# Expected: concepts == embeddings
+```
+
+4. **Test differentiation:**
+```bash
+# Query 1
+curl -X POST http://localhost:8001/sutra/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Where is the Eiffel Tower?"}' | jq -r '.answer'
+
+# Query 2
+curl -X POST http://localhost:8001/sutra/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is Tokyo?"}' | jq -r '.answer'
+
+# Should return DIFFERENT answers
+```
+
+**Prevention (Post-2025-10-19):**
+- ✅ Use ANY learning endpoint - all generate embeddings automatically
+- ✅ Storage server enforces embedding generation for consistency
+- ✅ Monitor `docker logs sutra-storage` for "LearningPipeline" logs
+- ✅ Ensure Ollama service is running and accessible to storage server
+- ✅ Verify `SUTRA_OLLAMA_URL` environment variable is set correctly
+
+**Key Architectural Change:**
+With unified learning (2025-10-19), the storage server is the single source of truth for learning operations. All services delegate to the storage server's learning pipeline, which guarantees embeddings are generated. The old "learn via Hybrid only" workaround is no longer needed.
+
+**Key Lesson:** Without embeddings, the system degrades to random concept retrieval. Embeddings are mandatory for semantic differentiation. The new architecture guarantees this at the storage layer.
+
+**See:** [`docs/UNIFIED_LEARNING_ARCHITECTURE.md`](UNIFIED_LEARNING_ARCHITECTURE.md) for complete design documentation.
+
+---
+
+### 5. "list indices must be integers or slices, not str"
 
 **Error Context:**
 ```

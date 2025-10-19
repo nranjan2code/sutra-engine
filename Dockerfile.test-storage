@@ -1,6 +1,12 @@
 # Test Dockerfile - Storage Server with Custom Binary Protocol
 FROM rustlang/rust:nightly-slim as builder
 
+# Install build dependencies for reqwest (needs OpenSSL)
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 
 # Copy protocol package
@@ -16,10 +22,11 @@ RUN cargo build --release --bin storage-server
 # Runtime image
 FROM debian:bookworm-slim
 
-# Install minimal runtime dependencies
+# Install minimal runtime dependencies (including OpenSSL for reqwest)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     netcat-openbsd \
+    libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary

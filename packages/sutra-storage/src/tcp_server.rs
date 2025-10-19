@@ -4,6 +4,7 @@
 //! Runs as standalone service - API/Hybrid connect over network.
 
 use crate::concurrent_memory::ConcurrentMemory;
+use crate::learning_pipeline::{LearningPipeline, LearnOptions};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -15,8 +16,59 @@ use tokio::signal;
 use serde::{Deserialize, Serialize};
 
 // Re-define protocol messages here for now (will use sutra-protocol crate)
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearnOptionsMsg {
+    pub generate_embedding: bool,
+    pub embedding_model: Option<String>,
+    pub extract_associations: bool,
+    pub min_association_confidence: f32,
+    pub max_associations_per_concept: usize,
+    pub strength: f32,
+    pub confidence: f32,
+}
+
+impl From<LearnOptionsMsg> for LearnOptions {
+    fn from(m: LearnOptionsMsg) -> Self {
+        LearnOptions {
+            generate_embedding: m.generate_embedding,
+            embedding_model: m.embedding_model,
+            extract_associations: m.extract_associations,
+            min_association_confidence: m.min_association_confidence,
+            max_associations_per_concept: m.max_associations_per_concept,
+            strength: m.strength,
+            confidence: m.confidence,
+        }
+    }
+}
+
+impl Default for LearnOptionsMsg {
+    fn default() -> Self {
+        let d = LearnOptions::default();
+        LearnOptionsMsg {
+            generate_embedding: d.generate_embedding,
+            embedding_model: d.embedding_model,
+            extract_associations: d.extract_associations,
+            min_association_confidence: d.min_association_confidence,
+            max_associations_per_concept: d.max_associations_per_concept,
+            strength: d.strength,
+            confidence: d.confidence,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StorageRequest {
+    // Legacy explicit learn (still supported)
+    // New unified learning API (V2)
+    LearnConceptV2 {
+        content: String,
+        options: LearnOptionsMsg,
+    },
+    LearnBatch {
+        contents: Vec<String>,
+        options: LearnOptionsMsg,
+    },
     LearnConcept {
         concept_id: String,
         content: String,
@@ -53,6 +105,8 @@ pub enum StorageRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StorageResponse {
+    LearnConceptV2Ok { concept_id: String },
+    LearnBatchOk { concept_ids: Vec<String> },
     LearnConceptOk { sequence: u64 },
     LearnAssociationOk { sequence: u64 },
     QueryConceptOk {
@@ -68,6 +122,7 @@ pub enum StorageResponse {
     StatsOk {
         concepts: u64,
         edges: u64,
+        vectors: u64,
         written: u64,
         dropped: u64,
         pending: u64,
@@ -87,14 +142,17 @@ pub enum StorageResponse {
 pub struct StorageServer {
     storage: Arc<ConcurrentMemory>,
     start_time: std::time::Instant,
+    pipeline: LearningPipeline,
 }
 
 impl StorageServer {
     /// Create new storage server
     pub fn new(storage: ConcurrentMemory) -> Self {
-        Self {
+        let pipeline = LearningPipeline::new().expect("Failed to init learning pipeline");
+Self {
             storage: Arc::new(storage),
             start_time: std::time::Instant::now(),
+            pipeline,
         }
     }
 
@@ -184,11 +242,23 @@ impl StorageServer {
         Ok(())
     }
 
-    /// Handle storage request
+/// Handle storage request
     async fn handle_request(&self, request: StorageRequest) -> StorageResponse {
         use crate::types::{ConceptId, AssociationType};
 
         match request {
+            StorageRequest::LearnConceptV2 { content, options } => {
+                match self.pipeline.learn_concept(&self.storage, &content, &options.into()).await {
+                    Ok(concept_id) => StorageResponse::LearnConceptV2Ok { concept_id },
+                    Err(e) => StorageResponse::Error { message: format!("LearnConceptV2 failed: {}", e) },
+                }
+            }
+            StorageRequest::LearnBatch { contents, options } => {
+                match self.pipeline.learn_batch(&self.storage, &contents, &options.into()).await {
+                    Ok(concept_ids) => StorageResponse::LearnBatchOk { concept_ids },
+                    Err(e) => StorageResponse::Error { message: format!("LearnBatch failed: {}", e) },
+                }
+            }
             StorageRequest::LearnConcept {
                 concept_id,
                 content,
@@ -297,11 +367,13 @@ impl StorageServer {
 
             StorageRequest::GetStats => {
                 let stats = self.storage.stats();
+                let hnsw_stats = self.storage.hnsw_stats();
                 let uptime = self.start_time.elapsed().as_secs();
 
                 StorageResponse::StatsOk {
                     concepts: stats.snapshot.concept_count as u64,
                     edges: stats.snapshot.edge_count as u64,
+                    vectors: hnsw_stats.indexed_vectors as u64,
                     written: stats.write_log.written,
                     dropped: stats.write_log.dropped,
                     pending: stats.write_log.pending as u64,

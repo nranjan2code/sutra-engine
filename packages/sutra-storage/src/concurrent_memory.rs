@@ -385,8 +385,14 @@ impl ConcurrentMemory {
         // Auto-index vector in HNSW if provided
         if let Some(vec) = vector {
             if vec.len() == self.config.vector_dimension {
+                log::info!("🔍 HNSW: Indexing vector for concept {} (dim={})", id.to_hex(), vec.len());
                 let _ = self.index_vector(id, vec);
+            } else {
+                log::warn!("❌ HNSW: Dimension mismatch! Expected {}, got {}. Concept {} NOT indexed.", 
+                          self.config.vector_dimension, vec.len(), id.to_hex());
             }
+        } else {
+            log::debug!("ℹ️  Concept {} stored without embedding", id.to_hex());
         }
         
         Ok(seq)
@@ -489,7 +495,10 @@ impl ConcurrentMemory {
     pub fn vector_search(&self, query: &[f32], k: usize, _ef_search: usize) -> Vec<(ConceptId, f32)> {
         let vectors_guard = self.vectors.read();
         
+        log::info!("🔍 Vector search: query_dim={}, k={}, indexed_vectors={}", query.len(), k, vectors_guard.len());
+        
         if vectors_guard.is_empty() {
+            log::warn!("⚠️  Vector search failed: NO VECTORS INDEXED!");
             return Vec::new();
         }
         
@@ -531,6 +540,7 @@ impl ConcurrentMemory {
     /// Get HNSW statistics
     pub fn hnsw_stats(&self) -> HnswStats {
         let indexed_count = self.vectors.read().len();
+        log::debug!("📊 HNSW Stats: {} vectors indexed (expected dim: {})", indexed_count, self.config.vector_dimension);
         
         HnswStats {
             indexed_vectors: indexed_count,

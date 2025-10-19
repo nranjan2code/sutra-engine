@@ -90,28 +90,37 @@ class TcpStorageAdapter:
         category: Optional[str] = None,
         confidence: float = 1.0,
         strength: float = 1.0,
-        embedding: Optional[List[float]] = None,
+        generate_embedding: bool = True,
+        extract_associations: bool = True,
+        embedding_model: Optional[str] = None,
+        min_association_confidence: float = 0.5,
+        max_associations_per_concept: int = 10,
     ) -> str:
-        """Learn a concept via TCP storage server."""
-        # Generate concept ID
-        concept_id = str(uuid.uuid4())
+        """Learn a concept via TCP storage server (unified pipeline)."""
+        options = {
+            "generate_embedding": bool(generate_embedding),
+            "embedding_model": embedding_model,
+            "extract_associations": bool(extract_associations),
+            "min_association_confidence": float(min_association_confidence),
+            "max_associations_per_concept": int(max_associations_per_concept),
+            "strength": float(strength),
+            "confidence": float(confidence),
+            # Note: 'source' and 'category' can be added to storage later
+        }
         
         def _operation():
-            return self.client.learn_concept(
-                concept_id=concept_id,
+            return self.client.learn_concept_v2(
                 content=content,
-                embedding=embedding or [],
-                strength=strength,
-                confidence=confidence,
+                options=options,
             )
         
         try:
-            sequence = self._execute_with_retry(_operation)
-            logger.debug(f"Learned concept {concept_id[:8]} via TCP (seq={sequence})")
+            concept_id = self._execute_with_retry(_operation)
+            logger.debug(f"Learned concept {concept_id[:8]} via TCP (unified)")
             return concept_id
             
         except Exception as e:
-            logger.error(f"Failed to learn concept via TCP: {e}")
+            logger.error(f"Failed to learn concept via TCP (unified): {e}")
             raise
 
     def add_concept(self, concept: Concept, embedding) -> None:
@@ -233,7 +242,13 @@ class TcpStorageAdapter:
     def get_neighbors(self, concept_id: str) -> List[str]:
         """Get neighboring concept IDs via TCP storage server."""
         def _operation():
-            return self.client.get_neighbors(concept_id)
+            result = self.client.get_neighbors(concept_id)
+            # Ensure result is a list of strings
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict) and 'neighbors' in result:
+                return result['neighbors']
+            return []
             
         try:
             return self._execute_with_retry(_operation)
@@ -258,6 +273,106 @@ class TcpStorageAdapter:
         except Exception as e:
             logger.error(f"Failed to find path via TCP: {e}")
             return None
+    
+    def find_paths(
+        self,
+        start_concepts: List[str],
+        target_concepts: List[str],
+        max_depth: int = 6,
+        num_paths: int = 5,
+        query: str = "",
+    ) -> List[Any]:
+        """Find multiple reasoning paths via TCP storage server."""
+        # For now, fallback to simple pathfinding between first concepts
+        # TODO: Implement full multi-path reasoning in storage server
+        paths = []
+        
+        for start in start_concepts[:2]:  # Limit starts
+            for target in target_concepts[:3]:  # Limit targets
+                if start == target:
+                    continue
+                    
+                path = self.find_path(start, target, max_depth)
+                if path:
+                    # Convert to ReasoningPath object
+                    from ..graph.concepts import ReasoningPath, ReasoningStep
+                    
+                    steps = []
+                    for i in range(len(path) - 1):
+                        assoc = self.get_association(path[i], path[i + 1])
+                        if assoc:
+                            step = ReasoningStep(
+                                step_number=i + 1,
+                                source_concept=path[i],
+                                relation=assoc.assoc_type.value,
+                                target_concept=path[i + 1],
+                                confidence=assoc.confidence,
+                            )
+                            steps.append(step)
+                    
+                    if steps:
+                        reasoning_path = ReasoningPath(
+                            steps=steps,
+                            confidence=min(s.confidence for s in steps),
+                        )
+                        paths.append(reasoning_path)
+                        
+                        if len(paths) >= num_paths:
+                            return paths
+        
+        return paths
+    
+    def get_association(
+        self, source_id: str, target_id: str
+    ) -> Optional[Association]:
+        """Get association between two concepts via TCP storage server."""
+        def _operation():
+            return self.client.get_association(source_id, target_id)
+            
+        try:
+            result = self._execute_with_retry(_operation)
+            
+            if not result:
+                return None
+            
+            # Convert type int back to AssociationType
+            type_map = {
+                0: AssociationType.SEMANTIC,
+                1: AssociationType.CAUSAL,
+                2: AssociationType.TEMPORAL,
+                3: AssociationType.HIERARCHICAL,
+                4: AssociationType.COMPOSITIONAL,
+            }
+            
+            assoc_type = type_map.get(result.get("type", 0), AssociationType.SEMANTIC)
+            
+            return Association(
+                source_id=result.get("source_id", source_id),
+                target_id=result.get("target_id", target_id),
+                assoc_type=assoc_type,
+                confidence=result.get("confidence", 1.0),
+            )
+            
+        except Exception as e:
+            logger.debug(f"No association found {source_id[:8]} -> {target_id[:8]}: {e}")
+            return None
+    
+    def get_all_concept_ids(self) -> List[str]:
+        """Get all concept IDs via TCP storage server."""
+        def _operation():
+            return self.client.get_all_concept_ids()
+            
+        try:
+            result = self._execute_with_retry(_operation)
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict) and 'concept_ids' in result:
+                return result['concept_ids']
+            return []
+            
+        except Exception as e:
+            logger.error(f"Failed to get all concept IDs via TCP: {e}")
+            return []
 
     def vector_search(
         self,

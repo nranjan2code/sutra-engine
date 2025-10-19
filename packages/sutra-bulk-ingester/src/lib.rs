@@ -387,6 +387,21 @@ impl BulkIngester {
     pub fn list_jobs(&self) -> Vec<&IngestionJob> {
         self.active_jobs.values().collect()
     }
+
+    /// Expose storage server address (for stateless handlers)
+    pub fn storage_server_address(&self) -> String {
+        self.config.storage_server.clone()
+    }
+
+    /// Simple ingestion API for direct content lists (unified pipeline)
+    pub async fn ingest_contents(&mut self, contents: Vec<String>) -> Result<Vec<String>> {
+        let concepts: Vec<crate::storage::Concept> = contents.into_iter().map(|c| crate::storage::Concept {
+            content: c,
+            metadata: HashMap::new(),
+            embedding: None, // Storage server generates embeddings
+        }).collect();
+        self.storage_client.batch_learn_concepts(concepts).await
+    }
 }
 
 #[cfg(test)]

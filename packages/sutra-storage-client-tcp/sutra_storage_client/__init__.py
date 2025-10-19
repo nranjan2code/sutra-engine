@@ -32,6 +32,17 @@ class StorageClient:
         self.address = (host, int(port))
         self.socket = None
         self._connect()
+        
+        # Defaults for unified learning
+        self.default_learn_options = {
+            "generate_embedding": True,
+            "embedding_model": None,
+            "extract_associations": True,
+            "min_association_confidence": 0.5,
+            "max_associations_per_concept": 10,
+            "strength": 1.0,
+            "confidence": 1.0,
+        }
     
     def _connect(self):
         """Establish TCP connection"""
@@ -78,6 +89,54 @@ class StorageClient:
             data += chunk
         return data
     
+    def learn_concept_v2(
+        self,
+        content: str,
+        options: Optional[dict] = None,
+    ) -> str:
+        """Learn a concept via unified learning pipeline (server-side embeddings+associations)."""
+        opts = dict(self.default_learn_options)
+        if options:
+            opts.update({k: v for k, v in options.items() if v is not None})
+        response = self._send_request("LearnConceptV2", {
+            "content": content,
+            "options": opts,
+        })
+        
+        if "Error" in response:
+            raise RuntimeError(response["Error"]["message"])
+        
+        if "LearnConceptV2Ok" in response:
+            result = response["LearnConceptV2Ok"]
+            # Handle both list format [concept_id] and dict format {concept_id: str}
+            if isinstance(result, list) and len(result) > 0:
+                return result[0]  # Storage server returns list format
+            elif isinstance(result, dict) and "concept_id" in result:
+                return result["concept_id"]
+        raise RuntimeError(f"Unexpected response: {response}")
+    
+    def learn_batch_v2(
+        self,
+        contents: List[str],
+        options: Optional[dict] = None,
+    ) -> List[str]:
+        """Batch learn via unified pipeline."""
+        opts = dict(self.default_learn_options)
+        if options:
+            opts.update({k: v for k, v in options.items() if v is not None})
+        response = self._send_request("LearnBatch", {
+            "contents": contents,
+            "options": opts,
+        })
+        if "Error" in response:
+            raise RuntimeError(response["Error"]["message"])
+        if "LearnBatchOk" in response:
+            result = response["LearnBatchOk"]
+            if isinstance(result, dict) and "concept_ids" in result:
+                return result["concept_ids"]
+        raise RuntimeError(f"Unexpected response: {response}")
+    
+    # Legacy explicit learn retained for compatibility
     def learn_concept(
         self,
         concept_id: str,
@@ -86,7 +145,7 @@ class StorageClient:
         strength: float = 1.0,
         confidence: float = 1.0,
     ) -> int:
-        """Learn a concept with optional embedding"""
+        """Learn a concept with optional embedding (legacy)."""
         response = self._send_request("LearnConcept", {
             "concept_id": concept_id,
             "content": content,
@@ -176,7 +235,10 @@ class StorageClient:
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
         
-        return response["GetNeighborsOk"]["neighbor_ids"]
+        result = response.get("GetNeighborsOk", {})
+        if isinstance(result, dict):
+            return result.get("neighbor_ids", [])
+        return []
     
     def find_path(
         self,
@@ -199,6 +261,80 @@ class StorageClient:
             return None
         
         return result["path"]
+    
+    def get_association(
+        self,
+        source_id: str,
+        target_id: str,
+    ) -> Optional[Dict]:
+        """Get association between two concepts"""
+        # TODO: Implement GetAssociation in storage server
+        # For now, return stub to prevent errors
+        try:
+            response = self._send_request("GetAssociation", {
+                "source_id": source_id,
+                "target_id": target_id,
+            })
+            
+            if "Error" in response:
+                return None
+            
+            if "GetAssociationOk" in response:
+                result = response["GetAssociationOk"]
+                if isinstance(result, dict) and result.get("found", False):
+                    return {
+                        "source_id": result.get("source_id", source_id),
+                        "target_id": result.get("target_id", target_id),
+                        "type": result.get("assoc_type", 0),
+                        "confidence": result.get("confidence", 1.0),
+                    }
+            return None
+        except Exception:
+            # Server doesn't support this yet, return None
+            return None
+    
+    def get_all_concept_ids(self) -> List[str]:
+        """Get all concept IDs"""
+        # TODO: Implement GetAllConceptIds in storage server
+        # For now, return stub to prevent errors
+        try:
+            # GetAllConceptIds is a unit variant - send just the string
+            request = "GetAllConceptIds"
+            packed = msgpack.packb(request)
+            
+            # Send with length prefix
+            self.socket.sendall(struct.pack(">I", len(packed)))
+            self.socket.sendall(packed)
+            
+            # Receive response length
+            length_bytes = self.socket.recv(4)
+            if len(length_bytes) < 4:
+                raise ConnectionError("Connection closed")
+            length = struct.unpack(">I", length_bytes)[0]
+            
+            # Receive response
+            response_bytes = b""
+            while len(response_bytes) < length:
+                chunk = self.socket.recv(min(4096, length - len(response_bytes)))
+                if not chunk:
+                    raise ConnectionError("Connection closed")
+                response_bytes += chunk
+            
+            response = msgpack.unpackb(response_bytes, raw=False)
+            
+            if "Error" in response:
+                return []
+            
+            if "GetAllConceptIdsOk" in response:
+                result = response["GetAllConceptIdsOk"]
+                if isinstance(result, list):
+                    return result
+                elif isinstance(result, dict) and "concept_ids" in result:
+                    return result["concept_ids"]
+            return []
+        except Exception:
+            # Server doesn't support this yet, return empty list
+            return []
     
     def vector_search(
         self,

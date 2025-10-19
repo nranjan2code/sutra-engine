@@ -36,25 +36,53 @@ Sutra AI is a **graph-based reasoning system** with complete explainability. Unl
 
 ## System Architecture
 
-### High-Level (gRPC-first)
+### High-Level (TCP Binary Protocol - Current Production Architecture)
 
 ```
-┌───────────────┐         gRPC          ┌─────────────────────┐
-│  sutra-api    │ ───────────────────▶  │  storage-server     │
-│  (FastAPI)    │ ◀───────────────────  │  (Rust, gRPC)       │
-└───────────────┘                       └─────────────────────┘
-        ▲                                        ▲
-        │                                        │
-        └──────────── gRPC ──────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│                     Unified Learning Architecture                      │
+│                        (Implemented 2025-10-19)                       │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  ANY Client (API/Hybrid/Bulk/Python):                               │
+│    └─→ TcpStorageAdapter.learn_concept(content, options)            │
+│        └─→ TCP: LearnConceptV2 {content, options}                   │
+│            └─→ StorageServer::LearningPipeline:                     │
+│                ├─→ 1. Generate embedding (Ollama HTTP)             │
+│                ├─→ 2. Extract associations (Rust NLP)              │
+│                ├─→ 3. Store atomically (HNSW + WAL)                │
+│                └─→ 4. Return concept_id                             │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
 
-┌───────────────┐
-│ sutra-hybrid  │  (embeddings + orchestration)
-└───────────────┘
+┌──────────────┐    TCP Binary     ┌─────────────────────────────────────┐
+│  sutra-api   │ ──── Protocol ──▶ │      storage-server                 │
+│  (FastAPI)   │ ◀────────────────  │   (Rust TCP + Learning Pipeline)   │
+└──────────────┘                    │                                     │
+        ▲                           │  🔥 NEW: Unified Learning Core:    │
+        │                           │  ├─ Embedding Generation (Ollama)  │
+        │ TCP Binary Protocol       │  ├─ Association Extraction (NLP)    │
+        │                           │  ├─ Atomic Storage (HNSW + WAL)     │
+┌──────────────┐                    │  └─ Port 50051                      │
+│ sutra-hybrid │ ──────────────────▶│                                     │
+│ (Semantic +  │ ◀──────────────────│                                     │
+│  NLG Layer)  │                    └─────────────────────────────────────┘
+└──────────────┘
+        ▲
+        │ HTTP
+        ▼
+┌──────────────┐
+│ sutra-ollama │
+│  (LLM Server)│
+└──────────────┘
 ```
 
-Design principle: All graph and vector operations run in the storage server. API and Hybrid never access storage in-process; they use the Python storage-client over gRPC.
-
-**Design Principle:** Only `sutra-api` is external-facing. Core, hybrid, and storage are internal implementation details.
+**Key Design Principles:**
+1. **Single Source of Truth**: Storage server owns ALL learning logic (embeddings + associations)
+2. **TCP Binary Protocol**: 10-50× lower latency than gRPC using bincode serialization
+3. **Unified Learning Pipeline**: No code duplication - all services delegate to storage server
+4. **Atomic Operations**: Complete learning pipeline executes atomically in storage server
+5. **Zero Client-Side Logic**: Clients are thin TCP adapters with no business logic
 
 ---
 
@@ -169,26 +197,41 @@ Data structures optimized for graph traversal, not tables or documents. Adjacenc
 
 ## Data Flow
 
-### Learning Flow
+### Unified Learning Flow (2025-10-19)
+
 ```
-User Input (Content)
-    ↓
-🔴 CRITICAL: Embedding Generation via Ollama
-    ├─ OllamaEmbedding.encode([content])
-    ├─ granite-embedding:30m model (768 dimensions)
-    └─ ⚠️ FAILS if Ollama not accessible → "No embedding processor available"
-    ↓
-Association Extraction (typed relationships)
+User Input (Content) via ANY Client (API/Hybrid/Bulk/Python)
     ↓
 TCP Storage Client (sutra-storage-client-tcp)
-    ├─ Convert numpy arrays → Python lists
-    ├─ StorageClient.learn_concept(concept_id, content, embedding)
-    └─ ⚠️ FAILS if direct storage access attempted
+    ├─ TcpStorageAdapter.learn_concept(content, options)
+    ├─ Convert numpy arrays → Python lists  
+    ├─ TCP Message: LearnConceptV2 {content, options}
+    └─ ⚠️ CRITICAL: ALL clients use unified TCP protocol
     ↓
-Storage Server (Rust, TCP Binary Protocol)
-    ├─ Lock-free write log (append-only)
-    ├─ Background reconciler (10ms loop)
-    └─ Immutable snapshot update with vector indexing
+Storage Server Learning Pipeline (Single Source of Truth)
+    ├─ 🔴 STEP 1: Embedding Generation
+    │   ├─ HTTP request → Ollama (granite-embedding:30m, 768 dims)
+    │   ├─ ⚠️ FAILS if Ollama not accessible → "No embedding processor available"
+    │   └─ Embedding stored with concept
+    ├─ 🔴 STEP 2: Association Extraction  
+    │   ├─ Rust-based NLP pattern matching
+    │   ├─ Typed relationships (semantic, causal, temporal, hierarchical)
+    │   └─ Confidence scoring and filtering
+    ├─ 🔴 STEP 3: Atomic Storage
+    │   ├─ Lock-free write log (append-only, 57K writes/sec)
+    │   ├─ HNSW vector indexing for semantic search
+    │   ├─ Background reconciler (10ms loop)  
+    │   ├─ WAL durability (zero data loss)
+    │   └─ Immutable snapshot update
+    └─ 🔴 STEP 4: Return concept_id
+        └─ Client receives concept_id for further operations
+
+✅ Benefits:
+- Single implementation for ALL services
+- Automatic embeddings for every concept
+- Automatic associations for graph building
+- Atomic operations with ACID guarantees
+- No "same answer" bug (embeddings always generated)
 ```
 
 ### Query Flow

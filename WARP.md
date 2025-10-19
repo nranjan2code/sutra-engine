@@ -6,24 +6,175 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 **NEVER IGNORE THESE REQUIREMENTS - SYSTEM WILL NOT FUNCTION WITHOUT THEM:**
 
-1. **Ollama Service is MANDATORY**
-   - Must be running with `granite-embedding:30m` model loaded
-   - Accessible at `SUTRA_OLLAMA_URL` (default: `http://host.docker.internal:11434`)
-   - Without this: "No embedding processor available" error = COMPLETE SYSTEM FAILURE
+### **1. STRICT EMBEDDING MODEL REQUIREMENT (Production Standard: 2025-10-19)**
 
-2. **TCP Architecture is MANDATORY**
+**⚠️ ONLY nomic-embed-text IS SUPPORTED ⚠️**
+
+Sutra AI uses **strict, single-model architecture** with ZERO fallbacks:
+
+```yaml
+REQUIRED:
+  - Model: nomic-embed-text
+  - Dimension: 768
+  - Provider: Ollama
+  - NO fallbacks allowed
+  - NO model mixing
+
+FORBIDDEN:
+  - granite-embedding:30m (384-d) ❌  
+  - sentence-transformers fallback ❌
+  - spaCy embeddings ❌
+  - TF-IDF fallback ❌
+  - Any dimension normalization ❌
+```
+
+**Why This Matters:**
+- Different models produce **incompatible semantic spaces**
+- Mixing models causes **WRONG QUERY RESULTS**
+- Real example: Using granite (384-d) for queries + nomic (768-d) for storage caused:
+  - Query: "What is the tallest mountain?" → Answer: "Pacific Ocean" ❌
+- Silent fallbacks hide production failures
+
+**Mandatory Environment Variables:**
+```bash
+# Storage Server (docker-compose-grid.yml)
+VECTOR_DIMENSION=768                      # MUST be 768
+SUTRA_EMBEDDING_MODEL=nomic-embed-text   # MUST be nomic-embed-text
+SUTRA_OLLAMA_URL=http://host.docker.internal:11434
+
+# Hybrid Service
+SUTRA_EMBEDDING_MODEL=nomic-embed-text   # MUST match storage
+SUTRA_VECTOR_DIMENSION=768               # MUST be 768
+SUTRA_USE_SEMANTIC_EMBEDDINGS=true      # MUST be true
+```
+
+**Verification:**
+```bash
+# 1. Ensure nomic-embed-text is available
+ollama list | grep nomic-embed-text
+
+# 2. Test embedding dimension
+curl -s http://localhost:11434/api/embeddings \
+  -d '{"model":"nomic-embed-text","prompt":"test"}' | \
+  jq '.embedding | length'
+# Expected: 768
+
+# 3. Check logs for correct initialization
+docker logs sutra-storage | grep "Vector dimension: 768"
+docker logs sutra-hybrid | grep "✅ PRODUCTION: Initialized with nomic-embed-text"
+```
+
+**See:** `PRODUCTION_REQUIREMENTS.md` for complete details and migration guide.
+
+### **2. Ollama Service Configuration**
+   - Must be running with `nomic-embed-text` model loaded
+   - Accessible at `SUTRA_OLLAMA_URL` (default: `http://host.docker.internal:11434`)
+   - Model will be auto-pulled on first use if not present
+
+### **3. TCP Architecture is MANDATORY**
    - ALL services MUST use `sutra-storage-client-tcp` package
    - NEVER import `sutra_storage` directly in distributed services
    - Unit variants send strings, not `{variant: {}}` format
    - Convert numpy arrays to lists before TCP transport
 
-3. **Common Production-Breaking Errors:**
-   - "No embedding processor available" → Ollama not configured
+### **4. Common Production-Breaking Errors:**
+   - "Dimension mismatch: expected 768, got 384" → Wrong embedding model (granite vs nomic)
+   - "Query embedding FALLBACK to spaCy" → SUTRA_EMBEDDING_MODEL not set in hybrid service
+   - "No embedding processor available" → Ollama not running
    - "can not serialize 'numpy.ndarray' object" → Missing array conversion
    - "wrong msgpack marker" → Wrong message format for unit variants
-   - "list indices must be integers" → Wrong response parsing format
 
-**Reference:** See `docs/EMBEDDING_TROUBLESHOOTING.md` for complete fix details.
+**References:**
+- **PRODUCTION_REQUIREMENTS.md** - Mandatory configuration (READ THIS FIRST)
+- **docs/EMBEDDING_TROUBLESHOOTING.md** - Troubleshooting guide
+
+## 🔥 NEW: Unified Learning Architecture (Implemented 2025-10-19)
+
+**CRITICAL ARCHITECTURAL CHANGE - ALL DEVELOPMENT MUST FOLLOW THIS PATTERN:**
+
+### Single Source of Truth: Storage Server Owns Learning
+
+```
+✅ CORRECT Architecture (Current):
+
+ALL Clients → TCP → Storage Server Learning Pipeline
+                      ├─→ Embedding Generation (Ollama)
+                      ├─→ Association Extraction (Rust)
+                      ├─→ Atomic Storage (HNSW + WAL)
+                      └─→ Return concept_id
+
+❌ OLD Architecture (Removed):
+Each service had duplicate logic for embeddings/associations
+```
+
+### Implementation Rules
+
+1. **Clients MUST delegate learning to storage server:**
+   ```python
+   # ✅ CORRECT - Delegate to storage
+   concept_id = storage.learn_concept(
+       content=content,
+       generate_embedding=True,  # Storage server handles this
+       extract_associations=True,
+   )
+   
+   # ❌ WRONG - Client-side embedding generation
+   embedding = ollama.generate(content)  # DON'T DO THIS
+   storage.add_concept(concept, embedding)
+   ```
+
+2. **ReasoningEngine.learn() extracts and passes parameters:**
+   ```python
+   # ✅ CORRECT - Extract from kwargs
+   generate_embedding = kwargs.get("generate_embedding", True)
+   extract_associations = kwargs.get("extract_associations", True)
+   
+   concept_id = self.storage.learn_concept(
+       content=content,
+       generate_embedding=generate_embedding,
+       extract_associations=extract_associations,
+       # ... other individual parameters
+   )
+   
+   # ❌ WRONG - Pass options dict
+   concept_id = self.storage.learn_concept(
+       content=content,
+       options=kwargs  # TcpStorageAdapter expects individual params
+   )
+   ```
+
+3. **TCP client response parsing handles list format:**
+   ```python
+   # ✅ CORRECT - Handle both dict and list formats
+   if isinstance(result, list) and len(result) > 0:
+       return result[0]  # Storage returns ['concept_id']
+   elif isinstance(result, dict) and "concept_id" in result:
+       return result["concept_id"]
+   ```
+
+4. **Storage server implements complete pipeline:**
+   - `learning_pipeline.rs` - Orchestrates entire flow
+   - `embedding_client.rs` - Ollama HTTP integration
+   - `association_extractor.rs` - Pattern-based NLP
+   - All atomically committed to storage
+
+### Benefits
+
+✅ **Zero code duplication** - One implementation for all clients  
+✅ **Guaranteed consistency** - Same behavior everywhere  
+✅ **Automatic embeddings** - No "same answer" bug  
+✅ **Easier testing** - Mock storage server instead of each client  
+✅ **Better performance** - Batch operations in one place  
+
+### Migration Complete
+
+- ✅ Phase 1: Storage server learning pipeline (2025-10-19)
+- ✅ ReasoningEngine updated to use unified API
+- ✅ TCP client response parsing fixed
+- ✅ Docker build cache issues resolved
+- ✅ End-to-end testing verified (Eiffel Tower, Great Wall, Mount Everest)
+
+**See:** `docs/UNIFIED_LEARNING_ARCHITECTURE.md` for complete design documentation.
 
 ## Project Overview
 
@@ -177,6 +328,10 @@ EVENT_STORAGE=localhost:50052 cargo run --release
 
 # Note: CLI tool is under migration to TCP protocol
 # Use Control Center UI at http://localhost:9000/grid for Grid management
+
+# Production Smoke Test (validates embedding configuration)
+./scripts/smoke-test-embeddings.sh
+# Checks: nomic-embed-text availability, 768-d config, no fallbacks, e2e semantic search
 ```
 
 ### Code Quality
@@ -250,7 +405,17 @@ export SUTRA_STORAGE_SERVER=localhost:50051
 uvicorn sutra_api.main:app --host 0.0.0.0 --port 8000
 ```
 
-**See `DEPLOYMENT.md` for comprehensive documentation.**
+**⚠️ CRITICAL: Before deploying, verify embedding configuration:**
+```bash
+# Run production smoke test
+./scripts/smoke-test-embeddings.sh
+
+# If tests fail, see PRODUCTION_REQUIREMENTS.md for fixes
+```
+
+**See:**
+- **`PRODUCTION_REQUIREMENTS.md`** - Mandatory embedding configuration (READ FIRST)
+- **`DEPLOYMENT.md`** - Comprehensive deployment documentation
 
 ### Build and Distribution
 ```bash
@@ -382,17 +547,21 @@ Based on production testing with ConcurrentStorage:
 
 The system has comprehensive testing at multiple levels:
 
-1. **Integration tests**: `tests/` directory with cross-package functionality
-2. **End-to-end demos**: `demo_simple.py`, `demo_end_to_end.py`, `demo_mass_learning.py`
-3. **API tests**: `packages/sutra-api/tests/` and `packages/sutra-hybrid/tests/`
-4. **Performance verification**: `verify_concurrent_storage.py` (production benchmarks)
-5. **Storage tests**: Rust unit and integration tests in `packages/sutra-storage/`
+1. **Production smoke test**: `scripts/smoke-test-embeddings.sh` (validates embedding configuration)
+2. **Integration tests**: `tests/` directory with cross-package functionality
+3. **End-to-end demos**: `demo_simple.py`, `demo_end_to_end.py`, `demo_mass_learning.py`
+4. **API tests**: `packages/sutra-api/tests/` and `packages/sutra-hybrid/tests/`
+5. **Performance verification**: `verify_concurrent_storage.py` (production benchmarks)
+6. **Storage tests**: Rust unit and integration tests in `packages/sutra-storage/`
 
 ### Test Locations
+- **`scripts/smoke-test-embeddings.sh`**: Production validation (model, config, e2e semantic search)
 - **Root `tests/`**: Integration tests and query processor tests
 - **`demo_*.py`**: End-to-end workflow demonstrations
 - **`verify_concurrent_storage.py`**: Performance benchmarking (57K writes/sec verified)
 - **Package-specific tests**: In respective `packages/*/tests/` directories
+
+**⚠️ Before every deployment, run:** `./scripts/smoke-test-embeddings.sh`
 
 ## Common Development Tasks
 
@@ -451,6 +620,23 @@ The system has comprehensive testing at multiple levels:
 
 ## Troubleshooting
 
+### Quick Diagnostics
+
+**Run the production smoke test first:**
+```bash
+./scripts/smoke-test-embeddings.sh
+```
+This validates:
+- ✅ nomic-embed-text model availability
+- ✅ Storage server 768-d configuration
+- ✅ Hybrid service embedding configuration
+- ✅ No fallback warnings
+- ✅ End-to-end semantic search
+
+**If smoke test fails, see `PRODUCTION_REQUIREMENTS.md` for detailed fixes.**
+
+---
+
 ### Import Errors
 ```bash
 # Solution: Set PYTHONPATH for core tests
@@ -479,6 +665,124 @@ pip install -r requirements-dev.txt
 - Monitor stats: `storage.stats()` shows writes, drops, concepts, edges
 - WAL automatically replays on startup for crash recovery
 - WAL is checkpointed (truncated) after successful flush
+
+### Same Answer for All Questions ⭐ CRITICAL
+
+**Symptoms:** Every query returns identical answer, regardless of question.
+
+**Root Cause:** Zero embeddings in storage (concepts learned without embedding generation).
+
+**Quick Diagnosis:**
+```bash
+curl -s http://localhost:8000/stats | jq '.total_embeddings'
+# If 0: System is non-functional
+```
+
+**Solution:**
+```bash
+# 1. Clean old data without embeddings
+docker stop sutra-storage sutra-api sutra-hybrid sutra-client
+docker rm -f sutra-storage
+docker volume rm sutra-models_storage-data
+docker-compose -f docker-compose-grid.yml up -d storage-server sutra-api sutra-hybrid sutra-client
+
+# 2. Learn via Hybrid service (has embeddings!)
+curl -X POST http://localhost:8001/sutra/learn \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Test fact"}'
+
+# 3. Verify embeddings generated
+curl -s http://localhost:8000/stats | jq '.total_embeddings'
+# Should be > 0
+```
+
+**Prevention:**
+- Always learn via `/sutra/learn` (Hybrid) not `/learn` (API)
+- Verify Ollama is running BEFORE learning data
+- Check `total_embeddings` matches `total_concepts`
+
+**See:**
+- **`PRODUCTION_REQUIREMENTS.md`** - Strict embedding requirements and migration guide
+- **`docs/EMBEDDING_TROUBLESHOOTING.md`** - Detailed troubleshooting
+- **`TROUBLESHOOTING.md`** - General troubleshooting
+
+### TCP Adapter Issues (Fixed 2025-10-19)
+
+**Symptoms:**
+- "Storage-backed pathfinding failed: no attribute 'find_paths'"
+- "list indices must be integers or slices, not str"
+- "Failed to get neighbors via TCP"
+
+**Root Cause:** Missing methods in `TcpStorageAdapter` and incorrect response parsing.
+
+**Fixed Methods:**
+- ✅ `find_paths()` - Multi-path reasoning support
+- ✅ `get_association()` - Association retrieval for path building
+- ✅ `get_all_concept_ids()` - Health check support
+- ✅ `get_neighbors()` - Fixed response parsing (dict vs list)
+
+**TCP Client Fixes:**
+- ✅ Unit variant handling (`GetStats`, `Flush`, `HealthCheck` send strings, not dicts)
+- ✅ Response parsing for nested list formats
+- ✅ Numpy array to list conversion before TCP transport
+
+**Verification:**
+```bash
+# Restart services to pick up fixes
+docker restart sutra-api sutra-hybrid sutra-client
+
+# Test pathfinding
+curl -X POST http://localhost:8001/sutra/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"test query"}'
+# Should not show "pathfinding failed" warnings
+```
+
+### Embedding Configuration Issues ⚠️ PRODUCTION-CRITICAL
+
+**Symptoms:**
+- Wrong query results despite correct storage ("tallest mountain" → "Pacific Ocean")
+- "Dimension mismatch: expected 768, got 384"
+- "Query embedding FALLBACK to spaCy" in logs
+- Semantic search returns irrelevant results
+
+**Root Cause:** Environment variable mismatch between services.
+
+**Quick Fix:**
+```bash
+# 1. Run production smoke test to diagnose
+./scripts/smoke-test-embeddings.sh
+
+# 2. Verify configuration
+docker logs sutra-storage | grep -E "(Vector dimension|nomic)"
+docker logs sutra-hybrid | grep -E "(PRODUCTION|nomic|fallback)"
+
+# 3. If configuration is wrong, fix docker-compose-grid.yml:
+#    storage-server:
+#      environment:
+#        - VECTOR_DIMENSION=768
+#        - SUTRA_EMBEDDING_MODEL=nomic-embed-text
+#    sutra-hybrid:
+#      environment:
+#        - SUTRA_EMBEDDING_MODEL=nomic-embed-text
+#        - SUTRA_VECTOR_DIMENSION=768
+
+# 4. Clean and restart
+./sutra-deploy.sh down
+docker volume rm sutra-models_storage-data
+./sutra-deploy.sh up
+
+# 5. Verify fix
+./scripts/smoke-test-embeddings.sh
+```
+
+**Prevention:**
+- **ALWAYS** set `SUTRA_EMBEDDING_MODEL=nomic-embed-text` for storage AND hybrid
+- **ALWAYS** set `VECTOR_DIMENSION=768` for storage
+- **ALWAYS** run smoke test before deploying
+- **NEVER** allow fallback embeddings (spaCy, TF-IDF, sentence-transformers)
+
+**See `PRODUCTION_REQUIREMENTS.md` for complete details and incident postmortem.**
 
 ## Code Style
 

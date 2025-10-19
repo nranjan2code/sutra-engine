@@ -64,7 +64,8 @@ Sutra AI combines graph-based reasoning with semantic embeddings:
 
 ## What Works (Proven End-to-End)
 
-✅ **Learn new knowledge** - Add concepts and relationships  
+✅ **Unified Learning** - 🔥 **NEW** All services use storage server's learning pipeline (embeddings + associations automatically)  
+✅ **Learn new knowledge** - Add concepts and relationships with automatic embedding generation  
 ✅ **Query with reasoning paths** - Get answers with explanations  
 ✅ **Save to disk** - Persist knowledge (concepts, associations, embeddings)  
 ✅ **Reload from disk** - Restore complete state after restart  
@@ -72,11 +73,39 @@ Sutra AI combines graph-based reasoning with semantic embeddings:
 ✅ **Audit trails** - Full compliance tracking  
 ✅ **REST API** - Production-ready HTTP interface  
 
-Tested with 5 concepts, ~100ms query latency, full persistence verified.
+**Production Verified (2025-10-19):**
+- Different queries return different answers ✅ (embedding system working)
+- Embeddings generated for all learned concepts ✅
+- Storage server handling 5+ vectors with <0.01ms reads
+- Tested with Eiffel Tower, Great Wall, Mount Everest facts - all correctly stored with embeddings
 
 ## Architecture
 
 **12-Service Production Ecosystem** with TCP binary protocol and containerized deployment. All services communicate via high-performance TCP with a secure React-based control center for monitoring.
+
+### 🎯 **NEW: Unified Learning Architecture**
+
+**Core Innovation:** Storage server owns the complete learning pipeline (embedding generation + association extraction + persistence). All clients are thin wrappers that delegate to the storage server's unified API.
+
+```
+✅ Unified Learning Pipeline (Implemented 2025-10-19):
+
+ANY Client (API/Hybrid/Bulk/Python):
+  └─→ TcpStorageAdapter.learn_concept(content, options)
+      └─→ TCP: LearnConceptV2 {content, options}
+          └─→ StorageServer::LearningPipeline:
+              ├─→ 1. Generate embedding (Ollama HTTP)
+              ├─→ 2. Extract associations (Rust NLP)
+              ├─→ 3. Store atomically (HNSW + WAL)
+              └─→ 4. Return concept_id
+
+Benefits:
+✅ Single source of truth for learning logic
+✅ Automatic embeddings for ALL learning paths
+✅ Automatic associations for graph building  
+✅ No code duplication across services
+✅ Consistent behavior everywhere
+```
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -86,32 +115,37 @@ Tested with 5 concepts, ~100ms query latency, full persistence verified.
 │  │  sutra-control │    │  sutra-client  │    │ sutra-markdown-web │  │
 │  │  (React + Fast │    │   (Streamlit   │    │   (Markdown API)   │  │
 │  │   API Gateway) │    │    UI Client)  │    │    Port: 8002     │  │
-│  │   Port: 9000   │    │   Port: 8080   │    └──────┴────────────┘  │
-│  └──────┴─────────┘    └──────┴─────────┘                        │
-│            │                     │            TCP                        │
-│            └─────────────────────┴───── Binary                   │
-│                                     │  Protocol                      │
-│  ┌───────────────┐              │  ┌─────────────────────────────┐  │
-│  │   sutra-api     │◀─────────────┴──▶│       storage-server         │  │
-│  │   (FastAPI)     │              │  │    (Rust TCP Server)        │  │
-│  │   Port: 8000    │              │  │      Port: 50051            │  │
-│  └──────┴─────────┘              │  └──────┴────────────────────────┘  │
-│            │                     │            │                       │
-│            └─────────────────────┴─────┴────────────────────────┘  │
-│                                     │            │                       │
-│  ┌───────────────┐              │  ┌─────┴───────────────────────┐  │
-│  │ sutra-hybrid  │◀─────────────┴──│◀┴────  sutra-ollama         │  │
-│  │ (Embeddings + │              │  │   (Local LLM Server)      │  │
-│  │ Orchestration)│              │  │      Port: 11434           │  │
-│  │   Port: 8001   │              │  └───────────────────────┘  │
-│  └───────────────┘              │                           │
-│                                     │                           │
-│  ┌────────────────────────────────┐◀─────────────┴─────────────────────────────  │
-│  │      sutra-bulk-ingester       │            🔥 NEW SERVICE        │
-│  │   (High-Performance Rust)      │            Port: 8005           │
-│  │      Port: 8005               │         (Production Ready)      │
-│  └────────────────────────────────┘                                   │
-│                                                                    │
+│  │   Port: 9000   │    │   Port: 8080   │    └──────────────────┘  │
+│  └───────────────┘    └───────────────┘           │            │
+│         │                    │                     │            │
+│         │            ┌───────┴─────────────────────┤            │
+│         │            │       TCP Binary Protocol   │            │
+│         ▼            ▼                             ▼            │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │           storage-server (Rust - Unified Learning Core)           │  │
+│  │                                                                    │  │
+│  │  🔥 NEW: Learning Pipeline (Single Source of Truth)               │  │
+│  │  ├─ Embedding Client → Ollama (granite-embedding:30m)            │  │
+│  │  ├─ Association Extractor → Pattern-based NLP                    │  │
+│  │  ├─ Storage Engine → HNSW + WAL (57K writes/sec)                 │  │
+│  │  └─ TCP Server → Port 50051                                       │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│         ▲                                              ▲               │
+│         │                                              │               │
+│  ┌──────┴──────┐    ┌──────────────┐     ┌───────────┴─────────────┐  │
+│  │  sutra-api   │    │ sutra-hybrid │     │  sutra-bulk-ingester    │  │
+│  │  (FastAPI)   │    │ (Semantic +  │     │  (High-Perf Rust)      │  │
+│  │  Port: 8000  │    │  NLG Layer)  │     │   Port: 8005 🔥        │  │
+│  └──────────────┘    │  Port: 8001  │     └─────────────────────────┘  │
+│                      └──────────────┘                                   │
+│                             │                                           │
+│                             ▼                                           │
+│                      ┌──────────────┐                                   │
+│                      │ sutra-ollama │                                   │
+│                      │   (Local LLM)│                                   │
+│                      │  Port: 11434 │                                   │
+│                      └──────────────┘                                   │
+│                                                                         │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
 │  │                   Sutra Grid (Distributed Layer)                    │  │
 │  │  Grid Master (7001 HTTP, 7002 TCP) ◀──TCP──▶ Grid Agents (8001)        │  │
@@ -121,16 +155,16 @@ Tested with 5 concepts, ~100ms query latency, full persistence verified.
 ```
 
 ### Core Services
+- **storage-server**: 🔥 **Unified Learning Core** - Rust TCP server (57K writes/sec) with complete learning pipeline (embedding generation + association extraction + persistence)
 - **sutra-control**: React-based monitoring center with Grid management and bulk ingester UI
 - **sutra-client**: Streamlit web interface for interactive queries  
-- **sutra-api**: Primary REST API for AI operations
-- **sutra-hybrid**: Semantic embeddings and orchestration
-- **storage-server**: Rust TCP core storage engine (57K writes/sec)
-- **sutra-bulk-ingester**: 🔥 **NEW** High-performance Rust bulk data ingestion (1K-10K articles/min)
+- **sutra-api**: Primary REST API - delegates learning to storage server
+- **sutra-hybrid**: Semantic layer + NLG - delegates learning to storage server
+- **sutra-bulk-ingester**: 🔥 High-performance Rust bulk data ingestion with unified learning (1K-10K articles/min)
 - **sutra-markdown-web**: Document processing API
-- **sutra-ollama**: Local LLM inference server
+- **sutra-ollama**: Local LLM inference and embedding generation
 
-All services communicate via gRPC internally, with REST APIs for external access. The control center provides secure monitoring without exposing internal implementation details.
+**Key Architectural Change (2025-10-19):** All services use TCP binary protocol to delegate learning operations to the storage server's unified pipeline. This eliminates code duplication, ensures consistency, and guarantees embeddings are generated for all learned concepts.
 
 ### Sutra Grid - Distributed Storage Orchestration
 
@@ -160,11 +194,13 @@ Sutra Grid manages storage nodes across multiple agents with:
 **⚠️ Before deployment, you MUST read:**
 - [`PRODUCTION_CHECKLIST.md`](PRODUCTION_CHECKLIST.md) - Mandatory pre-deployment verification
 - [`docs/EMBEDDING_TROUBLESHOOTING.md`](docs/EMBEDDING_TROUBLESHOOTING.md) - Critical fixes applied
+- [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) - Quick troubleshooting guide ⭐ **NEW**
 
 **The system will NOT function without:**
 1. Ollama service with `granite-embedding:30m` model
 2. Proper TCP protocol implementation
 3. Environment variables correctly configured
+4. **Embeddings for all learned concepts** (most common issue!)
 
 ## Quick Start
 

@@ -27,19 +27,27 @@ class OllamaEmbedding(EmbeddingProvider):
 
     def __init__(
         self,
-        model_name: str = "granite-embedding:30m",
+        model_name: str = "nomic-embed-text",
         ollama_url: str = None,
     ):
         """
-        Initialize Ollama embedding provider.
+        Initialize Ollama embedding provider - PRODUCTION: nomic-embed-text only.
 
         Args:
-            model_name: Name of the Ollama model to use
+            model_name: Name of the Ollama model (MUST be nomic-embed-text)
             ollama_url: URL of the Ollama API service
 
         Raises:
+            ValueError: If model is not nomic-embed-text
             ConnectionError: If cannot connect to Ollama service
         """
+        # PRODUCTION: Enforce nomic-embed-text for 768-dimensional embeddings
+        if model_name != "nomic-embed-text":
+            raise ValueError(
+                f"PRODUCTION REQUIREMENT: Only nomic-embed-text (768-d) is supported. "
+                f"Got: {model_name}. Update configuration."
+            )
+        
         self.model_name = model_name
         # Use environment variable or provided URL or default
         self.ollama_url = (
@@ -50,7 +58,7 @@ class OllamaEmbedding(EmbeddingProvider):
         
         # Test connection and ensure model is available
         self._ensure_model_available()
-        logger.info(f"Initialized OllamaEmbedding with model: {model_name}")
+        logger.info(f"✅ PRODUCTION: Initialized OllamaEmbedding with {model_name} (768-d)")
 
     def _ensure_model_available(self):
         """Ensure the model is available in Ollama."""
@@ -112,13 +120,19 @@ class OllamaEmbedding(EmbeddingProvider):
                 result = response.json()
                 raw_embedding = np.array(result["embedding"], dtype=np.float32)
                 
-                # Normalize raw embedding to 768 dimensions (standard)
-                embedding = self._normalize_to_768(raw_embedding)
+                # PRODUCTION: Enforce 768-d, no normalization
+                if len(raw_embedding) != 768:
+                    raise ValueError(
+                        f"PRODUCTION ERROR: Model {self.model_name} returned {len(raw_embedding)}-d "
+                        f"embedding, expected 768-d. Ensure nomic-embed-text is configured correctly."
+                    )
                 
                 # L2 normalize
-                norm = np.linalg.norm(embedding)
+                norm = np.linalg.norm(raw_embedding)
                 if norm > 0:
-                    embedding = embedding / norm
+                    embedding = raw_embedding / norm
+                else:
+                    embedding = raw_embedding
                     
                 embeddings.append(embedding)
                 
@@ -131,35 +145,12 @@ class OllamaEmbedding(EmbeddingProvider):
 
     def get_dimension(self) -> int:
         """
-        Get embedding dimension (standardized).
+        Get embedding dimension - PRODUCTION: strict 768-d requirement.
 
         Returns:
-            768 (standardized dimension across all providers)
+            768 (nomic-embed-text native dimension)
         """
         return 768
-
-    def _normalize_to_768(self, embedding: np.ndarray) -> np.ndarray:
-        """
-        Normalize embedding to 768 dimensions.
-        
-        Args:
-            embedding: Raw embedding from model (any dimension)
-            
-        Returns:
-            768-dimensional embedding
-        """
-        current_dim = len(embedding)
-        target_dim = 768
-        
-        if current_dim == target_dim:
-            return embedding
-        elif current_dim < target_dim:
-            # Pad with zeros
-            padding = np.zeros(target_dim - current_dim, dtype=np.float32)
-            return np.concatenate([embedding, padding])
-        else:
-            # Truncate to 768 dimensions
-            return embedding[:target_dim]
 
     def get_name(self) -> str:
         """

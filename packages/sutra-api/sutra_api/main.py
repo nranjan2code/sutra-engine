@@ -232,12 +232,13 @@ async def get_system_stats(client=Depends(get_storage_client)):
     """
     try:
         stats = client.stats()
+        vectors_count = stats.get("vectors", 0)
         return SystemStats(
-            total_concepts=stats.get("concepts", 0),
-            total_associations=stats.get("edges", 0),
-            total_embeddings=0,  # Default to 0 for now (no embedding support in basic API)
-            embedding_provider="none",  # No embedding provider in basic API
-            embedding_dimension=0,  # No embeddings in basic API
+            total_concepts=stats.get("total_concepts", 0),
+            total_associations=stats.get("total_edges", 0),
+            total_embeddings=vectors_count,  # Use actual vectors count from storage
+            embedding_provider="nomic-embed-text" if vectors_count > 0 else "none",
+            embedding_dimension=768,  # nomic-embed-text produces 768-dim vectors
             average_strength=1.0,  # Default strength value
             memory_usage_mb=None,  # Optional field
         )

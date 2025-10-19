@@ -19,6 +19,13 @@ services:
       - STORAGE_PATH=/data
       - STORAGE_HOST=0.0.0.0
       - STORAGE_PORT=50051
+      - VECTOR_DIMENSION=768
+      # Unified Learning Pipeline Configuration
+      - SUTRA_OLLAMA_URL=http://host.docker.internal:11434
+      - SUTRA_EMBEDDING_MODEL=nomic-embed-text
+      - SUTRA_EMBEDDING_TIMEOUT_SEC=30
+      - SUTRA_MIN_ASSOCIATION_CONFIDENCE=0.5
+      - SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT=10
     networks:
       - sutra-network
     restart: unless-stopped
@@ -197,6 +204,8 @@ services:
       - SUTRA_STORAGE_SERVER=storage-server:50051
       - SUTRA_USE_SEMANTIC_EMBEDDINGS=true
       - SUTRA_OLLAMA_URL=http://host.docker.internal:11434
+      - SUTRA_EMBEDDING_MODEL=nomic-embed-text
+      - SUTRA_VECTOR_DIMENSION=768
     depends_on:
       - storage-server
     networks:
@@ -261,13 +270,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    # Pull and run granite-embedding:30m model on startup
+    # Pull and run nomic-embed-text model on startup
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         ollama serve &
         sleep 10
-        ollama pull granite-embedding:30m
+        ollama pull nomic-embed-text
         wait
 
   # Sutra Client (Interactive AI Interface)

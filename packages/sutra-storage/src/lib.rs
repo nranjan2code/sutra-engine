@@ -23,6 +23,11 @@ mod vectors;
 // mod python_concurrent;
 mod reasoning_store;
 
+// Unified learning pipeline modules
+pub mod embedding_client;
+pub mod association_extractor;
+pub mod learning_pipeline;
+
 // New concurrent memory modules
 mod write_log;
 mod read_view;

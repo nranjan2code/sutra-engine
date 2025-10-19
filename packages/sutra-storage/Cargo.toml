@@ -53,6 +53,11 @@ tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "signal", "
 tracing = "0.1"                    # Structured logging
 tracing-subscriber = "0.3"         # Logging implementation
 
+# Learning pipeline dependencies
+reqwest = { version = "0.11", features = ["json"] }  # HTTP client for Ollama
+regex = "1.10"                     # Pattern matching for association extraction
+once_cell = "1.19"                 # Lazy static initialization
+
 [dev-dependencies]
 criterion = "0.5"                  # Benchmarking
 proptest = "1.4"                   # Property-based testing

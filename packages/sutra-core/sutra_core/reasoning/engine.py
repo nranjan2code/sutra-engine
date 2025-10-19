@@ -420,33 +420,46 @@ class ReasoningEngine:
         **kwargs: Any,
     ) -> str:
         """
-        Learn new knowledge and integrate it into the reasoning system.
+        Learn new knowledge using unified learning pipeline.
+        
+        Storage server handles: embedding generation + association extraction + storage.
+        This provides a single source of truth with no code duplication.
 
         Args:
             content: Knowledge content to learn
             source: Source of the knowledge
             category: Category/domain of knowledge
-            **kwargs: Additional learning options
+            **kwargs: Additional learning options (passed to storage server)
 
         Returns:
             Concept ID of learned knowledge
         """
         self.learning_events += 1
 
-        # Generate embedding first (prefer batch processor for better quality)
-        embedding = None
-        if self.embedding_batch_processor or self.nlp_processor:
-            embedding = self._generate_embedding_with_retry(content, "new")
-            if embedding is None:
-                raise StorageError(
-                    f"CRITICAL: Failed to generate embedding. "
-                    f"Content: '{content[:100]}...'"
-                )
+        if not self.storage:
+            raise StorageError("Storage not initialized")
 
-        # Learn through adaptive system (writes directly to storage - lock-free)
-        # Storage auto-indexes vectors in native HNSW
-        concept_id = self.adaptive_learner.learn_adaptive(
-            content, source=source, category=category, embedding=embedding, **kwargs
+        # Call unified learning API - storage server handles everything
+        # Extract options with defaults
+        generate_embedding = kwargs.get("generate_embedding", True)
+        embedding_model = kwargs.get("embedding_model", None)
+        extract_associations = kwargs.get("extract_associations", True)
+        min_association_confidence = kwargs.get("min_association_confidence", 0.5)
+        max_associations_per_concept = kwargs.get("max_associations_per_concept", 10)
+        strength = kwargs.get("strength", 1.0)
+        confidence = kwargs.get("confidence", 1.0)
+        
+        concept_id = self.storage.learn_concept(
+            content=content,
+            source=source,
+            category=category,
+            generate_embedding=generate_embedding,
+            embedding_model=embedding_model,
+            extract_associations=extract_associations,
+            min_association_confidence=min_association_confidence,
+            max_associations_per_concept=max_associations_per_concept,
+            strength=strength,
+            confidence=confidence,
         )
 
         # Selectively invalidate cache entries affected by new content

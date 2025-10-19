@@ -4,6 +4,59 @@
 
 All deployment operations are managed through **`./sutra-deploy.sh`** - this is the only script you need.
 
+## 🚨 CRITICAL: Pre-Deployment Requirements
+
+**Before running any deployment commands, ensure:**
+
+1. **Ollama Service Running:**
+```bash
+# Install Ollama (if not installed)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Start Ollama and load embedding model
+ollama pull granite-embedding:30m
+
+# Verify
+curl http://localhost:11434/api/tags | jq '.models[].name'
+# Should include: granite-embedding:30m
+```
+
+2. **Docker & Docker Compose:**
+```bash
+docker --version  # 20.10+
+docker-compose --version  # 1.29+
+```
+
+**⚠️ Without Ollama + embeddings, the system will NOT function correctly.**  
+See [`docs/EMBEDDING_TROUBLESHOOTING.md`](docs/EMBEDDING_TROUBLESHOOTING.md) for details.
+
+### 🔥 NEW: Unified Learning Architecture (2025-10-19)
+
+**Key Deployment Change:** Storage server now owns the complete learning pipeline.
+
+```
+Storage Server:
+  ├─ Embedding Generation (via Ollama HTTP)
+  ├─ Association Extraction (Rust NLP)
+  ├─ Atomic Storage (HNSW + WAL)
+  └─ All clients delegate to this pipeline
+```
+
+**What This Means for Deployment:**
+- ✅ No client-side embedding configuration needed
+- ✅ Consistent behavior across all services
+- ✅ Automatic embeddings for ALL learned concepts
+- ✅ No "same answer" bug (fixed permanently)
+
+**Environment Variables (Storage Server):**
+```bash
+SUTRA_OLLAMA_URL=http://host.docker.internal:11434  # Required
+SUTRA_EMBEDDING_MODEL=granite-embedding:30m          # Default
+SUTRA_EXTRACT_ASSOCIATIONS=true                     # Default
+```
+
+---
+
 ## Quick Start
 
 ### First-Time Installation
@@ -102,6 +155,56 @@ Backups are saved to `./backups/` directory.
 
 ## Troubleshooting
 
+### Same Answer for All Questions
+
+**Problem:** System returns identical answer regardless of question.
+
+**Status:** ✅ **FIXED** (2025-10-19) - Unified learning architecture guarantees embeddings
+
+**Historical Issue (Pre-2025-10-19):**
+- Old architecture: Only Hybrid service generated embeddings
+- API and Bulk Ingester learned without embeddings
+- Result: "Same answer" bug
+
+**Current Architecture (Post-2025-10-19):**
+- Storage server owns complete learning pipeline
+- ALL services automatically generate embeddings
+- Bug cannot occur with new architecture
+
+**Diagnosis (if issue persists):**
+```bash
+curl -s http://localhost:8000/stats | jq '.total_embeddings'
+# If 0: Ollama not configured or storage corrupted
+```
+
+**Solution:**
+```bash
+# 1. Verify Ollama is running
+curl http://localhost:11434/api/tags | jq '.models[].name'
+# Should include: granite-embedding:30m
+
+# 2. If Ollama missing, install and configure
+ollama pull granite-embedding:30m
+
+# 3. Restart storage server to pick up Ollama
+docker restart sutra-storage
+
+# 4. Learn a test fact (any service works now)
+curl -X POST http://localhost:8001/sutra/learn \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Test fact with embedding"}'
+
+# 5. Verify embeddings generated
+curl -s http://localhost:8000/stats | jq '.total_embeddings'
+# Should be > 0
+
+# 6. Test different queries return different answers
+curl -X POST http://localhost:8001/sutra/query \
+  -d '{"query":"What is the test?"}' | jq '.answer'
+```
+
+**See:** [`docs/UNIFIED_LEARNING_ARCHITECTURE.md`](docs/UNIFIED_LEARNING_ARCHITECTURE.md) for complete architecture documentation.
+
 ### Services Not Starting
 ```bash
 # Check logs
@@ -112,6 +215,19 @@ Backups are saved to `./backups/` directory.
 
 # Restart all services
 ./sutra-deploy.sh restart
+```
+
+### Ollama Connection Issues
+```bash
+# Test from host
+curl http://localhost:11434/api/tags
+
+# Test from container
+docker exec sutra-hybrid curl http://host.docker.internal:11434/api/tags
+
+# Check environment
+docker exec sutra-hybrid env | grep OLLAMA
+# Expected: SUTRA_OLLAMA_URL=http://host.docker.internal:11434
 ```
 
 ### Port Conflicts

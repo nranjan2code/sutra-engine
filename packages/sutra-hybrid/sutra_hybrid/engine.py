@@ -54,13 +54,17 @@ class SutraAI:
         os.environ["SUTRA_STORAGE_MODE"] = "server"
         os.environ["SUTRA_STORAGE_SERVER"] = storage_server
         
-        # Create Ollama NLP processor first
+        # PRODUCTION: Strict nomic-embed-text NLP processor, NO FALLBACKS
+        import os
+        model_name = os.getenv("SUTRA_EMBEDDING_MODEL", "nomic-embed-text")
         try:
-            ollama_nlp = OllamaNLPProcessor()
-            logger.info("Created Ollama NLP processor")
+            ollama_nlp = OllamaNLPProcessor(model_name=model_name)
+            logger.info(f"✅ PRODUCTION: Created Ollama NLP processor with {model_name}")
         except Exception as e:
-            logger.error(f"Failed to create Ollama NLP processor: {e}")
-            ollama_nlp = None
+            raise RuntimeError(
+                f"PRODUCTION FAILURE: Cannot initialize Ollama NLP processor with {model_name}. "
+                f"Ensure Ollama is running and nomic-embed-text is loaded. Error: {e}"
+            )
         
         # Initialize ReasoningEngine (which will use TCP storage client internally)
         self._core = ReasoningEngine(use_rust_storage=True)
@@ -81,19 +85,30 @@ class SutraAI:
         )
 
     def _init_embeddings(self, use_semantic: bool) -> EmbeddingProvider:
-        if use_semantic:
-            # Try Ollama first (preferred for granite-embedding:30m)
-            try:
-                return OllamaEmbedding()
-            except (ConnectionError, RuntimeError) as e:
-                logger.warning(f"Ollama not available: {e}, trying sentence-transformers")
-                # Fallback to sentence-transformers
-                try:
-                    return SemanticEmbedding()
-                except ImportError:
-                    logger.warning("sentence-transformers not available, using TF-IDF")
-                    return TfidfEmbedding()
-        return TfidfEmbedding()
+        # PRODUCTION: Strict nomic-embed-text requirement, NO FALLBACKS
+        import os
+        model_name = os.getenv("SUTRA_EMBEDDING_MODEL", "nomic-embed-text")
+        
+        if model_name != "nomic-embed-text":
+            raise ValueError(
+                f"PRODUCTION REQUIREMENT: Only nomic-embed-text (768-d) is supported. "
+                f"Set SUTRA_EMBEDDING_MODEL=nomic-embed-text. Current: {model_name}"
+            )
+        
+        if not use_semantic:
+            raise ValueError(
+                "PRODUCTION REQUIREMENT: Semantic embeddings must be enabled. "
+                "Set SUTRA_USE_SEMANTIC_EMBEDDINGS=true"
+            )
+        
+        try:
+            logger.info(f"🔧 PRODUCTION: Initializing Ollama with {model_name} (768-d, NO FALLBACKS)")
+            return OllamaEmbedding(model_name=model_name)
+        except (ConnectionError, RuntimeError) as e:
+            raise RuntimeError(
+                f"PRODUCTION FAILURE: Cannot initialize nomic-embed-text embeddings. "
+                f"Ensure Ollama is running with nomic-embed-text model loaded. Error: {e}"
+            )
 
     def _content_id(self, content: str) -> str:
         return hashlib.sha1(content.encode("utf-8")).hexdigest()[:16]
@@ -108,16 +123,9 @@ class SutraAI:
     ) -> LearnResult:
         start_time = time.time()
 
-        concept_id = self._content_id(content)
-
-        embedding: Optional[np.ndarray] = None
-        if self.enable_semantic:
-            try:
-                embedding = self._embedding_provider.encode([content])[0]
-            except Exception as e:
-                logger.warning(f"Embedding generation failed: {e}")
-
-        # Learn via ReasoningEngine (proper architecture)
+        # Learn via ReasoningEngine → TcpStorageAdapter → Storage Server
+        # Storage server handles: embedding generation + association extraction + storage
+        # This eliminates duplicate code and ensures consistency
         concept_id = self._core.learn(
             content=content,
             source=source,
@@ -125,12 +133,12 @@ class SutraAI:
         )
 
         exec_ms = (time.time() - start_time) * 1000
-        logger.info(f"Learned concept {concept_id} in {exec_ms:.1f}ms")
+        logger.info(f"Learned concept {concept_id} in {exec_ms:.1f}ms (unified pipeline)")
         return LearnResult(
             concept_id=concept_id,
             timestamp=datetime.utcnow().isoformat() + "Z",
             concepts_created=1,
-            associations_created=0,
+            associations_created=0,  # TODO: Get actual count from storage
             message="Knowledge learned successfully",
             source=source,
             category=category,
