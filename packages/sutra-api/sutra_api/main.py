@@ -235,7 +235,11 @@ async def get_system_stats(client=Depends(get_storage_client)):
         return SystemStats(
             total_concepts=stats.get("concepts", 0),
             total_associations=stats.get("edges", 0),
-            uptime_seconds=get_uptime(),
+            total_embeddings=0,  # Default to 0 for now (no embedding support in basic API)
+            embedding_provider="none",  # No embedding provider in basic API
+            embedding_dimension=0,  # No embeddings in basic API
+            average_strength=1.0,  # Default strength value
+            memory_usage_mb=None,  # Optional field
         )
     except Exception as e:
         logger.error(f"Failed to get stats: {e}")

@@ -112,7 +112,8 @@ class GrpcStorageAdapter:
             raise ValueError(
                 f"Embedding dimension {embedding.shape[0]} doesn't match expected {self.vector_dimension}"
             )
-        if not np.isfinite(embedding).all():
+        # Fix numpy array boolean ambiguity by using bool() conversion
+        if not bool(np.isfinite(embedding).all()):
             raise ValueError("Embedding contains NaN or Inf values")
 
         try:

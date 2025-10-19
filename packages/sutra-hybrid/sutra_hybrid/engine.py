@@ -14,9 +14,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from sutra_storage_client import StorageClient
+# Import ReasoningEngine from sutra-core (proper architecture)
+from sutra_core import ReasoningEngine
+from .nlp_adapter import OllamaNLPProcessor
 
-from .embeddings import EmbeddingProvider, SemanticEmbedding, TfidfEmbedding
+from .embeddings import EmbeddingProvider, OllamaEmbedding, SemanticEmbedding, TfidfEmbedding
 from .explanation import ExplanationGenerator
 from .results import (
     AuditTrail,
@@ -46,22 +48,51 @@ class SutraAI:
         enable_semantic: bool = True,
     ) -> None:
         self.enable_semantic = enable_semantic
-        self._storage = StorageClient(storage_server)
+        # Use proper architecture: Hybrid -> Core -> Storage
+        # Set environment variable for ReasoningEngine to use server mode
+        import os
+        os.environ["SUTRA_STORAGE_MODE"] = "server"
+        os.environ["SUTRA_STORAGE_SERVER"] = storage_server
+        
+        # Create Ollama NLP processor first
+        try:
+            ollama_nlp = OllamaNLPProcessor()
+            logger.info("Created Ollama NLP processor")
+        except Exception as e:
+            logger.error(f"Failed to create Ollama NLP processor: {e}")
+            ollama_nlp = None
+        
+        # Initialize ReasoningEngine (which will use TCP storage client internally)
+        self._core = ReasoningEngine(use_rust_storage=True)
+        
+        # Inject Ollama NLP processor into ReasoningEngine for vector search
+        if ollama_nlp:
+            self._core.nlp_processor = ollama_nlp
+            # Also need to update the QueryProcessor with the new nlp_processor
+            if hasattr(self._core, 'query_processor'):
+                self._core.query_processor.nlp_processor = ollama_nlp
+            logger.info("Injected Ollama NLP processor into ReasoningEngine and QueryProcessor")
         self._embedding_provider = self._init_embeddings(enable_semantic)
         self._explainer = ExplanationGenerator()
         self._query_cache: Dict[str, ExplainableResult] = {}
         logger.info(
-            "Initialized SutraAI (TCP) with embeddings=%s",
+            "Initialized SutraAI (Hybrid->Core->Storage) with embeddings=%s",
             self._embedding_provider.get_name(),
         )
 
     def _init_embeddings(self, use_semantic: bool) -> EmbeddingProvider:
         if use_semantic:
+            # Try Ollama first (preferred for granite-embedding:30m)
             try:
-                return SemanticEmbedding()
-            except ImportError:
-                logger.warning("sentence-transformers not available, using TF-IDF")
-                return TfidfEmbedding()
+                return OllamaEmbedding()
+            except (ConnectionError, RuntimeError) as e:
+                logger.warning(f"Ollama not available: {e}, trying sentence-transformers")
+                # Fallback to sentence-transformers
+                try:
+                    return SemanticEmbedding()
+                except ImportError:
+                    logger.warning("sentence-transformers not available, using TF-IDF")
+                    return TfidfEmbedding()
         return TfidfEmbedding()
 
     def _content_id(self, content: str) -> str:
@@ -86,18 +117,15 @@ class SutraAI:
             except Exception as e:
                 logger.warning(f"Embedding generation failed: {e}")
 
-        seq = self._storage.learn_concept(
-            concept_id=concept_id,
+        # Learn via ReasoningEngine (proper architecture)
+        concept_id = self._core.learn(
             content=content,
-            embedding=embedding,
-            strength=1.0,
-            confidence=1.0,
+            source=source,
+            category=category,
         )
 
         exec_ms = (time.time() - start_time) * 1000
-        logger.info(f"Learned concept {concept_id} (seq={seq}) in {exec_ms:.1f}ms")
-
-        stats = self._storage.stats()
+        logger.info(f"Learned concept {concept_id} in {exec_ms:.1f}ms")
         return LearnResult(
             concept_id=concept_id,
             timestamp=datetime.utcnow().isoformat() + "Z",
@@ -124,52 +152,51 @@ class SutraAI:
         semantic_support: Optional[List[Dict[str, Any]]] = None
         matched_concept: Optional[str] = None
 
+        # Use ReasoningEngine for proper reasoning
+        core_result = self._core.ask(query, num_reasoning_paths=num_paths)
+        
+        # Extract answer and confidence from core result
+        answer = core_result.primary_answer
+        graph_confidence = core_result.confidence
+        
+        # Apply semantic boost if enabled
         if semantic_boost and self.enable_semantic:
             try:
                 qvec = self._embedding_provider.encode([query])[0]
-                matches: List[Tuple[str, float]] = self._storage.vector_search(qvec, k=5)
-                if matches:
-                    semantic_confidence = float(matches[0][1])
+                # Use core's search capability
+                search_results = self._core.search_concepts(query, limit=5)
+                if search_results:
+                    semantic_confidence = search_results[0].get('relevance_score', 0.0)
                     semantic_support = [
-                        {"concept_id": cid, "similarity": float(sim)}
-                        for cid, sim in matches
+                        {"concept_id": result.get('id', ''), "similarity": result.get('relevance_score', 0.0)}
+                        for result in search_results
                     ]
-                    matched_concept = matches[0][0]
             except Exception as e:
                 logger.warning(f"Semantic search failed: {e}")
 
-        # Fallback answer strategy: echo top matched concept content if available
-        if matched_concept:
-            concept = self._storage.query_concept(matched_concept)
-            answer = concept["content"] if concept else query
-        else:
-            answer = query  # Minimal fallback: mirror query when no knowledge yet
-
-        # Try to craft a simple reasoning path via storage (optional)
+        # Convert reasoning paths from core result
         reasoning_paths: Optional[List[ReasoningPathDetail]] = None
-        try:
-            if matched_concept:
-                # Single-node path representing semantic match
-                reasoning_paths = [
+        if core_result.supporting_paths:
+            reasoning_paths = []
+            for path in core_result.supporting_paths:
+                reasoning_paths.append(
                     ReasoningPathDetail(
-                        concepts=[answer],
-                        concept_ids=[matched_concept],
-                        association_types=[],
-                        confidence=semantic_confidence,
-                        explanation="Top semantic match from vector search",
+                        concepts=[step.target_concept for step in path.steps],
+                        concept_ids=[step.target_concept for step in path.steps],  # Simplified
+                        association_types=[step.relation for step in path.steps],
+                        confidence=path.confidence,
+                        explanation=f"Graph reasoning path with {len(path.steps)} steps",
                     )
-                ]
-        except Exception:
-            reasoning_paths = None
+                )
 
-        final_confidence = max(semantic_confidence, min_confidence)
+        final_confidence = max(graph_confidence, semantic_confidence, min_confidence)
         exec_ms = (time.time() - start_time) * 1000
 
         confidence_breakdown = ConfidenceBreakdown(
-            graph_confidence=0.0,  # graph reasoning handled by storage service
+            graph_confidence=graph_confidence,
             semantic_confidence=semantic_confidence,
-            path_quality=semantic_confidence,
-            consensus_strength=semantic_confidence,
+            path_quality=graph_confidence,
+            consensus_strength=core_result.consensus_strength,
             final_confidence=final_confidence,
         )
 
@@ -180,9 +207,9 @@ class SutraAI:
             concepts_accessed=len(semantic_support or []),
             associations_traversed=0,
             execution_time_ms=exec_ms,
-            reasoning_method="semantic_only",
+            reasoning_method="hybrid_graph_semantic" if semantic_boost else "graph_only",
             semantic_boost_used=semantic_boost and self.enable_semantic,
-            paths_explored=1 if reasoning_paths else 0,
+            paths_explored=len(reasoning_paths) if reasoning_paths else 0,
             storage_path="tcp://storage-server",
         )
 
@@ -244,262 +271,36 @@ class SutraAI:
         return entries
 
     def get_stats(self) -> Dict[str, Any]:
-        s = self._storage.stats()
+        # Get stats from ReasoningEngine (proper architecture)
+        s = self._core.get_system_stats()
+        storage_stats = s.get("storage", {})
         return {
-            "total_concepts": s.get("concepts", 0),
-            "total_associations": s.get("edges", 0),
-            "total_embeddings": None,
-            "embedding_coverage": None,
-            "storage_path": "tcp://storage-server",
-            "semantic_enabled": self.enable_semantic,
+            "total_concepts": storage_stats.get("total_concepts", 0),
+            "total_associations": storage_stats.get("total_associations", 0),
+            "total_embeddings": 0,  # Will implement embedding tracking later
             "embedding_provider": self._embedding_provider.get_name(),
+            "embedding_dimension": 768,  # Standard embedding dimension
+            "average_strength": 1.0,  # Default value
+            "semantic_enabled": self.enable_semantic,
             "version": "2.0.0",
             "cached_queries": len(self._query_cache),
         }
 
     def save(self) -> None:
-        # No local persistence required; vectors stored server-side
-        return None
+        # Save via ReasoningEngine
+        self._core.save()
 
     def close(self) -> None:
         try:
-            self._storage.close()
+            self._core.close()
         except Exception:
             pass
 
-    def learn(
-        self,
-        content: str,
-        source: Optional[str] = None,
-        category: Optional[str] = None,
-        **metadata,
-    ) -> LearnResult:
-        """
-        Learn new knowledge with graph + semantic embeddings.
+    # learn method already defined above - removing duplicate
 
-        Args:
-            content: Knowledge to learn
-            source: Optional source attribution
-            category: Optional category/domain
-            **metadata: Additional metadata
+    # ask method already defined above - removing duplicate
 
-        Returns:
-            LearnResult with concept ID and statistics
-
-        Example:
-            >>> result = ai.learn(
-            ...     "Python 3.13 released October 2024",
-            ...     source="python.org",
-            ...     category="programming"
-            ... )
-            >>> print(result.concept_id)
-        """
-        start_time = time.time()
-
-        # Track before state
-        stats_before = self._core.storage.stats()
-        concepts_before = stats_before.get("total_concepts", 0)
-        associations_before = stats_before.get("total_associations", 0)
-
-        # Learn via core (graph reasoning)
-        concept_id = self._core.learn(content)
-
-        # Generate and store embedding
-        if self.enable_semantic:
-            try:
-                embedding = self._embedding_provider.encode([content])[0]
-                self._concept_embeddings[concept_id] = embedding
-            except Exception as e:
-                logger.warning(f"Failed to generate embedding: {e}")
-
-        # Track after state
-        stats_after = self._core.storage.stats()
-        concepts_after = stats_after.get("total_concepts", 0)
-        associations_after = stats_after.get("total_associations", 0)
-
-        # Calculate differences
-        concepts_created = concepts_after - concepts_before
-        associations_created = associations_after - associations_before
-
-        execution_time = (time.time() - start_time) * 1000
-
-        logger.info(
-            f"Learned concept {concept_id} in {execution_time:.1f}ms "
-            f"({concepts_created} concepts, {associations_created} assocs)"
-        )
-
-        return LearnResult(
-            concept_id=concept_id,
-            timestamp=datetime.utcnow().isoformat() + "Z",
-            concepts_created=concepts_created,
-            associations_created=associations_created,
-            message="Knowledge learned successfully",
-            source=source,
-            category=category,
-        )
-
-    def ask(
-        self,
-        query: str,
-        explain: bool = True,
-        semantic_boost: bool = True,
-        num_paths: int = 5,
-        min_confidence: float = 0.5,
-    ) -> ExplainableResult:
-        """
-        Query knowledge base with hybrid reasoning.
-
-        Args:
-            query: Natural language question
-            explain: Generate human-readable explanation
-            semantic_boost: Use semantic similarity to enhance results
-            num_paths: Number of reasoning paths to explore
-            min_confidence: Minimum confidence threshold
-
-        Returns:
-            ExplainableResult with answer, confidence, and optional explanation
-
-        Example:
-            >>> result = ai.ask("What is Python?", explain=True, semantic_boost=True)
-            >>> print(result.answer)
-            >>> result.show_explanation()
-            >>> result.show_audit_trail()
-        """
-        start_time = time.time()
-        query_id = f"q_{uuid.uuid4().hex[:12]}"
-
-        # Query via core (graph reasoning)
-        core_result = self._core.ask(
-            query,
-            num_reasoning_paths=num_paths,
-        )
-
-        # Apply semantic boost if enabled
-        semantic_confidence = 0.0
-        semantic_support = None
-
-        if semantic_boost and self.enable_semantic and self._concept_embeddings:
-            semantic_results = self._semantic_search(query, top_k=5)
-            semantic_confidence = semantic_results[0][1] if semantic_results else 0.0
-            semantic_support = [
-                {"concept_id": cid, "similarity": sim, "reason": "semantic_match"}
-                for cid, sim in semantic_results
-            ]
-
-            # Boost confidence based on semantic agreement
-            semantic_contribution = min(0.3, semantic_confidence * 0.3)  # Max 30% boost
-            final_confidence = min(
-                1.0, core_result.confidence * (1 + semantic_contribution)
-            )
-        else:
-            final_confidence = core_result.confidence
-            semantic_contribution = 0.0
-
-        execution_time = (time.time() - start_time) * 1000
-
-        # Convert reasoning paths (ConsensusResult has supporting_paths)
-        reasoning_paths = self._convert_paths(core_result.supporting_paths)
-
-        # Build confidence breakdown
-        confidence_breakdown = ConfidenceBreakdown(
-            graph_confidence=core_result.confidence,
-            semantic_confidence=semantic_confidence,
-            path_quality=core_result.confidence,
-            consensus_strength=core_result.confidence,
-            final_confidence=final_confidence,
-        )
-
-        # Build audit trail
-        audit_trail = AuditTrail(
-            query_id=query_id,
-            query=query,
-            timestamp=datetime.utcnow().isoformat() + "Z",
-            concepts_accessed=len(
-                set(
-                    cid
-                    for path in core_result.supporting_paths
-                    for cid in [c.id for c in path.path]
-                )
-            ),
-            associations_traversed=sum(
-                len(path.path) - 1 for path in core_result.supporting_paths
-            ),
-            execution_time_ms=execution_time,
-            reasoning_method="graph_traversal"
-            + ("_with_semantic" if semantic_boost else ""),
-            semantic_boost_used=semantic_boost and self.enable_semantic,
-            paths_explored=len(core_result.supporting_paths),
-            storage_path=self.storage_path,
-        )
-
-        # Generate explanation if requested
-        explanation_text = None
-        if explain and reasoning_paths:
-            explanation_text = self._explainer.generate(
-                query=query,
-                answer=core_result.primary_answer,
-                confidence=final_confidence,
-                reasoning_paths=reasoning_paths,
-                semantic_boost=semantic_boost and self.enable_semantic,
-                semantic_contribution=semantic_contribution,
-            )
-
-        result = ExplainableResult(
-            answer=core_result.primary_answer,
-            confidence=final_confidence,
-            explanation=explanation_text,
-            reasoning_paths=reasoning_paths if explain else None,
-            confidence_breakdown=confidence_breakdown,
-            semantic_support=semantic_support,
-            audit_trail=audit_trail,
-            metadata={
-                "query_id": query_id,
-                "execution_time_ms": execution_time,
-            },
-        )
-
-        # Cache for /explain endpoint
-        self._query_cache[query_id] = result
-
-        logger.info(
-            f"Query {query_id} answered in {execution_time:.1f}ms "
-            f"(confidence: {final_confidence:.2f})"
-        )
-
-        return result
-
-    def _semantic_search(
-        self, query: str, top_k: int = 5, threshold: float = 0.5
-    ) -> List[tuple]:
-        """
-        Search for concepts using semantic similarity.
-
-        Returns:
-            List of (concept_id, similarity_score) tuples
-        """
-        if not self._concept_embeddings:
-            return []
-
-        try:
-            # Encode query
-            query_embedding = self._embedding_provider.encode([query])[0]
-
-            # Calculate similarities
-            similarities = []
-            for concept_id, concept_embedding in self._concept_embeddings.items():
-                similarity = self._embedding_provider.similarity(
-                    query_embedding, concept_embedding
-                )
-                if similarity >= threshold:
-                    similarities.append((concept_id, similarity))
-
-            # Sort by similarity and return top_k
-            similarities.sort(key=lambda x: x[1], reverse=True)
-            return similarities[:top_k]
-
-        except Exception as e:
-            logger.warning(f"Semantic search failed: {e}")
-            return []
+    # _semantic_search method removed - using ReasoningEngine's search_concepts instead
 
     def explain(self, query_id: str) -> Optional[ExplainableResult]:
         """
@@ -536,7 +337,7 @@ class SutraAI:
         graph_result = self.ask(query, explain=True, semantic_boost=False)
 
         # Strategy 2: Semantic-enhanced
-        if self.enable_semantic and self._concept_embeddings:
+        if self.enable_semantic:
             semantic_result = self.ask(query, explain=True, semantic_boost=True)
         else:
             # If semantic not available, return same result
@@ -548,7 +349,7 @@ class SutraAI:
         )
 
         # Determine recommendation
-        if not self.enable_semantic or not self._concept_embeddings:
+        if not self.enable_semantic:
             recommended = "graph_only"
             reasoning = "Semantic embeddings not available"
         elif agreement > 0.9:
@@ -633,117 +434,14 @@ class SutraAI:
     def get_concept(self, concept_id: str) -> Optional[Dict[str, Any]]:
         """
         Get detailed information about a specific concept.
-
-        Args:
-            concept_id: Concept identifier
-
-        Returns:
-            Dictionary with concept details, or None if not found
         """
-        concept = self._core.storage.get_concept(concept_id)
-        if not concept:
-            return None
+        return self._core.get_concept_info(concept_id)
 
-        # Get associations
-        associations = []
-        neighbors = self._core.storage.get_neighbors(concept_id)
-        for neighbor_id in neighbors[:10]:  # Limit to 10
-            neighbor = self._core.storage.get_concept(neighbor_id)
-            if neighbor:
-                assoc = self._core.storage.get_association(concept_id, neighbor_id)
-                associations.append(
-                    {
-                        "target_id": neighbor_id,
-                        "target_content": neighbor.content,
-                        "type": assoc.assoc_type.name if assoc else "unknown",
-                        "confidence": assoc.confidence if assoc else 0.0,
-                    }
-                )
+    # get_stats method already defined above - removing duplicate
 
-        result = {
-            "concept_id": concept.id,
-            "content": concept.content,
-            "strength": concept.strength,
-            "confidence": concept.confidence,
-            "created_at": (
-                time.strftime('%Y-%m-%dT%H:%M:%S.%fZ', time.gmtime(concept.created))
-                if hasattr(concept, 'created') and concept.created else None
-            ),
-            "last_accessed": (
-                time.strftime('%Y-%m-%dT%H:%M:%S.%fZ', time.gmtime(concept.last_accessed))
-                if hasattr(concept, 'last_accessed') and concept.last_accessed else None
-            ),
-            "access_count": concept.access_count,
-            "associations": associations,
-        }
+    # save method already defined above - removing duplicate
 
-        # Add embedding info if available
-        if concept_id in self._concept_embeddings:
-            result["has_embedding"] = True
-            result["embedding_dim"] = len(self._concept_embeddings[concept_id])
-        else:
-            result["has_embedding"] = False
-
-        return result
-
-    def get_stats(self) -> Dict[str, Any]:
-        """
-        Get system statistics.
-
-        Returns:
-            Dictionary with system statistics
-        """
-        core_stats = self._core.storage.stats()
-
-        return {
-            "total_concepts": core_stats.get("total_concepts", 0),
-            "total_associations": core_stats.get("total_associations", 0),
-            "total_embeddings": len(self._concept_embeddings),
-            "embedding_coverage": (
-                len(self._concept_embeddings) / core_stats.get("total_concepts", 1)
-                if core_stats.get("total_concepts", 0) > 0
-                else 0.0
-            ),
-            "storage_path": self.storage_path,
-            "semantic_enabled": self.enable_semantic,
-            "embedding_provider": self._embedding_provider.get_name(),
-            "version": "2.0.0",
-            "cached_queries": len(self._query_cache),
-        }
-
-    def save(self) -> None:
-        """
-        Persist all knowledge to disk.
-
-        Saves both graph data and embeddings.
-        """
-        import pickle
-        from pathlib import Path
-
-        # Save graph data
-        self._core.save()
-
-        # Save embeddings
-        if self._concept_embeddings:
-            embeddings_path = Path(self.storage_path) / "embeddings.pkl"
-            try:
-                with open(embeddings_path, "wb") as f:
-                    pickle.dump(self._concept_embeddings, f)
-                logger.info(f"Saved {len(self._concept_embeddings)} embeddings")
-            except Exception as e:
-                logger.warning(f"Failed to save embeddings: {e}")
-
-        logger.info(f"Knowledge saved to {self.storage_path}")
-
-    def close(self) -> None:
-        """
-        Clean shutdown of the system.
-
-        Saves all data and releases resources.
-        """
-        self.save()
-        self._core.close()
-        logger.info("SutraAI closed")
+    # close method already defined above - removing duplicate
 
     def _convert_paths(self, core_paths) -> List[ReasoningPathDetail]:
         """Convert core ReasoningPath objects to ReasoningPathDetail."""

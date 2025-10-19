@@ -196,6 +196,7 @@ services:
       - SUTRA_STORAGE_MODE=server
       - SUTRA_STORAGE_SERVER=storage-server:50051
       - SUTRA_USE_SEMANTIC_EMBEDDINGS=true
+      - SUTRA_OLLAMA_URL=http://host.docker.internal:11434
     depends_on:
       - storage-server
     networks:
@@ -243,6 +244,32 @@ services:
       retries: 3
       start_period: 15s
 
+  # Ollama Service (Local LLM/Embedding Server)
+  sutra-ollama:
+    image: ollama/ollama:latest
+    container_name: sutra-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # Pull and run granite-embedding:30m model on startup
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 10
+        ollama pull granite-embedding:30m
+        wait
+
   # Sutra Client (Interactive AI Interface)
   sutra-client:
     build:
@@ -258,6 +285,7 @@ services:
     depends_on:
       - sutra-api
       - sutra-hybrid
+      - sutra-ollama
     networks:
       - sutra-network
     restart: unless-stopped
@@ -281,6 +309,8 @@ volumes:
   agent1-data:
     driver: local
   agent2-data:
+    driver: local
+  ollama-data:
     driver: local
 
 networks:

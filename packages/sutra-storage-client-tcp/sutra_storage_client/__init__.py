@@ -2,20 +2,23 @@
 Storage client using custom binary protocol.
 
 Replaces gRPC client while maintaining distributed architecture.
-Connects to storage server via TCP with bincode serialization.
+Based on working test_tcp_client.py implementation.
 """
 
 import socket
 import struct
 from typing import Dict, List, Optional, Tuple
-import msgpack  # Fast alternative to pickle/json
+try:
+    import msgpack
+except ImportError:
+    raise ImportError("msgpack package required: pip install msgpack")
 
 
 class StorageClient:
     """
     TCP client for storage server using custom binary protocol.
     
-    Drop-in replacement for gRPC StorageClient with 10-50× better performance.
+    Based on working test_tcp_client.py implementation.
     """
     
     def __init__(self, server_address: str = "localhost:50051"):
@@ -36,32 +39,34 @@ class StorageClient:
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # Low latency
         self.socket.connect(self.address)
     
-    def _send_request(self, request: Dict) -> Dict:
-        """Send request and receive response"""
-        try:
-            # Serialize with msgpack (10× faster than JSON, compatible with bincode for basic types)
-            payload = msgpack.packb(request, use_bin_type=True)
-            
-            # Send length prefix (4 bytes, big-endian)
-            self.socket.sendall(struct.pack(">I", len(payload)))
-            
-            # Send payload
-            self.socket.sendall(payload)
-            
-            # Receive length prefix
-            length_data = self._recv_exactly(4)
-            length = struct.unpack(">I", length_data)[0]
-            
-            # Receive payload
-            response_data = self._recv_exactly(length)
-            
-            # Deserialize
-            return msgpack.unpackb(response_data, raw=False)
-            
-        except (socket.error, ConnectionError) as e:
-            # Reconnect on error
-            self._connect()
-            raise ConnectionError(f"Storage server connection lost: {e}")
+    def _send_request(self, variant_name: str, data: dict) -> dict:
+        """Send request and receive response.
+        
+        Rust enum format: {variant_name: variant_data}
+        """
+        # Pack request as enum: {variant_name: data}
+        request = {variant_name: data}
+        packed = msgpack.packb(request)
+        
+        # Send with length prefix
+        self.socket.sendall(struct.pack(">I", len(packed)))
+        self.socket.sendall(packed)
+        
+        # Receive response length
+        length_bytes = self.socket.recv(4)
+        if len(length_bytes) < 4:
+            raise ConnectionError("Connection closed")
+        length = struct.unpack(">I", length_bytes)[0]
+        
+        # Receive response
+        response_bytes = b""
+        while len(response_bytes) < length:
+            chunk = self.socket.recv(min(4096, length - len(response_bytes)))
+            if not chunk:
+                raise ConnectionError("Connection closed")
+            response_bytes += chunk
+        
+        return msgpack.unpackb(response_bytes, raw=False)
     
     def _recv_exactly(self, n: int) -> bytes:
         """Receive exactly n bytes"""
@@ -82,20 +87,22 @@ class StorageClient:
         confidence: float = 1.0,
     ) -> int:
         """Learn a concept with optional embedding"""
-        request = {
-            "type": "LearnConcept",
+        response = self._send_request("LearnConcept", {
             "concept_id": concept_id,
             "content": content,
-            "embedding": embedding or [],
-            "strength": strength,
-            "confidence": confidence,
-        }
-        response = self._send_request(request)
+            "embedding": [float(x) for x in (embedding or [])],
+            "strength": float(strength),
+            "confidence": float(confidence),
+        })
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
         
-        return response["LearnConceptOk"]["sequence"]
+        if "LearnConceptOk" in response:
+            sequence_list = response["LearnConceptOk"]
+            return sequence_list[0] if sequence_list else 0
+        
+        raise RuntimeError(f"Unexpected response: {response}")
     
     def learn_association(
         self,
@@ -105,27 +112,27 @@ class StorageClient:
         confidence: float = 1.0,
     ) -> int:
         """Learn an association between concepts"""
-        request = {
-            "type": "LearnAssociation",
+        response = self._send_request("LearnAssociation", {
             "source_id": source_id,
             "target_id": target_id,
-            "assoc_type": assoc_type,
-            "confidence": confidence,
-        }
-        response = self._send_request(request)
+            "assoc_type": int(assoc_type),
+            "confidence": float(confidence),
+        })
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
         
-        return response["LearnAssociationOk"]["sequence"]
+        if "LearnAssociationOk" in response:
+            sequence_list = response["LearnAssociationOk"]
+            return sequence_list[0] if sequence_list else 0
+        
+        raise RuntimeError(f"Unexpected response: {response}")
     
     def query_concept(self, concept_id: str) -> Optional[Dict]:
         """Query a concept by ID"""
-        request = {
-            "type": "QueryConcept",
+        response = self._send_request("QueryConcept", {
             "concept_id": concept_id,
-        }
-        response = self._send_request(request)
+        })
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
@@ -148,11 +155,9 @@ class StorageClient:
     
     def get_neighbors(self, concept_id: str) -> List[str]:
         """Get neighboring concepts"""
-        request = {
-            "type": "GetNeighbors",
+        response = self._send_request("GetNeighbors", {
             "concept_id": concept_id,
-        }
-        response = self._send_request(request)
+        })
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
@@ -166,13 +171,11 @@ class StorageClient:
         max_depth: int = 6,
     ) -> Optional[List[str]]:
         """Find path between two concepts"""
-        request = {
-            "type": "FindPath",
+        response = self._send_request("FindPath", {
             "start_id": start_id,
             "end_id": end_id,
             "max_depth": max_depth,
-        }
-        response = self._send_request(request)
+        })
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
@@ -190,13 +193,11 @@ class StorageClient:
         ef_search: int = 50,
     ) -> List[Tuple[str, float]]:
         """Vector similarity search"""
-        request = {
-            "type": "VectorSearch",
+        response = self._send_request("VectorSearch", {
             "query_vector": query_vector,
             "k": k,
             "ef_search": ef_search,
-        }
-        response = self._send_request(request)
+        })
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
@@ -205,8 +206,7 @@ class StorageClient:
     
     def stats(self) -> Dict:
         """Get storage statistics"""
-        request = {"type": "GetStats"}
-        response = self._send_request(request)
+        response = self._send_request("GetStats", {})
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
@@ -215,16 +215,14 @@ class StorageClient:
     
     def flush(self) -> None:
         """Force flush to disk"""
-        request = {"type": "Flush"}
-        response = self._send_request(request)
+        response = self._send_request("Flush", {})
         
         if "Error" in response:
             raise RuntimeError(f"Flush failed: {response['Error']['message']}")
     
     def health_check(self) -> Dict:
         """Check server health"""
-        request = {"type": "HealthCheck"}
-        response = self._send_request(request)
+        response = self._send_request("HealthCheck", {})
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])

@@ -107,8 +107,8 @@ async def query(
         result = ai.ask(
             query=request.query,
             semantic_boost=request.semantic_boost,
-            max_depth=request.max_depth,
-            max_paths=request.max_paths,
+            num_paths=request.max_paths,
+            # Note: max_depth not supported in current SutraAI.ask() implementation
         )
 
         # Convert reasoning paths (if present)
@@ -180,7 +180,7 @@ async def query(
             reasoning_paths=converted_reasoning_paths,
             semantic_support=semantic_support,
             explanation=result.explanation or "",
-            timestamp=(result.timestamp if isinstance(result.timestamp, str) else getattr(result, "timestamp", "")) or datetime.utcnow().isoformat(),
+            timestamp=(result.audit_trail.timestamp if result.audit_trail else datetime.utcnow().isoformat()),
         )
 
     except Exception as e:

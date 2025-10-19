@@ -11,12 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy TCP storage client
-COPY packages/sutra-storage-client ./packages/sutra-storage-client
-# Copy NLG package (no-LLM grounded NLG)
+# Copy required packages
+COPY packages/sutra-storage-client-tcp ./packages/sutra-storage-client-tcp
+COPY packages/sutra-core ./packages/sutra-core
 COPY packages/sutra-nlg ./packages/sutra-nlg
 
-# Requirements (no sutra-core)
+# Requirements
 RUN cat > hybrid-requirements.txt <<EOF
 typing_extensions>=4.12.0
 numpy>=1.24.0,<2.0.0
@@ -26,11 +26,13 @@ uvicorn[standard]>=0.24.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 msgpack>=1.0.0
+requests>=2.31.0
 EOF
 
 # Install
 RUN pip install --no-cache-dir typing_extensions>=4.12.0 && \
-    pip install --no-cache-dir --user ./packages/sutra-storage-client && \
+    pip install --no-cache-dir --user ./packages/sutra-storage-client-tcp && \
+    pip install --no-cache-dir --user ./packages/sutra-core && \
     pip install --no-cache-dir --user ./packages/sutra-nlg && \
     pip install --no-cache-dir --user --no-compile -r hybrid-requirements.txt && \
     find /root/.local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true && \

@@ -157,30 +157,30 @@ class ReasoningEngine:
         storage_mode = os.environ.get("SUTRA_STORAGE_MODE", "local")
         
         if storage_mode == "server":
-            # Distributed mode: use gRPC to connect to storage server
+            # Distributed mode: use TCP to connect to storage server
             try:
-                from ..storage import GrpcStorageAdapter
+                from ..storage import TcpStorageAdapter
                 
                 # Use EmbeddingGemma dimension (768) for HNSW
                 vector_dim = 768
                 server_address = os.environ.get("SUTRA_STORAGE_SERVER", "storage-server:50051")
                 
-                self.storage = GrpcStorageAdapter(
+                self.storage = TcpStorageAdapter(
                     server_address=server_address,
                     vector_dimension=vector_dim,
                 )
                 logger.info(
-                    f"gRPC storage connected to {server_address} (dim={vector_dim})"
+                    f"TCP storage connected to {server_address} (dim={vector_dim})"
                 )
                 
                 # Get concept count from server
                 if self.storage:
                     stats = self.storage.stats()
-                    concept_count = stats.get("concepts", 0)
+                    concept_count = stats.get("total_concepts", 0)
                     if concept_count > 0:
                         logger.info(f"Loaded {concept_count} concepts from storage server")
                 
-                use_rust_storage = True  # Treat gRPC as "storage available"
+                use_rust_storage = True  # Treat TCP as "storage available"
             except Exception as e:
                 logger.error(f"Failed to connect to storage server: {e}")
                 raise RuntimeError(f"Storage server connection required but failed: {e}")
@@ -477,10 +477,10 @@ class ReasoningEngine:
                 if embedding is not None and len(embedding) > 0:
                     # Validate embedding quality
                     embedding_array = np.array(embedding, dtype=np.float32)
-                    if (
-                        not np.isnan(embedding_array).any()
-                        and not np.isinf(embedding_array).any()
-                    ):
+                    # Fix numpy array boolean ambiguity by using bool() conversion
+                    has_nan = bool(np.isnan(embedding_array).any())
+                    has_inf = bool(np.isinf(embedding_array).any())
+                    if not has_nan and not has_inf:
                         logger.debug(
                             f"✅ Generated embedding for {concept_id[:8]} (attempt {attempt + 1})"
                         )
