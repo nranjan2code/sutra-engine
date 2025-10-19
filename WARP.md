@@ -2,6 +2,29 @@
 
 This file provides guidance to WARP (warp.dev) when working with code in this repository.
 
+## 🚨 CRITICAL: Embedding System Requirements (MANDATORY)
+
+**NEVER IGNORE THESE REQUIREMENTS - SYSTEM WILL NOT FUNCTION WITHOUT THEM:**
+
+1. **Ollama Service is MANDATORY**
+   - Must be running with `granite-embedding:30m` model loaded
+   - Accessible at `SUTRA_OLLAMA_URL` (default: `http://host.docker.internal:11434`)
+   - Without this: "No embedding processor available" error = COMPLETE SYSTEM FAILURE
+
+2. **TCP Architecture is MANDATORY**
+   - ALL services MUST use `sutra-storage-client-tcp` package
+   - NEVER import `sutra_storage` directly in distributed services
+   - Unit variants send strings, not `{variant: {}}` format
+   - Convert numpy arrays to lists before TCP transport
+
+3. **Common Production-Breaking Errors:**
+   - "No embedding processor available" → Ollama not configured
+   - "can not serialize 'numpy.ndarray' object" → Missing array conversion
+   - "wrong msgpack marker" → Wrong message format for unit variants
+   - "list indices must be integers" → Wrong response parsing format
+
+**Reference:** See `docs/EMBEDDING_TROUBLESHOOTING.md` for complete fix details.
+
 ## Project Overview
 
 Sutra AI is an explainable graph-based AI system that learns in real-time without retraining. It provides complete reasoning paths for every decision, making it a transparent alternative to black-box LLMs.
@@ -68,9 +91,11 @@ Sutra AI is an explainable graph-based AI system that learns in real-time withou
 - **sutra-hybrid**: Semantic embeddings integration (SutraAI class) that combines graph reasoning with optional similarity matching
 - **sutra-nlg**: Grounded, template-driven NLG (no LLM) used by Hybrid for human-like, explainable responses
 - **sutra-api**: Production REST API with FastAPI, rate limiting, and comprehensive endpoints
+- **sutra-hybrid**: Semantic embeddings integration (SutraAI class) that combines graph reasoning with optional similarity matching
 - **sutra-control**: Modern React-based control center with secure FastAPI gateway for system monitoring and management
 - **sutra-client**: Streamlit-based web interface for interactive AI queries and knowledge exploration
 - **sutra-markdown-web**: Markdown API service for document processing and content management
+- **sutra-bulk-ingester**: High-performance Rust service for bulk data ingestion with TCP storage integration (production-ready)
 - **sutra-cli**: Command-line interface (placeholder)
 
 #### Sutra Grid (Distributed Infrastructure)
@@ -174,8 +199,11 @@ All deployment operations are managed through one script:
 # First-time installation
 ./sutra-deploy.sh install
 
-# Start all services
+# Start all services (11-service ecosystem)
 ./sutra-deploy.sh up
+
+# Start with bulk ingester (12-service ecosystem)
+docker-compose -f docker-compose-grid.yml --profile bulk-ingester up -d
 
 # Stop all services
 ./sutra-deploy.sh down
@@ -202,6 +230,7 @@ All deployment operations are managed through one script:
 - Sutra Client (UI): http://localhost:8080  
 - Sutra API: http://localhost:8000
 - Sutra Hybrid API: http://localhost:8001
+- Sutra Bulk Ingester: http://localhost:8005 (Rust service for production data ingestion)
 - Grid Master (HTTP Binary Distribution): http://localhost:7001
 - Grid Master (TCP Agent Protocol): localhost:7002
 
@@ -274,16 +303,19 @@ Production-ready storage architecture with enterprise-grade durability:
 - Tested with comprehensive crash simulation tests
 
 ### Sutra Control Center (sutra-control)
-Modern React-based monitoring and management interface with **Grid Management Integration**:
+Modern React-based monitoring and management interface with **Complete UI Integration**:
 - **Frontend**: React 18 with Material Design 3, TypeScript, and Vite
 - **Backend**: Secure FastAPI gateway providing REST APIs for all services
 - **Real-time Updates**: Live system metrics and performance monitoring
 - **Grid Management**: Complete web UI for Grid agents and storage nodes ✅
+- **Bulk Ingester UI**: Integrated web interface for high-performance data ingestion ✅
+- **Navigation**: Full sidebar with Dashboard, Components, Analytics, Knowledge Graph, Reasoning Engine, Bulk Ingestion, Grid Management, and Settings
 - **Grid API**: REST endpoints for spawn/stop operations, status monitoring ✅
-- **Features**: System health monitoring, performance metrics, knowledge graph visualization, Grid cluster management
+- **Features**: System health monitoring, performance metrics, knowledge graph visualization, Grid cluster management, bulk data ingestion interface
 - **Architecture**: Multi-stage Docker build combining React SPA with Python gateway
 - **Access**: http://localhost:9000 (containerized deployment)
 - **Grid UI**: Accessible at http://localhost:9000/grid with real-time monitoring
+- **Bulk Ingester UI**: Accessible at http://localhost:9000/bulk-ingester with ingestion management
 ### Configuration
 
 ### Environment Variables

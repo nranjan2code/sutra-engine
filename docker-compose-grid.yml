@@ -296,6 +296,48 @@ services:
       retries: 3
       start_period: 10s
 
+  # ============================================================================
+  # BULK INGESTION LAYER (Optional - can be disabled)
+  # ============================================================================
+  
+  # Primary Bulk Ingester Service (Optional)
+  sutra-bulk-ingester:
+    build:
+      context: .
+      dockerfile: ./packages/sutra-bulk-ingester/Dockerfile
+    image: sutra-bulk-ingester:latest
+    container_name: sutra-bulk-ingester
+    ports:
+      - "8005:8005"  # Bulk ingestion API
+    volumes:
+      - ./datasets:/datasets:ro  # Read-only dataset access
+      - ingestion-jobs:/jobs     # Job state persistence
+    environment:
+      - RUST_LOG=info
+      - SUTRA_STORAGE_MODE=server
+      - SUTRA_STORAGE_SERVER=storage-server:50051
+      - SUTRA_OLLAMA_URL=http://sutra-ollama:11434
+      - SUTRA_GRID_MASTER=grid-master:7001
+      - INGESTER_WORKERS=2
+      - INGESTER_BATCH_SIZE=100
+      - INGESTER_MEMORY_LIMIT=2048
+    depends_on:
+      storage-server:
+        condition: service_healthy
+      grid-master:
+        condition: service_healthy
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    profiles:
+      - bulk-ingester  # Optional profile - only start when requested
+
 # ============================================================================
 # NETWORKING & STORAGE
 # ============================================================================
@@ -311,6 +353,9 @@ volumes:
   agent2-data:
     driver: local
   ollama-data:
+    driver: local
+  # New volume for bulk ingestion (only created when bulk-ingester profile used)
+  ingestion-jobs:
     driver: local
 
 networks:

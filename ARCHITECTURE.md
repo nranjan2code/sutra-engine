@@ -2,7 +2,25 @@
 
 **An explainable AI system that learns in real-time without retraining**
 
-Version: 2.0.0 | Status: Production-ready | Last Updated: 2025-10-17
+Version: 2.0.0 | Status: Production-ready | Last Updated: 2025-10-19
+
+## 🚨 CRITICAL PRODUCTION REQUIREMENTS
+
+### Embedding System (MANDATORY)
+
+**⚠️ WARNING:** The system CANNOT function without proper embedding configuration. All production deployments MUST ensure:
+
+1. **Ollama Service**: Must be accessible at `SUTRA_OLLAMA_URL` with `granite-embedding:30m` model loaded
+2. **TCP Protocol**: ALL services MUST use `sutra-storage-client-tcp` package - NEVER direct storage access
+3. **Message Format**: Unit variants (`GetStats`, `Flush`, `HealthCheck`) send string, not `{variant: {}}`
+4. **Vector Serialization**: Always convert numpy arrays to Python lists before TCP transport
+5. **Error Handling**: Implement retry logic for TCP connection failures
+
+**Common Failure Modes:**
+- "No embedding processor available" → Ollama not accessible or model not loaded
+- "can not serialize 'numpy.ndarray' object" → Missing array-to-list conversion
+- "wrong msgpack marker" → Incorrect message format for unit variants
+- "Connection closed" → TCP client using wrong protocol
 
 ---
 
@@ -153,38 +171,51 @@ Data structures optimized for graph traversal, not tables or documents. Adjacenc
 
 ### Learning Flow
 ```
-User Input
+User Input (Content)
     ↓
-Content + (optional) Embedding
+🔴 CRITICAL: Embedding Generation via Ollama
+    ├─ OllamaEmbedding.encode([content])
+    ├─ granite-embedding:30m model (768 dimensions)
+    └─ ⚠️ FAILS if Ollama not accessible → "No embedding processor available"
     ↓
 Association Extraction (typed relationships)
     ↓
-ConcurrentStorage.learn_concept()
+TCP Storage Client (sutra-storage-client-tcp)
+    ├─ Convert numpy arrays → Python lists
+    ├─ StorageClient.learn_concept(concept_id, content, embedding)
+    └─ ⚠️ FAILS if direct storage access attempted
     ↓
-Lock-free write log (append-only)
-    ↓
-Background reconciler (10ms loop)
-    ↓
-Immutable snapshot update
-    ↓
-Optional: Flush to storage.dat
+Storage Server (Rust, TCP Binary Protocol)
+    ├─ Lock-free write log (append-only)
+    ├─ Background reconciler (10ms loop)
+    └─ Immutable snapshot update with vector indexing
 ```
 
 ### Query Flow
 ```
 User Query
     ↓
-Semantic Matching (optional embeddings)
+🔴 CRITICAL: Query Embedding Generation
+    ├─ OllamaNLPProcessor.get_embedding(query)
+    ├─ granite-embedding:30m model (768 dimensions)
+    └─ ⚠️ FAILS if no embedding processor → "No embedding processor available"
     ↓
-Concept Retrieval (<0.01ms, zero-copy)
+TCP Storage Client - Vector Search
+    ├─ Convert numpy query vector → Python list
+    ├─ StorageClient.vector_search(query_vector, k=10)
+    ├─ Parse response: [[['concept_id', score]]] → [(id, score)]
+    └─ ⚠️ FAILS if wrong response parsing
     ↓
-PathFinder (multi-strategy BFS)
+Concept Retrieval via TCP
+    ├─ StorageClient.query_concept(concept_id)
+    ├─ Parse response: [found, id, content, strength, confidence]
+    └─ ⚠️ FAILS if expecting dict format
+    ↓
+PathFinder (multi-strategy graph traversal)
     ↓
 Multi-Path Plan Aggregation (MPPA)
     ↓
-Consensus Answer + Confidence + Reasoning Path
-    ↓
-Audit Trail (logged with timestamp)
+Consensus Answer + Confidence + Reasoning Paths
 ```
 
 ---

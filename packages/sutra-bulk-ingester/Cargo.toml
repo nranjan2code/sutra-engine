@@ -1,0 +1,74 @@
+[package]
+name = "sutra-bulk-ingester"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance bulk data ingestion service for Sutra AI"
+
+[lib]
+name = "sutra_bulk_ingester"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.0", features = ["full"] }
+tokio-util = "0.7"
+
+# Web framework
+axum = { version = "0.7", features = ["json", "multipart", "macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# TCP client for storage
+sutra-protocol = { path = "../sutra-protocol" }
+
+# Async I/O
+futures = "0.3"
+async-stream = "0.3"
+
+# Memory management
+bytes = "1.0"
+memmap2 = "0.9"
+
+# Text processing
+regex = "1.0"
+unicode-segmentation = "1.0"
+
+# Monitoring
+metrics = "0.22"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Plugin system via PyO3 (optional)
+pyo3 = { version = "0.20", features = ["extension-module", "multiple-pymethods"], optional = true }
+pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"], optional = true }
+
+# Compression for large datasets
+flate2 = "1.0"
+zstd = "0.13"
+
+# HTTP client for external APIs
+reqwest = { version = "0.11", features = ["json", "stream"] }
+
+# Configuration
+config = "0.13"
+clap = { version = "4.0", features = ["derive"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+uuid = { version = "1.0", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3.0"
+pretty_assertions = "1.0"
+
+[features]
+default = ["embedded-only"]
+python-plugins = ["pyo3", "pyo3-asyncio"]
+embedded-only = []  # For pure Rust deployment without Python

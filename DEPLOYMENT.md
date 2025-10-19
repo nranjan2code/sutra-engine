@@ -47,6 +47,9 @@ This will:
 Once deployed, access services at:
 
 - **Sutra Control Center**: http://localhost:9000
+  - Dashboard: http://localhost:9000/
+  - Grid Management: http://localhost:9000/grid
+  - Bulk Ingester UI: http://localhost:9000/bulk-ingester ✅
 - **Sutra Client (UI)**: http://localhost:8080
 - **Sutra API**: http://localhost:8000
 - **Sutra Hybrid API**: http://localhost:8001

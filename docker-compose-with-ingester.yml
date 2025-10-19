@@ -1,0 +1,233 @@
+# Extended docker-compose with bulk ingester integration
+# This extends the existing docker-compose-grid.yml with bulk ingestion services
+
+services:
+  # ============================================================================
+  # STORAGE LAYER (Existing)
+  # ============================================================================
+  
+  storage-server:
+    extends:
+      file: docker-compose-grid.yml
+      service: storage-server
+      
+  grid-event-storage:
+    extends:
+      file: docker-compose-grid.yml
+      service: grid-event-storage
+
+  # ============================================================================
+  # GRID INFRASTRUCTURE (Existing)
+  # ============================================================================
+  
+  grid-master:
+    extends:
+      file: docker-compose-grid.yml
+      service: grid-master
+      
+  grid-agent-1:
+    extends:
+      file: docker-compose-grid.yml
+      service: grid-agent-1
+      
+  grid-agent-2:
+    extends:
+      file: docker-compose-grid.yml
+      service: grid-agent-2
+
+  # ============================================================================
+  # API LAYER (Existing)
+  # ============================================================================
+  
+  sutra-api:
+    extends:
+      file: docker-compose-grid.yml
+      service: sutra-api
+      
+  sutra-hybrid:
+    extends:
+      file: docker-compose-grid.yml
+      service: sutra-hybrid
+
+  # ============================================================================
+  # WEB INTERFACES (Existing)
+  # ============================================================================
+  
+  sutra-control:
+    extends:
+      file: docker-compose-grid.yml
+      service: sutra-control
+      
+  sutra-client:
+    extends:
+      file: docker-compose-grid.yml
+      service: sutra-client
+      
+  sutra-ollama:
+    extends:
+      file: docker-compose-grid.yml
+      service: sutra-ollama
+
+  # ============================================================================
+  # BULK INGESTION LAYER (NEW)
+  # ============================================================================
+  
+  # Primary Bulk Ingester Service
+  sutra-bulk-ingester:
+    build:
+      context: .
+      dockerfile: ./packages/sutra-bulk-ingester/Dockerfile
+    image: sutra-bulk-ingester:latest
+    container_name: sutra-bulk-ingester
+    ports:
+      - "8005:8005"  # Bulk ingestion API
+    volumes:
+      - datasets-volume:/datasets:ro  # Read-only dataset access
+      - ingestion-jobs:/jobs          # Job state persistence
+      - ./datasets:/host-datasets:ro  # Direct host access for development
+    environment:
+      - RUST_LOG=info
+      - SUTRA_STORAGE_MODE=server
+      - SUTRA_STORAGE_SERVER=storage-server:50051
+      - SUTRA_OLLAMA_URL=http://sutra-ollama:11434
+      - SUTRA_GRID_MASTER=grid-master:7001
+      - INGESTER_WORKERS=4
+      - INGESTER_BATCH_SIZE=100
+      - INGESTER_MEMORY_LIMIT=4096
+      - INGESTER_PLUGIN_DIR=/app/plugins
+    depends_on:
+      storage-server:
+        condition: service_healthy
+      sutra-ollama:
+        condition: service_healthy
+      grid-master:
+        condition: service_healthy
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+  # Bulk Ingestion Worker 1
+  ingester-worker-1:
+    build:
+      context: .
+      dockerfile: ./packages/sutra-bulk-ingester/Dockerfile
+    image: sutra-bulk-ingester:latest
+    container_name: sutra-ingester-worker-1
+    volumes:
+      - datasets-volume:/datasets:ro
+      - ingestion-jobs:/jobs
+      - ./datasets:/host-datasets:ro
+    environment:
+      - RUST_LOG=info
+      - SUTRA_STORAGE_MODE=server
+      - SUTRA_STORAGE_SERVER=storage-server:50051
+      - SUTRA_OLLAMA_URL=http://sutra-ollama:11434
+      - WORKER_ID=worker-001
+      - WORKER_TYPE=background
+      - INGESTER_MEMORY_LIMIT=2048
+    depends_on:
+      sutra-bulk-ingester:
+        condition: service_healthy
+      storage-server:
+        condition: service_healthy
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    # Workers run in background mode - no port exposure needed
+    command: ["/usr/local/bin/sutra-bulk-ingester", "--worker-mode", "--worker-id", "worker-001"]
+
+  # Bulk Ingestion Worker 2
+  ingester-worker-2:
+    build:
+      context: .
+      dockerfile: ./packages/sutra-bulk-ingester/Dockerfile  
+    image: sutra-bulk-ingester:latest
+    container_name: sutra-ingester-worker-2
+    volumes:
+      - datasets-volume:/datasets:ro
+      - ingestion-jobs:/jobs
+      - ./datasets:/host-datasets:ro
+    environment:
+      - RUST_LOG=info
+      - SUTRA_STORAGE_MODE=server
+      - SUTRA_STORAGE_SERVER=storage-server:50051
+      - SUTRA_OLLAMA_URL=http://sutra-ollama:11434
+      - WORKER_ID=worker-002
+      - WORKER_TYPE=background
+      - INGESTER_MEMORY_LIMIT=2048
+    depends_on:
+      sutra-bulk-ingester:
+        condition: service_healthy
+      storage-server:
+        condition: service_healthy
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    command: ["/usr/local/bin/sutra-bulk-ingester", "--worker-mode", "--worker-id", "worker-002"]
+
+  # ============================================================================
+  # DEVELOPMENT HELPER (Optional)
+  # ============================================================================
+  
+  # Dataset preparation service (for development)
+  dataset-prep:
+    image: python:3.11-slim
+    container_name: dataset-prep
+    volumes:
+      - datasets-volume:/datasets
+      - ./datasets:/host-datasets:ro
+    command: >
+      sh -c "
+        echo 'Setting up datasets...' &&
+        mkdir -p /datasets &&
+        if [ -f /host-datasets/wikipedia.txt ]; then
+          echo 'Copying Wikipedia dataset...' &&
+          cp /host-datasets/wikipedia.txt /datasets/
+        fi &&
+        echo 'Dataset preparation complete'
+      "
+    networks:
+      - sutra-network
+    profiles:
+      - setup  # Only run when explicitly requested
+
+# ============================================================================
+# VOLUMES & NETWORKING
+# ============================================================================
+
+volumes:
+  # Extend existing volumes
+  storage-data:
+    driver: local
+  grid-event-data:
+    driver: local
+  agent1-data:
+    driver: local
+  agent2-data:
+    driver: local
+  ollama-data:
+    driver: local
+    
+  # New volumes for bulk ingestion
+  datasets-volume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./datasets  # Bind to local datasets directory
+  ingestion-jobs:
+    driver: local
+
+networks:
+  sutra-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16

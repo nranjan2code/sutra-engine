@@ -31,6 +31,16 @@ The control center follows a secure gateway pattern:
 - **Responsive Design**: Works on desktop, tablet, and mobile
 - **Progressive Web App**: Installable with offline capabilities
 
+### Navigation & Features
+- **Dashboard** - System overview with metrics cards and performance charts
+- **Components** - Component status monitoring and control
+- **Analytics** - Performance analytics and historical data visualization
+- **Knowledge Graph** - Interactive knowledge exploration and visualization
+- **Reasoning Engine** - AI reasoning paths and query interface
+- **Bulk Ingestion** - High-performance data ingestion management interface ✅
+- **Grid Management** - Distributed storage cluster management ✅
+- **Settings** - System configuration and preferences
+
 ### Dashboard Features
 - **System Metrics Cards** - CPU, Memory, Storage, Concepts, Associations
 - **Performance Charts** - Real-time CPU and Memory usage visualization

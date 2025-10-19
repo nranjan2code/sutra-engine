@@ -1,5 +1,46 @@
 # TCP Binary Protocol Architecture
 
+## 🚨 CRITICAL FIXES APPLIED (2025-10-19)
+
+**PRODUCTION BREAKING ISSUES RESOLVED:**
+
+### 1. Unit Variant Message Format
+**WRONG (causes "wrong msgpack marker" error):**
+```python
+request = {"GetStats": {}}  # ❌ BREAKS storage server
+```
+
+**CORRECT:**
+```python
+request = "GetStats"  # ✅ Works with Rust enum parser
+```
+
+**Affected Operations:** `GetStats`, `Flush`, `HealthCheck`
+
+### 2. Vector Serialization
+**WRONG (causes "can not serialize 'numpy.ndarray'" error):**
+```python
+vector_search(numpy_array)  # ❌ BREAKS msgpack
+```
+
+**CORRECT:**
+```python
+if hasattr(query_vector, 'tolist'):
+    query_vector = query_vector.tolist()  # ✅ Convert to Python list
+```
+
+### 3. Response Parsing
+**Storage server returns nested lists, not dicts:**
+
+**VectorSearch Response:** `[[['concept_id', score]]]` (triple nested)
+**QueryConcept Response:** `[found, id, content, strength, confidence]` (flat list)
+
+### 4. Architecture Compliance
+**CRITICAL:** All services MUST use `sutra-storage-client-tcp` package:
+- ✅ `from sutra_storage_client import StorageClient`
+- ❌ Never import `sutra_storage` directly
+- ❌ Never instantiate `RustStorageAdapter` in distributed mode
+
 **Status**: ✅ **Production** (October 2025)
 
 ## Overview

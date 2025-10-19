@@ -31,6 +31,7 @@ import { KnowledgeGraph } from '../KnowledgeGraph';
 import { Reasoning } from '../Reasoning';
 import { Settings } from '../Settings';
 import Grid from '../Grid';
+import BulkIngester from '../BulkIngester';
 import { ConnectionStatus } from '../ConnectionStatus';
 
 const DRAWER_WIDTH = 280;
@@ -53,6 +54,7 @@ export const Layout: React.FC = () => {
       '/analytics': 'Analytics',
       '/knowledge': 'Knowledge Graph',
       '/reasoning': 'Reasoning Engine',
+      '/bulk-ingester': 'Bulk Data Ingestion',
       '/grid': 'Grid Management',
       '/settings': 'Settings',
     };
@@ -188,6 +190,7 @@ export const Layout: React.FC = () => {
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/knowledge" element={<KnowledgeGraph />} />
                 <Route path="/reasoning" element={<Reasoning />} />
+                <Route path="/bulk-ingester" element={<BulkIngester />} />
                 <Route path="/grid" element={<Grid />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

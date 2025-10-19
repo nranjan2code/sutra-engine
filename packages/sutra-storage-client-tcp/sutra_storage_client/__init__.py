@@ -137,16 +137,30 @@ class StorageClient:
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
         
-        result = response["QueryConceptOk"]
-        if not result["found"]:
-            return None
+        if "QueryConceptOk" in response:
+            result = response["QueryConceptOk"]
+            # Handle list format: [found, concept_id, content, strength, confidence]
+            if isinstance(result, list):
+                if len(result) >= 5 and result[0]:  # found = True
+                    return {
+                        "id": result[1],
+                        "content": result[2],
+                        "strength": result[3],
+                        "confidence": result[4],
+                    }
+                return None  # found = False or not enough data
+            # Handle dict format
+            elif isinstance(result, dict):
+                if not result.get("found", False):
+                    return None
+                return {
+                    "id": result["concept_id"],
+                    "content": result["content"],
+                    "strength": result["strength"],
+                    "confidence": result["confidence"],
+                }
         
-        return {
-            "id": result["concept_id"],
-            "content": result["content"],
-            "strength": result["strength"],
-            "confidence": result["confidence"],
-        }
+        return None
     
     def contains(self, concept_id: str) -> bool:
         """Check if concept exists"""
@@ -193,6 +207,12 @@ class StorageClient:
         ef_search: int = 50,
     ) -> List[Tuple[str, float]]:
         """Vector similarity search"""
+        # Convert numpy array to list if needed
+        if hasattr(query_vector, 'tolist'):
+            query_vector = query_vector.tolist()
+        elif hasattr(query_vector, '__iter__'):
+            query_vector = [float(x) for x in query_vector]
+        
         response = self._send_request("VectorSearch", {
             "query_vector": query_vector,
             "k": k,
@@ -202,32 +222,128 @@ class StorageClient:
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
         
-        return [(r[0], r[1]) for r in response["VectorSearchOk"]["results"]]
+        if "VectorSearchOk" in response:
+            data = response["VectorSearchOk"]
+            # Handle nested list format: [[['id', score], ['id', score]]]
+            if isinstance(data, list):
+                if len(data) > 0 and isinstance(data[0], list):
+                    # Flatten one level: [['id', score], ['id', score]]
+                    results = data[0] if len(data) > 0 else []
+                    return [(r[0], r[1]) for r in results if len(r) >= 2]
+                else:
+                    # Direct format: [['id', score], ['id', score]]
+                    return [(r[0], r[1]) for r in data if len(r) >= 2]
+            # If data is a dict with "results" key, use that
+            elif isinstance(data, dict) and "results" in data:
+                return [(r[0], r[1]) for r in data["results"]]
+        
+        return []
     
     def stats(self) -> Dict:
         """Get storage statistics"""
-        response = self._send_request("GetStats", {})
+        # GetStats is a unit variant - send just the string
+        request = "GetStats"
+        packed = msgpack.packb(request)
+        
+        # Send with length prefix
+        self.socket.sendall(struct.pack(">I", len(packed)))
+        self.socket.sendall(packed)
+        
+        # Receive response length
+        length_bytes = self.socket.recv(4)
+        if len(length_bytes) < 4:
+            raise ConnectionError("Connection closed")
+        length = struct.unpack(">I", length_bytes)[0]
+        
+        # Receive response
+        response_bytes = b""
+        while len(response_bytes) < length:
+            chunk = self.socket.recv(min(4096, length - len(response_bytes)))
+            if not chunk:
+                raise ConnectionError("Connection closed")
+            response_bytes += chunk
+        
+        response = msgpack.unpackb(response_bytes, raw=False)
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
         
-        return response["StatsOk"]
+        if "StatsOk" in response:
+            data = response["StatsOk"]
+            # If data is a list, convert to dict
+            if isinstance(data, list):
+                return {
+                    "total_concepts": data[0] if len(data) > 0 else 0,
+                    "total_edges": data[1] if len(data) > 1 else 0,
+                    "writes": data[2] if len(data) > 2 else 0,
+                    "drops": data[3] if len(data) > 3 else 0,
+                    "pending": data[4] if len(data) > 4 else 0,
+                    "reconciliations": data[5] if len(data) > 5 else 0,
+                    "uptime_seconds": data[6] if len(data) > 6 else 0,
+                }
+            return data
+        
+        return {}
     
     def flush(self) -> None:
         """Force flush to disk"""
-        response = self._send_request("Flush", {})
+        # Flush is a unit variant - send just the string
+        request = "Flush"
+        packed = msgpack.packb(request)
+        
+        # Send with length prefix
+        self.socket.sendall(struct.pack(">I", len(packed)))
+        self.socket.sendall(packed)
+        
+        # Receive response length
+        length_bytes = self.socket.recv(4)
+        if len(length_bytes) < 4:
+            raise ConnectionError("Connection closed")
+        length = struct.unpack(">I", length_bytes)[0]
+        
+        # Receive response
+        response_bytes = b""
+        while len(response_bytes) < length:
+            chunk = self.socket.recv(min(4096, length - len(response_bytes)))
+            if not chunk:
+                raise ConnectionError("Connection closed")
+            response_bytes += chunk
+        
+        response = msgpack.unpackb(response_bytes, raw=False)
         
         if "Error" in response:
             raise RuntimeError(f"Flush failed: {response['Error']['message']}")
     
     def health_check(self) -> Dict:
         """Check server health"""
-        response = self._send_request("HealthCheck", {})
+        # HealthCheck is a unit variant - send just the string
+        request = "HealthCheck"
+        packed = msgpack.packb(request)
+        
+        # Send with length prefix
+        self.socket.sendall(struct.pack(">I", len(packed)))
+        self.socket.sendall(packed)
+        
+        # Receive response length
+        length_bytes = self.socket.recv(4)
+        if len(length_bytes) < 4:
+            raise ConnectionError("Connection closed")
+        length = struct.unpack(">I", length_bytes)[0]
+        
+        # Receive response
+        response_bytes = b""
+        while len(response_bytes) < length:
+            chunk = self.socket.recv(min(4096, length - len(response_bytes)))
+            if not chunk:
+                raise ConnectionError("Connection closed")
+            response_bytes += chunk
+        
+        response = msgpack.unpackb(response_bytes, raw=False)
         
         if "Error" in response:
             raise RuntimeError(response["Error"]["message"])
         
-        return response["HealthCheckOk"]
+        return response.get("HealthCheckOk", {})
     
     def close(self):
         """Close connection to server"""

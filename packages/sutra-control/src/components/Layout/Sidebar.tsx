@@ -25,6 +25,7 @@ import {
   Storage as StorageIcon,
   Cloud as CloudIcon,
   GridView as GridIcon,
+  CloudUpload as BulkIngesterIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 
@@ -74,6 +75,13 @@ const navigationItems: NavigationItem[] = [
     icon: <ReasoningIcon />,
     path: '/reasoning',
     description: 'AI reasoning paths and queries',
+  },
+  {
+    id: 'bulk-ingester',
+    label: 'Bulk Ingestion',
+    icon: <BulkIngesterIcon />,
+    path: '/bulk-ingester',
+    description: 'High-performance data ingestion',
   },
   {
     id: 'grid',
