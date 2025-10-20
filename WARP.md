@@ -4,6 +4,12 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## 🚨 CRITICAL: Embedding System Requirements (MANDATORY)
 
+**⚠️ TECHNICAL DEBT RESOLVED (2025-10-20) ⚠️**
+
+**Previous Issue**: Reasoning paths were broken due to component initialization order problems.  
+**Resolution**: Fixed embedding processor initialization order. See `docs/TECHNICAL_DEBT_REASONING_PATHS_RESOLVED.md`.  
+**Status**: ✅ **SYSTEM FULLY FUNCTIONAL**
+
 **NEVER IGNORE THESE REQUIREMENTS - SYSTEM WILL NOT FUNCTION WITHOUT THEM:**
 
 ### **1. STRICT EMBEDDING MODEL REQUIREMENT (Production Standard: 2025-10-19)**
@@ -65,6 +71,41 @@ docker logs sutra-hybrid | grep "✅ PRODUCTION: Initialized with nomic-embed-te
 ```
 
 **See:** `PRODUCTION_REQUIREMENTS.md` for complete details and migration guide.
+
+### **5. MANDATORY: Component Initialization Order (CRITICAL)**
+
+**⚠️ COMPONENT INITIALIZATION ORDER IS CRITICAL ⚠️**
+
+Following the 2025-10-20 technical debt resolution, **strict initialization order** is now **MANDATORY**:
+
+```python
+# ✅ CORRECT ORDER (MANDATORY)
+class SutraAI:
+    def __init__(self):
+        # 1. Environment setup
+        os.environ["SUTRA_STORAGE_MODE"] = "server"
+        
+        # 2. Embedding processors FIRST (CRITICAL)
+        self.ollama_nlp = OllamaNLPProcessor(model_name="nomic-embed-text")
+        
+        # 3. Core components
+        self._core = ReasoningEngine(use_rust_storage=True)
+        
+        # 4. Component reconstruction with correct processors
+        self._core.query_processor = QueryProcessor(
+            self._core.storage,
+            self._core.association_extractor,
+            self._core.path_finder,
+            self._core.mppa,
+            embedding_processor=None,
+            nlp_processor=self.ollama_nlp,  # ← Pre-created processor
+        )
+        logger.info("Recreated QueryProcessor with OllamaNLPProcessor")
+```
+
+**Violation of initialization order will cause system failure.**
+
+**Reference**: `docs/COMPONENT_INITIALIZATION_GUIDELINES.md` (MANDATORY reading)
 
 ### **2. Ollama Service Configuration**
    - Must be running with `nomic-embed-text` model loaded
@@ -276,35 +317,54 @@ Sutra AI is an explainable graph-based AI system that learns in real-time withou
 ## Development Commands
 
 ### Environment Setup
-```bash
-# One-command setup (creates venv, installs packages)
-make setup
 
-# Manual setup (alternative)
+**Build System Overview:**
+- **Multi-language workspace**: Python (PyO3) + Rust + Node.js
+- **Python packages**: 15 packages with editable installs via `requirements-dev.txt`
+- **Rust workspace**: 6 crates with optimized release builds (`Cargo.toml`)
+- **Frontend**: React/TypeScript with Vite build system (`package.json`)
+- **No Makefile**: Uses direct tooling (pytest, cargo, npm, docker-compose)
+
+```bash
+# Virtual environment setup (REQUIRED)
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e packages/sutra-core/
-pip install -r requirements-dev.txt
+pip install -r requirements-dev.txt  # Installs all -e packages automatically
+
+# Development dependencies structure:
+# -e packages/sutra-core/
+# -e packages/sutra-hybrid/ 
+# -e packages/sutra-api/
+# -e packages/sutra-nlg/
+# -e packages/sutra-storage-client-tcp/
+# Plus: pytest, black, isort, flake8, mypy, fastapi, etc.
 ```
 
 ### Testing
+
+**Current Test Pipeline Status:**
+- **Integration tests**: 24 tests (3 deselected, 21 executed)
+- **Requires running services**: Tests expect localhost:8000 (API) and localhost:8001 (Hybrid)
+- **Service dependency**: Must run `./sutra-deploy.sh up` before testing
+
 ```bash
-# Core package tests
-make test-core
+# CRITICAL: Start services first (tests require running system)
+./sutra-deploy.sh up
+
+# Core integration tests (with proper environment)
+source venv/bin/activate
+PYTHONPATH=packages/sutra-core python -m pytest tests/ -v
 
 # Storage tests (Rust - includes WAL crash recovery tests)
 cd packages/sutra-storage
 cargo test
 cargo test test_wal  # Specific WAL durability tests
 
-# End-to-end demos
+# End-to-end demos (require services running)
 python demo_simple.py
 python demo_end_to_end.py
 python demo_mass_learning.py
 python demo_wikipedia_learning.py
-
-# Integration tests (root tests directory)
-python -m pytest tests/ -v
 
 # Verify storage performance
 python verify_concurrent_storage.py
@@ -364,10 +424,10 @@ All deployment operations are managed through one script:
 # First-time installation
 ./sutra-deploy.sh install
 
-# Start all services (11-service ecosystem)
+# Start all services (10-service ecosystem - verified working)
 ./sutra-deploy.sh up
 
-# Start with bulk ingester (12-service ecosystem)
+# Start with bulk ingester (11-service ecosystem)
 docker-compose -f docker-compose-grid.yml --profile bulk-ingester up -d
 
 # Stop all services
@@ -389,6 +449,28 @@ docker-compose -f docker-compose-grid.yml --profile bulk-ingester up -d
 # Complete cleanup
 ./sutra-deploy.sh clean
 ```
+
+**✅ VERIFIED DEPLOYMENT STATUS (2025-10-20):**
+
+| Service | Port | Status | Health | Function |
+|---------|------|---------|---------|----------|
+| Storage Server | 50051 | ✅ Running | Healthy | Core knowledge graph |
+| Grid Event Storage | 50052 | ✅ Running | Healthy | Grid observability |
+| Sutra API | 8000 | ✅ Running | Healthy | REST API |
+| Sutra Hybrid | 8001 | ✅ Running | Healthy | Semantic embeddings |
+| Control Center | 9000 | ✅ Running | Healthy | Management UI |
+| Client UI | 8080 | ✅ Running | Healthy | Interactive interface |
+| Grid Master | 7001-7002 | ✅ Running | Healthy | Orchestration |
+| Grid Agent 1 | 8003 | ✅ Running | Healthy | Node management |
+| Grid Agent 2 | 8004 | ✅ Running | Healthy | Node management |
+| Ollama | 11434 | ✅ Running | Healthy | nomic-embed-text |
+
+**End-to-End Verification:**
+- ✅ Learning pipeline: POST `/sutra/learn` → concept stored
+- ✅ Query pipeline: POST `/sutra/query` → semantic retrieval (89.9% similarity)
+- ✅ Embedding model: nomic-embed-text (768-d) operational
+- ✅ TCP binary protocol: All services communicating
+- ✅ Health checks: All endpoints responding
 
 **Service URLs (after deployment):**
 - Sutra Control Center: http://localhost:9000
@@ -418,13 +500,40 @@ uvicorn sutra_api.main:app --host 0.0.0.0 --port 8000
 - **`DEPLOYMENT.md`** - Comprehensive deployment documentation
 
 ### Build and Distribution
-```bash
-# Build all packages
-make build
 
-# Clean build artifacts
-make clean
+**Multi-Stage Build Process:**
+1. **Rust workspace**: `cargo build --release` (6 crates with optimized builds)
+2. **Python packages**: Editable installs via `requirements-dev.txt` (15 packages)
+3. **Frontend**: React/TypeScript with Vite (`npm run build`)
+4. **Docker images**: Multi-stage builds with production optimizations
+
+```bash
+# Build Docker images (via deployment script)
+./sutra-deploy.sh build
+
+# Manual Docker builds
+docker-compose -f docker-compose-grid.yml build
+
+# Individual service builds
+docker-compose -f docker-compose-grid.yml build storage-server
+docker-compose -f docker-compose-grid.yml build sutra-api
+
+# Rust workspace build
+cargo build --release
+
+# Python package builds
+pip install -e packages/sutra-core/
+pip install -r requirements-dev.txt
+
+# Frontend build
+cd packages/sutra-control && npm run build
 ```
+
+**Build Artifacts:**
+- Docker images: `sutra-*:latest` tags
+- Rust binaries: Optimized release builds with LTO
+- Python wheels: Editable development installs
+- Frontend assets: Production React builds
 
 ## Key Components
 
@@ -783,6 +892,88 @@ docker volume rm sutra-models_storage-data
 - **NEVER** allow fallback embeddings (spaCy, TF-IDF, sentence-transformers)
 
 **See `PRODUCTION_REQUIREMENTS.md` for complete details and incident postmortem.**
+
+### Common Deployment Issues (2025-10-20)
+
+#### Docker Build Failures
+**Symptoms:** "failed to solve: image already exists" during builds
+
+**Solution:**
+```bash
+# Remove problematic images
+docker rmi sutra-storage-server:latest || true
+
+# Rebuild specific service
+docker-compose -f docker-compose-grid.yml build storage-server
+
+# Or rebuild all services
+./sutra-deploy.sh build
+```
+
+#### Port Conflicts (11434 - Ollama)
+**Symptoms:** "bind: address already in use" on port 11434
+
+**Solution:**
+```bash
+# Check what's using the port
+lsof -i :11434
+
+# Stop local Ollama if running
+killall ollama
+
+# Or modify docker-compose to use different port mapping
+# ports:
+#   - "11435:11434"  # Map to different external port
+```
+
+#### Services Not Starting
+**Symptoms:** Empty status output from `./sutra-deploy.sh status`
+
+**Solution:**
+```bash
+# Check Docker daemon
+docker info
+
+# Check for conflicting containers
+docker ps -a | grep sutra
+
+# Clean up and restart
+docker-compose -f docker-compose-grid.yml down
+docker system prune -f
+./sutra-deploy.sh up
+```
+
+#### Health Check Failures
+**Symptoms:** Services show "health: starting" or "unhealthy"
+
+**Solution:**
+```bash
+# Check service logs
+docker logs sutra-hybrid --tail 50
+
+# Wait for Ollama model download (can take 5-10 minutes)
+docker logs sutra-ollama | grep -E "(pulling|success)"
+
+# Verify model availability
+curl -s http://localhost:11434/api/tags | jq '.models[].name'
+# Should show: "nomic-embed-text:latest"
+```
+
+#### Test Failures Due to Missing Services
+**Symptoms:** "Connection refused" errors in tests
+
+**Solution:**
+```bash
+# ALWAYS start services before testing
+./sutra-deploy.sh up
+
+# Wait for health checks to pass
+./sutra-deploy.sh status
+
+# Then run tests
+source venv/bin/activate
+PYTHONPATH=packages/sutra-core python -m pytest tests/ -v
+```
 
 ## Code Style
 

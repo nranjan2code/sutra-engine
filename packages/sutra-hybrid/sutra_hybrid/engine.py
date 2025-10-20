@@ -16,6 +16,7 @@ import numpy as np
 
 # Import ReasoningEngine from sutra-core (proper architecture)
 from sutra_core import ReasoningEngine
+from sutra_core.reasoning.query import QueryProcessor
 from .nlp_adapter import OllamaNLPProcessor
 
 from .embeddings import EmbeddingProvider, OllamaEmbedding, SemanticEmbedding, TfidfEmbedding
@@ -55,10 +56,11 @@ class SutraAI:
         os.environ["SUTRA_STORAGE_SERVER"] = storage_server
         
         # PRODUCTION: Strict nomic-embed-text NLP processor, NO FALLBACKS
+        # Create BEFORE ReasoningEngine to ensure proper initialization order
         import os
         model_name = os.getenv("SUTRA_EMBEDDING_MODEL", "nomic-embed-text")
         try:
-            ollama_nlp = OllamaNLPProcessor(model_name=model_name)
+            self.ollama_nlp = OllamaNLPProcessor(model_name=model_name)
             logger.info(f"✅ PRODUCTION: Created Ollama NLP processor with {model_name}")
         except Exception as e:
             raise RuntimeError(
@@ -66,16 +68,22 @@ class SutraAI:
                 f"Ensure Ollama is running and nomic-embed-text is loaded. Error: {e}"
             )
         
-        # Initialize ReasoningEngine (which will use TCP storage client internally)
+        # Initialize ReasoningEngine with pre-created OllamaNLPProcessor
+        # This ensures QueryProcessor gets the right NLP processor from the start
         self._core = ReasoningEngine(use_rust_storage=True)
         
-        # Inject Ollama NLP processor into ReasoningEngine for vector search
-        if ollama_nlp:
-            self._core.nlp_processor = ollama_nlp
-            # Also need to update the QueryProcessor with the new nlp_processor
-            if hasattr(self._core, 'query_processor'):
-                self._core.query_processor.nlp_processor = ollama_nlp
-            logger.info("Injected Ollama NLP processor into ReasoningEngine and QueryProcessor")
+        # Set the NLP processor BEFORE initialization completes
+        self._core.nlp_processor = self.ollama_nlp
+        # Recreate QueryProcessor with the correct NLP processor
+        self._core.query_processor = QueryProcessor(
+            self._core.storage,
+            self._core.association_extractor,
+            self._core.path_finder,
+            self._core.mppa,
+            embedding_processor=None,  # Will use nlp_processor fallback (which is now OllamaNLP)
+            nlp_processor=self.ollama_nlp,
+        )
+        logger.info("Recreated QueryProcessor with OllamaNLPProcessor")
         self._embedding_provider = self._init_embeddings(enable_semantic)
         self._explainer = ExplanationGenerator()
         self._query_cache: Dict[str, ExplainableResult] = {}

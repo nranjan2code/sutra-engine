@@ -256,12 +256,12 @@ class QueryProcessor:
             except Exception as e:
                 logger.warning(f"Batch embedding failed: {e}")
 
-        # Fallback to NLP processor
+        # PRODUCTION FALLBACK: Use configured NLP processor (OllamaNLPProcessor)
         if query_embedding is None and self.nlp_processor:
             try:
                 query_embedding = self.nlp_processor.get_embedding(query)
-                logger.warning(
-                    f"Query embedding FALLBACK to spaCy: dim={len(query_embedding) if query_embedding is not None else 0}"
+                logger.debug(
+                    f"Query embedding via configured NLP processor (nomic-embed-text): dim={len(query_embedding) if query_embedding is not None else 0}"
                 )
             except Exception as e:
                 logger.warning(f"NLP embedding failed: {e}")

@@ -3,9 +3,11 @@
 
 # Core packages (installed in editable mode)
 -e packages/sutra-core/
+-e packages/sutra-hybrid/
+-e packages/sutra-api/
+-e packages/sutra-nlg/
+-e packages/sutra-storage-client-tcp/
 # TODO: Add when implemented:
-# -e packages/sutra-hybrid/
-# -e packages/sutra-api/
 # -e packages/sutra-cli/
 
 # Development tools

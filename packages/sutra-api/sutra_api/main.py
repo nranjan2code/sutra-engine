@@ -150,26 +150,31 @@ async def learn_knowledge(
     client=Depends(get_storage_client)
 ):
     """
-    Learn new knowledge (thin proxy to storage server).
+    Learn new knowledge using unified learning pipeline.
     
-    Forwards learning request to storage server via gRPC.
+    Storage server handles: embedding generation + association extraction + storage.
+    This ensures consistency across all services.
     """
     try:
-        # Simple proxy: forward to storage server
-        # TODO: Generate embedding if needed, or let server do it
-        sequence = client.learn_concept(
-            concept_id=request.content[:50],  # Use content hash as ID
+        # Use unified learning pipeline (V2)
+        concept_id = client.learn_concept_v2(
             content=request.content,
-            embedding=None,  # Let server handle embeddings
-            strength=1.0,
-            confidence=1.0,
+            options={
+                "generate_embedding": True,
+                "extract_associations": True,
+                "strength": 1.0,
+                "confidence": 1.0,
+                "source": request.source,
+            }
         )
         
+        logger.info(f"✅ Learned concept {concept_id[:8]} via unified pipeline")
+        
         return LearnResponse(
-            concept_id=f"concept_{sequence}",
-            message="Concept learned successfully",
+            concept_id=concept_id,
+            message="Concept learned successfully via unified pipeline",
             concepts_created=1,
-            associations_created=0,
+            associations_created=0,  # TODO: Get actual count from storage
         )
     except Exception as e:
         logger.error(f"Learning failed: {e}")
@@ -191,30 +196,33 @@ async def batch_learn(
     client=Depends(get_storage_client)
 ):
     """
-    Learn multiple knowledge items in batch.
+    Learn multiple knowledge items in batch using optimized pipeline.
     
-    More efficient than calling /learn multiple times.
+    Uses storage server's batch processing for better performance.
+    Includes embedding generation and association extraction for all items.
     """
     try:
-        results = []
-        for item in request.items:
-            sequence = client.learn_concept(
-                concept_id=item.content[:50],
-                content=item.content,
-                embedding=None,
-                strength=1.0,
-                confidence=1.0,
-            )
-            results.append({
-                "concept_id": f"concept_{sequence}",
-                "status": "success"
-            })
+        # Extract contents from batch request
+        contents = [item.content for item in request.items]
+        
+        # Use unified batch learning pipeline (V2)
+        concept_ids = client.learn_batch_v2(
+            contents=contents,
+            options={
+                "generate_embedding": True,
+                "extract_associations": True,
+                "strength": 1.0,
+                "confidence": 1.0,
+            }
+        )
+        
+        logger.info(f"✅ Batch learned {len(concept_ids)} concepts via unified pipeline")
         
         return BatchLearnResponse(
-            total_items=len(request.items),
-            successful=len(results),
-            failed=0,
-            results=results,
+            concept_ids=concept_ids,
+            total_concepts=len(concept_ids),
+            total_associations=0,  # TODO: Get actual count from storage
+            message=f"Successfully learned {len(concept_ids)} concepts in batch",
         )
     except Exception as e:
         logger.error(f"Batch learning failed: {e}")

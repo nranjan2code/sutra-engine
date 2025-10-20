@@ -68,11 +68,7 @@ tempfile = "3.8"                   # Temporary directories for testing
 name = "storage-server"
 path = "src/bin/storage_server.rs"
 
-[profile.release]
-opt-level = 3
-lto = true                         # Link-time optimization
-codegen-units = 1                  # Better optimization
-panic = 'abort'                    # Smaller binary
+# Profiles are configured at the workspace root
 
 # TODO: Add benchmarks later
 # [[bench]]

@@ -31,7 +31,7 @@ impl Default for EmbeddingConfig {
             ollama_url: std::env::var("SUTRA_OLLAMA_URL")
                 .unwrap_or_else(|_| "http://host.docker.internal:11434".to_string()),
             default_model: std::env::var("SUTRA_EMBEDDING_MODEL")
-                .unwrap_or_else(|_| "granite-embedding:30m".to_string()),
+                .unwrap_or_else(|_| "nomic-embed-text".to_string()),
             timeout_secs: std::env::var("SUTRA_EMBEDDING_TIMEOUT_SEC")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -313,7 +313,7 @@ mod tests {
         // This will fail if Ollama isn't running, which is expected
         if let Ok(embedding) = result {
             assert!(!embedding.is_empty());
-            assert_eq!(embedding.len(), 768); // granite-embedding dimension
+            assert_eq!(embedding.len(), 768); // nomic-embed-text dimension
         }
     }
 }
