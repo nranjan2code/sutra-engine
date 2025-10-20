@@ -17,9 +17,9 @@ import numpy as np
 # Import ReasoningEngine from sutra-core (proper architecture)
 from sutra_core import ReasoningEngine
 from sutra_core.reasoning.query import QueryProcessor
-from .nlp_adapter import OllamaNLPProcessor
+# Using EmbeddingServiceProvider for all embedding operations
 
-from .embeddings import EmbeddingProvider, OllamaEmbedding, SemanticEmbedding, TfidfEmbedding
+from .embeddings import EmbeddingProvider, EmbeddingServiceProvider, SemanticEmbedding, TfidfEmbedding
 from .explanation import ExplanationGenerator
 from .results import (
     AuditTrail,
@@ -55,35 +55,36 @@ class SutraAI:
         os.environ["SUTRA_STORAGE_MODE"] = "server"
         os.environ["SUTRA_STORAGE_SERVER"] = storage_server
         
-        # PRODUCTION: Strict nomic-embed-text NLP processor, NO FALLBACKS
+        # PRODUCTION: Initialize embedding service (ONLY option)
         # Create BEFORE ReasoningEngine to ensure proper initialization order
         import os
-        model_name = os.getenv("SUTRA_EMBEDDING_MODEL", "nomic-embed-text")
+        service_url = os.getenv("SUTRA_EMBEDDING_SERVICE_URL", "http://sutra-embedding-service:8888")
+        
         try:
-            self.ollama_nlp = OllamaNLPProcessor(model_name=model_name)
-            logger.info(f"✅ PRODUCTION: Created Ollama NLP processor with {model_name}")
+            self.embedding_processor = EmbeddingServiceProvider(service_url=service_url)
+            logger.info(f"✅ PRODUCTION: Created EmbeddingServiceProvider at {service_url}")
         except Exception as e:
             raise RuntimeError(
-                f"PRODUCTION FAILURE: Cannot initialize Ollama NLP processor with {model_name}. "
-                f"Ensure Ollama is running and nomic-embed-text is loaded. Error: {e}"
+                f"PRODUCTION FAILURE: Cannot initialize embedding service at {service_url}. "
+                f"Ensure service is running and healthy. Error: {e}"
             )
         
-        # Initialize ReasoningEngine with pre-created OllamaNLPProcessor
-        # This ensures QueryProcessor gets the right NLP processor from the start
+        # Initialize ReasoningEngine with embedding service processor
+        # This ensures QueryProcessor gets the right embedding processor from the start
         self._core = ReasoningEngine(use_rust_storage=True)
         
-        # Set the NLP processor BEFORE initialization completes
-        self._core.nlp_processor = self.ollama_nlp
-        # Recreate QueryProcessor with the correct NLP processor
+        # Set the embedding processor BEFORE initialization completes
+        self._core.embedding_processor = self.embedding_processor
+        # Recreate QueryProcessor with the embedding service processor
         self._core.query_processor = QueryProcessor(
             self._core.storage,
             self._core.association_extractor,
             self._core.path_finder,
             self._core.mppa,
-            embedding_processor=None,  # Will use nlp_processor fallback (which is now OllamaNLP)
-            nlp_processor=self.ollama_nlp,
+            embedding_processor=self.embedding_processor,
+            nlp_processor=None,
         )
-        logger.info("Recreated QueryProcessor with OllamaNLPProcessor")
+        logger.info("Recreated QueryProcessor with EmbeddingServiceProvider")
         self._embedding_provider = self._init_embeddings(enable_semantic)
         self._explainer = ExplanationGenerator()
         self._query_cache: Dict[str, ExplainableResult] = {}
@@ -93,30 +94,16 @@ class SutraAI:
         )
 
     def _init_embeddings(self, use_semantic: bool) -> EmbeddingProvider:
-        # PRODUCTION: Strict nomic-embed-text requirement, NO FALLBACKS
-        import os
-        model_name = os.getenv("SUTRA_EMBEDDING_MODEL", "nomic-embed-text")
-        
-        if model_name != "nomic-embed-text":
-            raise ValueError(
-                f"PRODUCTION REQUIREMENT: Only nomic-embed-text (768-d) is supported. "
-                f"Set SUTRA_EMBEDDING_MODEL=nomic-embed-text. Current: {model_name}"
-            )
-        
+        # PRODUCTION: Use embedding service for consistency
         if not use_semantic:
             raise ValueError(
                 "PRODUCTION REQUIREMENT: Semantic embeddings must be enabled. "
                 "Set SUTRA_USE_SEMANTIC_EMBEDDINGS=true"
             )
         
-        try:
-            logger.info(f"🔧 PRODUCTION: Initializing Ollama with {model_name} (768-d, NO FALLBACKS)")
-            return OllamaEmbedding(model_name=model_name)
-        except (ConnectionError, RuntimeError) as e:
-            raise RuntimeError(
-                f"PRODUCTION FAILURE: Cannot initialize nomic-embed-text embeddings. "
-                f"Ensure Ollama is running with nomic-embed-text model loaded. Error: {e}"
-            )
+        # Return the same embedding service provider for consistency
+        logger.info("🔧 PRODUCTION: Using EmbeddingServiceProvider (nomic-embed-text-v1.5, 768-d)")
+        return self.embedding_processor
 
     def _content_id(self, content: str) -> str:
         return hashlib.sha1(content.encode("utf-8")).hexdigest()[:16]

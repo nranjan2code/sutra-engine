@@ -2,7 +2,7 @@
 # Client -> Python Gateway -> gRPC -> Internal Services
 
 # Stage 1: Build React frontend
-FROM node:18-alpine AS frontend-builder
+FROM sutra-base-node:latest AS frontend-builder
 
 WORKDIR /build
 
@@ -14,19 +14,14 @@ COPY packages/sutra-control/index.html ./
 COPY packages/sutra-control/src/ ./src/
 
 # Install dependencies and build
-RUN npm ci --silent
+RUN npm ci --silent --include=dev
 RUN npm run build
 
 # Stage 2: Python backend with built React app
-FROM python:3.11-slim
+FROM sutra-base-python:latest
 
-# Install system dependencies  
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    gcc \
-    g++ \
-    && useradd --create-home --uid 1000 sutra \
-    && rm -rf /var/lib/apt/lists/*
+# System dependencies already in base image
+RUN adduser --disabled-password --gecos '' --uid 1000 sutra
 
 WORKDIR /app
 

@@ -256,7 +256,7 @@ class QueryProcessor:
             except Exception as e:
                 logger.warning(f"Batch embedding failed: {e}")
 
-        # PRODUCTION FALLBACK: Use configured NLP processor (OllamaNLPProcessor)
+                # PRODUCTION: Use embedding processor
         if query_embedding is None and self.nlp_processor:
             try:
                 query_embedding = self.nlp_processor.get_embedding(query)

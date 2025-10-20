@@ -1,8 +1,9 @@
-///! Embedding client for Ollama integration
+///! Embedding client for Sutra Embedding Service integration
 ///!
-///! Production-grade HTTP client for generating embeddings via Ollama.
-///! Supports both single and batch embedding generation with retry logic,
-///! timeout handling, and comprehensive error reporting.
+///! Production-grade HTTP client for generating embeddings via dedicated
+///! embedding service using nomic-embed-text-v1.5. Supports both single and 
+///! batch embedding generation with retry logic, timeout handling, and 
+///! comprehensive error reporting.
 
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode};
@@ -13,10 +14,8 @@ use tracing::{debug, info, warn, error};
 /// Configuration for embedding client
 #[derive(Debug, Clone)]
 pub struct EmbeddingConfig {
-    /// Ollama server URL
-    pub ollama_url: String,
-    /// Default embedding model
-    pub default_model: String,
+    /// Embedding service URL
+    pub service_url: String,
     /// Request timeout in seconds
     pub timeout_secs: u64,
     /// Maximum retries on failure
@@ -28,10 +27,8 @@ pub struct EmbeddingConfig {
 impl Default for EmbeddingConfig {
     fn default() -> Self {
         Self {
-            ollama_url: std::env::var("SUTRA_OLLAMA_URL")
-                .unwrap_or_else(|_| "http://host.docker.internal:11434".to_string()),
-            default_model: std::env::var("SUTRA_EMBEDDING_MODEL")
-                .unwrap_or_else(|_| "nomic-embed-text".to_string()),
+            service_url: std::env::var("SUTRA_EMBEDDING_SERVICE_URL")
+                .unwrap_or_else(|_| "http://sutra-embedding-service:8888".to_string()),
             timeout_secs: std::env::var("SUTRA_EMBEDDING_TIMEOUT_SEC")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -42,17 +39,21 @@ impl Default for EmbeddingConfig {
     }
 }
 
-/// Request format for Ollama embedding API
+/// Request format for embedding service API
 #[derive(Serialize, Debug)]
 struct EmbeddingRequest {
-    model: String,
-    prompt: String,
+    texts: Vec<String>,
+    normalize: bool,
 }
 
-/// Response format from Ollama embedding API
+/// Response format from embedding service API
 #[derive(Deserialize, Debug)]
 struct EmbeddingResponse {
-    embedding: Vec<f32>,
+    embeddings: Vec<Vec<f32>>,
+    dimension: u32,
+    model: String,
+    processing_time_ms: f64,
+    cached_count: u32,
 }
 
 /// Embedding client for generating vector embeddings
@@ -70,8 +71,8 @@ impl EmbeddingClient {
             .context("Failed to create HTTP client")?;
             
         info!(
-            "Initialized EmbeddingClient: url={}, model={}, timeout={}s",
-            config.ollama_url, config.default_model, config.timeout_secs
+            "Initialized EmbeddingClient: service_url={}, timeout={}s",
+            config.service_url, config.timeout_secs
         );
         
         Ok(Self { config, client })
@@ -86,57 +87,27 @@ impl EmbeddingClient {
     ///
     /// # Arguments
     /// * `text` - Text to generate embedding for
-    /// * `model` - Optional model override (uses default if None)
+    /// * `normalize` - Whether to L2 normalize the embedding
     ///
     /// # Returns
     /// * `Ok(Vec<f32>)` - 768-dimensional embedding vector
     /// * `Err` - If generation fails after all retries
-    pub async fn generate(&self, text: &str, model: Option<&str>) -> Result<Vec<f32>> {
-        let model = model.unwrap_or(&self.config.default_model);
+    pub async fn generate(&self, text: &str, normalize: bool) -> Result<Vec<f32>> {
+        let embeddings = self.generate_batch(&[text.to_string()], normalize).await;
         
-        debug!("Generating embedding: text_len={}, model={}", text.len(), model);
-        
-        let mut last_error = None;
-        
-        for attempt in 0..=self.config.max_retries {
-            match self.try_generate(text, model).await {
-                Ok(embedding) => {
-                    debug!("Generated embedding: dim={}, attempt={}", embedding.len(), attempt + 1);
-                    return Ok(embedding);
-                }
-                Err(e) => {
-                    last_error = Some(e);
-                    
-                    if attempt < self.config.max_retries {
-                        let delay = Duration::from_millis(
-                            self.config.retry_delay_ms * (2_u64.pow(attempt as u32))
-                        );
-                        warn!(
-                            "Embedding generation failed (attempt {}/{}), retrying in {:?}",
-                            attempt + 1,
-                            self.config.max_retries + 1,
-                            delay
-                        );
-                        tokio::time::sleep(delay).await;
-                    }
-                }
-            }
-        }
-        
-        Err(last_error.unwrap().context(format!(
-            "Failed to generate embedding after {} attempts",
-            self.config.max_retries + 1
-        )))
+        embeddings.into_iter().next()
+            .flatten()
+            .ok_or_else(|| anyhow::anyhow!("No embedding returned for text"))
     }
     
-    /// Internal method to attempt embedding generation (no retries)
-    async fn try_generate(&self, text: &str, model: &str) -> Result<Vec<f32>> {
+    /// Internal method to attempt embedding generation with retry logic
+    async fn try_generate_batch(&self, texts: &[String], normalize: bool) -> Result<Vec<Vec<f32>>> {
         let request = EmbeddingRequest {
-            model: model.to_string(),
-            prompt: text.to_string(),
+            texts: texts.to_vec(),
+            normalize,
         };
         
-        let url = format!("{}/api/embeddings", self.config.ollama_url);
+        let url = format!("{}/embed", self.config.service_url);
         
         let response = self.client
             .post(&url)
@@ -152,24 +123,42 @@ impl EmbeddingClient {
                     .await
                     .context("Failed to parse embedding response")?;
                     
-                // Validate embedding dimension
-                if embedding_response.embedding.is_empty() {
-                    return Err(anyhow::anyhow!("Received empty embedding vector"));
+                // Validate embedding dimensions
+                if embedding_response.embeddings.is_empty() {
+                    return Err(anyhow::anyhow!("Received empty embedding response"));
                 }
                 
-                Ok(embedding_response.embedding)
+                // Validate dimension consistency
+                if embedding_response.dimension != 768 {
+                    return Err(anyhow::anyhow!(
+                        "Expected 768-dimensional embeddings, got {}",
+                        embedding_response.dimension
+                    ));
+                }
+                
+                debug!(
+                    "Generated {} embeddings in {:.2}ms ({} cached)",
+                    embedding_response.embeddings.len(),
+                    embedding_response.processing_time_ms,
+                    embedding_response.cached_count
+                );
+                
+                Ok(embedding_response.embeddings)
             }
-            StatusCode::NOT_FOUND => {
+            StatusCode::UNPROCESSABLE_ENTITY => {
+                let error_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "<failed to read error>".to_string());
                 Err(anyhow::anyhow!(
-                    "Model '{}' not found. Pull it with: ollama pull {}",
-                    model,
-                    model
+                    "Invalid request format: {}",
+                    error_text
                 ))
             }
             StatusCode::SERVICE_UNAVAILABLE => {
                 Err(anyhow::anyhow!(
-                    "Ollama service unavailable at {}",
-                    self.config.ollama_url
+                    "Embedding service unavailable at {}",
+                    self.config.service_url
                 ))
             }
             status => {
@@ -178,7 +167,7 @@ impl EmbeddingClient {
                     .await
                     .unwrap_or_else(|_| "<failed to read error>".to_string());
                 Err(anyhow::anyhow!(
-                    "Ollama returned status {}: {}",
+                    "Embedding service returned status {}: {}",
                     status,
                     error_text
                 ))
@@ -190,95 +179,103 @@ impl EmbeddingClient {
     ///
     /// # Arguments
     /// * `texts` - Slice of texts to generate embeddings for
-    /// * `model` - Optional model override (uses default if None)
+    /// * `normalize` - Whether to L2 normalize embeddings
     ///
     /// # Returns
     /// * Vector of Option<Vec<f32>> - Some(embedding) if successful, None if failed
     ///
-    /// Note: Individual failures don't fail the entire batch
+    /// Note: Uses intelligent batching with retry logic
     pub async fn generate_batch(
         &self,
         texts: &[String],
-        model: Option<&str>,
+        normalize: bool,
     ) -> Vec<Option<Vec<f32>>> {
+        if texts.is_empty() {
+            return Vec::new();
+        }
+        
         info!("Batch embedding generation: {} texts", texts.len());
         
-        let mut embeddings = Vec::with_capacity(texts.len());
-        let mut success_count = 0;
-        let mut failure_count = 0;
+        let mut last_error = None;
         
-        // TODO: Optimize with concurrent requests when Ollama supports it
-        // For now, process sequentially to avoid overwhelming the service
-        for (i, text) in texts.iter().enumerate() {
-            match self.generate(text, model).await {
-                Ok(embedding) => {
-                    embeddings.push(Some(embedding));
-                    success_count += 1;
-                    
-                    if (i + 1) % 100 == 0 {
-                        debug!("Batch progress: {}/{} completed", i + 1, texts.len());
-                    }
+        for attempt in 0..=self.config.max_retries {
+            match self.try_generate_batch(texts, normalize).await {
+                Ok(embeddings) => {
+                    info!(
+                        "Batch embedding complete: {}/{} successful (attempt {})",
+                        embeddings.len(),
+                        texts.len(),
+                        attempt + 1
+                    );
+                    return embeddings.into_iter().map(Some).collect();
                 }
                 Err(e) => {
-                    warn!("Failed to generate embedding for text {}: {}", i, e);
-                    embeddings.push(None);
-                    failure_count += 1;
+                    last_error = Some(e);
+                    
+                    if attempt < self.config.max_retries {
+                        let delay = Duration::from_millis(
+                            self.config.retry_delay_ms * (2_u64.pow(attempt as u32))
+                        );
+                        warn!(
+                            "Batch embedding failed (attempt {}/{}), retrying in {:?}: {}",
+                            attempt + 1,
+                            self.config.max_retries + 1,
+                            delay,
+                            last_error.as_ref().unwrap()
+                        );
+                        tokio::time::sleep(delay).await;
+                    }
                 }
             }
         }
         
-        info!(
-            "Batch embedding complete: {}/{} successful, {} failed",
-            success_count,
-            texts.len(),
-            failure_count
+        error!(
+            "Batch embedding failed after {} attempts: {}",
+            self.config.max_retries + 1,
+            last_error.as_ref().unwrap()
         );
         
-        embeddings
+        // Return None for all texts on complete failure
+        vec![None; texts.len()]
     }
     
-    /// Check if Ollama service is available and model is loaded
-    pub async fn health_check(&self, model: Option<&str>) -> Result<bool> {
-        let model = model.unwrap_or(&self.config.default_model);
+    /// Check if embedding service is available and healthy
+    pub async fn health_check(&self) -> Result<bool> {
+        debug!("Health check for embedding service");
         
-        debug!("Health check: model={}", model);
-        
-        // Try to list models
-        let url = format!("{}/api/tags", self.config.ollama_url);
+        let url = format!("{}/health", self.config.service_url);
         
         match self.client.get(&url).send().await {
             Ok(response) => {
                 if response.status().is_success() {
-                    // Check if specific model is available
                     #[derive(Deserialize)]
-                    struct ModelList {
-                        models: Vec<ModelInfo>,
+                    struct HealthResponse {
+                        status: String,
+                        model_loaded: bool,
                     }
                     
-                    #[derive(Deserialize)]
-                    struct ModelInfo {
-                        name: String,
-                    }
-                    
-                    if let Ok(model_list) = response.json::<ModelList>().await {
-                        let available = model_list.models.iter()
-                            .any(|m| m.name.starts_with(model));
+                    if let Ok(health) = response.json::<HealthResponse>().await {
+                        let is_healthy = health.status == "healthy" && health.model_loaded;
                         
-                        if !available {
-                            warn!("Model '{}' not found in Ollama", model);
+                        if !is_healthy {
+                            warn!("Embedding service unhealthy: status={}, model_loaded={}", 
+                                health.status, health.model_loaded);
+                        } else {
+                            debug!("Embedding service healthy");
                         }
                         
-                        Ok(available)
+                        Ok(is_healthy)
                     } else {
-                        Ok(true) // Service is up, model check failed
+                        warn!("Failed to parse health response");
+                        Ok(false)
                     }
                 } else {
-                    error!("Ollama health check failed: status={}", response.status());
+                    error!("Embedding service health check failed: status={}", response.status());
                     Ok(false)
                 }
             }
             Err(e) => {
-                error!("Failed to connect to Ollama at {}: {}", self.config.ollama_url, e);
+                error!("Failed to connect to embedding service at {}: {}", self.config.service_url, e);
                 Ok(false)
             }
         }
@@ -292,7 +289,7 @@ mod tests {
     #[test]
     fn test_config_defaults() {
         let config = EmbeddingConfig::default();
-        assert!(!config.ollama_url.is_empty());
+        assert!(!config.service_url.is_empty());
         assert!(!config.default_model.is_empty());
         assert!(config.timeout_secs > 0);
     }
@@ -303,17 +300,17 @@ mod tests {
         assert!(client.is_ok());
     }
     
-    // Integration test (requires Ollama running)
+    // Integration test (requires embedding service running)
     #[tokio::test]
     #[ignore] // Only run with --ignored flag
     async fn test_generate_embedding() {
         let client = EmbeddingClient::with_defaults().unwrap();
-        let result = client.generate("Test text", None).await;
+        let result = client.generate("Test text", true).await;
         
-        // This will fail if Ollama isn't running, which is expected
+        // This will fail if embedding service isn't running, which is expected
         if let Ok(embedding) = result {
             assert!(!embedding.is_empty());
-            assert_eq!(embedding.len(), 768); // nomic-embed-text dimension
+            assert_eq!(embedding.len(), 768); // nomic-embed-text-v1.5 dimension
         }
     }
 }

@@ -1,12 +1,8 @@
 # Dockerfile for Sutra Core Python Package
-FROM python:3.11-alpine
+FROM sutra-base-python:latest
 
-# Install system dependencies  
-RUN apk add --no-cache \
-    curl \
-    gcc \
-    musl-dev \
-    && adduser --disabled-password --gecos '' --uid 1000 sutra
+# System dependencies already in base image
+RUN adduser --disabled-password --gecos '' --uid 1000 sutra
 
 WORKDIR /app
 

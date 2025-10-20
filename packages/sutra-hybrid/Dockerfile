@@ -2,14 +2,11 @@
 # Build from monorepo root: docker build -f packages/sutra-hybrid/Dockerfile .
 
 # Stage 1: Builder
-FROM python:3.11-slim AS builder
+FROM sutra-base-python:latest AS builder
 
 WORKDIR /build
 
-# Install minimal build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ protobuf-compiler \
-    && rm -rf /var/lib/apt/lists/*
+# Build dependencies already in base image
 
 # Copy required packages
 COPY packages/sutra-storage-client-tcp ./packages/sutra-storage-client-tcp
@@ -39,18 +36,14 @@ RUN pip install --no-cache-dir typing_extensions>=4.12.0 && \
     find /root/.local -type f -name "*.pyc" -delete || true
 
 # Stage 2: Runtime
-FROM python:3.11-slim
+FROM sutra-base-python:latest
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+# Runtime dependencies already in base image
 
-# Install typing_extensions system-wide
-RUN pip install --no-cache-dir typing_extensions>=4.12.0 msgpack>=1.0.0
+# Python dependencies in base image
 
 # Create non-root user
-RUN useradd -m -u 1000 sutra
+RUN adduser -D -u 1000 sutra
 
 WORKDIR /app
 

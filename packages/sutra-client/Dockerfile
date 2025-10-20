@@ -1,6 +1,6 @@
 # Multi-stage build for Sutra Client
 # Stage 1: Builder
-FROM node:18-alpine AS builder
+FROM sutra-base-node:latest AS builder
 
 WORKDIR /build
 
@@ -17,10 +17,9 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Runtime with nginx
-FROM nginx:1.25-alpine
+FROM sutra-base-nginx:latest
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
+# curl already in base image
 
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/nginx.conf
@@ -29,7 +28,8 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY --from=builder /build/dist /usr/share/nginx/html
 
 # Create nginx user directories
-RUN chown -R nginx:nginx /usr/share/nginx/html && \
+RUN mkdir -p /etc/nginx/conf.d && \
+    chown -R nginx:nginx /usr/share/nginx/html && \
     chown -R nginx:nginx /var/cache/nginx && \
     chown -R nginx:nginx /var/log/nginx && \
     chown -R nginx:nginx /etc/nginx/conf.d

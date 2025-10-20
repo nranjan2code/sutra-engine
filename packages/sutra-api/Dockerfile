@@ -2,12 +2,11 @@
 # Build from monorepo root: docker build -f packages/sutra-api/Dockerfile .
 
 # Stage 1: Builder
-FROM python:3.11-alpine AS builder
+FROM sutra-base-python:latest AS builder
 
 WORKDIR /build
 
-# Install build tools
-RUN apk add --no-cache gcc musl-dev libffi-dev
+# Build tools already in base image
 
 # Copy only storage-client package
 COPY packages/sutra-storage-client-tcp ./packages/sutra-storage-client-tcp
@@ -29,13 +28,11 @@ RUN pip install --no-cache-dir --user -r api-requirements.txt && \
     find /root/.local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 # Stage 2: Runtime
-FROM python:3.11-alpine
+FROM sutra-base-python:latest
 
-# Install runtime dependencies (minimal!)
-RUN apk add --no-cache curl libstdc++
+# Runtime dependencies already in base image
 
-# Install critical Python deps system-wide to avoid user-site issues
-RUN pip install --no-cache-dir typing_extensions>=4.12.0 msgpack>=1.0.0
+# Python dependencies in base image
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' --uid 1000 sutra

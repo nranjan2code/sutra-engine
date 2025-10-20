@@ -1,9 +1,8 @@
 # Multi-stage build for Sutra Grid Agent
 # Stage 1: Builder
-FROM rustlang/rust:nightly-alpine AS builder
+FROM sutra-base-rust:latest AS builder
 
-# Install build dependencies
-RUN apk add --no-cache musl-dev
+# Build dependencies already in base image
 
 WORKDIR /build
 
@@ -30,10 +29,9 @@ WORKDIR /build/sutra-grid-agent
 RUN cargo build --release --bin sutra-grid-agent
 
 # Stage 2: Runtime
-FROM alpine:3.19
+FROM sutra-base-runtime:latest
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates libgcc curl procps netcat-openbsd
+# Runtime dependencies already in base image
 
 # Create non-root user
 RUN addgroup -g 1000 sutra && \

@@ -57,7 +57,7 @@ impl LearningPipeline {
 
         // Step 1: Embedding
         let embedding_opt = if options.generate_embedding {
-            match self.embedding_client.generate(content, options.embedding_model.as_deref()).await {
+            match self.embedding_client.generate(content, true).await {
                 Ok(vec) => Some(vec),
                 Err(e) => { warn!("Embedding failed, continuing without: {}", e); None }
             }
@@ -117,7 +117,7 @@ impl LearningPipeline {
 
         // Batch embeddings first to reduce overhead
         let embeddings: Vec<Option<Vec<f32>>> = if options.generate_embedding {
-            self.embedding_client.generate_batch(contents, options.embedding_model.as_deref()).await
+            self.embedding_client.generate_batch(contents, true).await
         } else {
             vec![None; contents.len()]
         };

@@ -1,9 +1,8 @@
 # Multi-stage build for Sutra Storage Server
 # Stage 1: Builder
-FROM rustlang/rust:nightly-alpine AS builder
+FROM sutra-base-rust:latest AS builder
 
-# Install build dependencies
-RUN apk add --no-cache musl-dev protobuf-dev
+# Build dependencies already in base image
 
 WORKDIR /build
 
@@ -16,10 +15,9 @@ COPY packages/sutra-storage/src ./src
 RUN cargo build --release --bin storage_server_simple
 
 # Stage 2: Runtime
-FROM alpine:3.19
+FROM sutra-base-runtime:latest
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates libgcc
+# Runtime dependencies already in base image
 
 # Create non-root user
 RUN addgroup -g 1000 sutra && \

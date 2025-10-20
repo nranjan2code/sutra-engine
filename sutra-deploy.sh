@@ -42,14 +42,14 @@ print_header() {
 
 # Command functions
 cmd_build() {
-    log_info "Building all Docker images..."
+    log_info "Building self-contained Docker images..."
     
-    docker-compose -f $COMPOSE_FILE build --parallel
+    ./build.sh
     
     log_success "All images built successfully!"
     echo ""
     log_info "Built images:"
-    docker images | grep -E "(sutra|REPOSITORY)" | head -20
+    docker images | grep -E "(sutra-|sutra-base)" | head -20
 }
 
 cmd_up() {
@@ -61,6 +61,83 @@ cmd_up() {
     log_success "Sutra Grid system started!"
     echo ""
     cmd_status
+    
+    # Validate critical services
+    echo ""
+    log_info "Validating critical services..."
+    if validate_embedding_service && validate_hybrid_service; then
+        log_success "All critical services validated successfully!"
+    else
+        log_warning "Some validations failed. Check service logs for details."
+        log_info "Run './sutra-deploy.sh validate' for detailed health checks."
+    fi
+}
+
+cmd_validate() {
+    log_info "Running comprehensive service validation..."
+    echo ""
+    
+    local failures=0
+    
+    # Check if all containers are running
+    log_info "Checking container status..."
+    local containers=("sutra-storage" "sutra-embedding-service" "sutra-hybrid" "sutra-api" "sutra-control" "sutra-client" "sutra-grid-master" "sutra-grid-events" "sutra-grid-agent-1" "sutra-grid-agent-2")
+    
+    for container in "${containers[@]}"; do
+        if docker ps | grep -q "$container"; then
+            log_success "$container: Running"
+        else
+            log_error "$container: Not running"
+            ((failures++))
+        fi
+    done
+    
+    echo ""
+    
+    # Validate embedding service
+    if ! validate_embedding_service; then
+        ((failures++))
+    fi
+    echo ""
+    
+    # Validate hybrid service
+    if ! validate_hybrid_service; then
+        ((failures++))
+    fi
+    echo ""
+    
+    # Test key endpoints
+    log_info "Testing service endpoints..."
+    local endpoints=(
+        "http://localhost:8000/health:API"
+        "http://localhost:8001/ping:Hybrid"
+        "http://localhost:8888/health:Embedding"
+        "http://localhost:9000/health:Control"
+        "http://localhost:7001/health:Grid Master"
+    )
+    
+    for endpoint in "${endpoints[@]}"; do
+        local url="${endpoint%:*}"
+        local name="${endpoint#*:}"
+        if curl -f -s "$url" > /dev/null 2>&1; then
+            log_success "$name endpoint: Responding"
+        else
+            log_error "$name endpoint: Not responding"
+            ((failures++))
+        fi
+    done
+    
+    echo ""
+    
+    # Final summary
+    if [ $failures -eq 0 ]; then
+        log_success "All validation checks passed! System is production-ready."
+        return 0
+    else
+        log_error "$failures validation checks failed. System is NOT production-ready."
+        log_info "Check service logs and fix issues before deployment."
+        return 1
+    fi
 }
 
 cmd_down() {
@@ -90,9 +167,99 @@ cmd_status() {
     echo "  • Sutra Client (UI):    http://localhost:8080"
     echo "  • Sutra API:            http://localhost:8000"
     echo "  • Sutra Hybrid API:     http://localhost:8001"
+    echo "  • Sutra Embedding Service: http://localhost:8888"
     echo "  • Grid Master (HTTP):   http://localhost:7001"
     echo "  • Grid Master (gRPC):   localhost:7002"
     echo "  • Storage Server:       localhost:50051"
+}
+
+validate_embedding_service() {
+    log_info "Validating critical embedding service..."
+    
+    # Check if container is running
+    if ! docker ps | grep -q "sutra-embedding-service"; then
+        log_error "Embedding service container not running!"
+        return 1
+    fi
+    
+    # Wait for service to be ready (up to 90 seconds)
+    log_info "Waiting for embedding service to load model..."
+    for i in {1..18}; do
+        if curl -f -s http://localhost:8888/health > /dev/null 2>&1; then
+            break
+        fi
+        echo -n "."
+        sleep 5
+    done
+    echo ""
+    
+    # Test health endpoint
+    if ! curl -f -s http://localhost:8888/health > /dev/null 2>&1; then
+        log_error "Embedding service health check failed!"
+        log_info "Checking logs:"
+        docker logs sutra-embedding-service --tail 10
+        return 1
+    fi
+    
+    # Validate model and dimension
+    local health_response
+    health_response=$(curl -s http://localhost:8888/health 2>/dev/null || echo "{}")
+    
+    local model_loaded
+    local dimension
+    model_loaded=$(echo "$health_response" | jq -r '.model_loaded // false' 2>/dev/null || echo "false")
+    dimension=$(echo "$health_response" | jq -r '.dimension // 0' 2>/dev/null || echo "0")
+    
+    if [ "$model_loaded" != "true" ]; then
+        log_error "Embedding model not loaded!"
+        return 1
+    fi
+    
+    if [ "$dimension" != "768" ]; then
+        log_error "Wrong embedding dimension: $dimension (expected 768)"
+        return 1
+    fi
+    
+    # Test embedding generation
+    local embed_response
+    embed_response=$(curl -s -X POST http://localhost:8888/embed \
+        -H "Content-Type: application/json" \
+        -d '{"texts": ["test"], "normalize": true}' 2>/dev/null || echo "{}")
+    
+    local embed_length
+    embed_length=$(echo "$embed_response" | jq -r '.embeddings[0] | length' 2>/dev/null || echo "0")
+    
+    if [ "$embed_length" != "768" ]; then
+        log_error "Embedding generation failed (got $embed_length dimensions)"
+        return 1
+    fi
+    
+    log_success "Embedding service fully operational (nomic-embed-text-v1.5, 768-d)"
+    return 0
+}
+
+validate_hybrid_service() {
+    log_info "Validating hybrid service connection to embedding service..."
+    
+    # Check if hybrid is healthy (not restarting)
+    local hybrid_status
+    hybrid_status=$(docker ps --format "table {{.Names}}\t{{.Status}}" | grep sutra-hybrid | awk '{print $2}' || echo "Down")
+    
+    if echo "$hybrid_status" | grep -q "Restarting"; then
+        log_error "Hybrid service is restarting! Check embedding service connection."
+        log_info "Recent hybrid logs:"
+        docker logs sutra-hybrid --tail 5 2>&1 | grep -E "(embedding|PRODUCTION)"
+        return 1
+    fi
+    
+    # Test hybrid ping endpoint
+    if ! curl -f -s http://localhost:8001/ping > /dev/null 2>&1; then
+        log_warning "Hybrid service ping endpoint not responding"
+        return 1
+    fi
+    
+    log_success "Hybrid service operational and connected to embedding service"
+    return 0
 }
 
 cmd_logs() {
@@ -229,6 +396,7 @@ cmd_help() {
     echo "  down         - Stop all services"
     echo "  restart      - Restart all services"
     echo "  status       - Show service status and URLs"
+    echo "  validate     - Run comprehensive health checks (including embedding service)"
     echo "  logs [svc]   - Show logs (optionally for specific service)"
     echo "  clean        - Remove all containers, volumes, and images"
     echo "  maintenance  - Interactive maintenance menu"
@@ -237,6 +405,7 @@ cmd_help() {
     echo "Examples:"
     echo "  ./sutra-deploy.sh install         # First-time setup"
     echo "  ./sutra-deploy.sh up              # Start services"
+    echo "  ./sutra-deploy.sh validate        # Check system health"
     echo "  ./sutra-deploy.sh logs sutra-api  # View API logs"
     echo "  ./sutra-deploy.sh maintenance     # Maintenance menu"
     echo ""
@@ -272,6 +441,9 @@ case $COMMAND in
         ;;
     status)
         cmd_status
+        ;;
+    validate)
+        cmd_validate
         ;;
     logs)
         cmd_logs $2

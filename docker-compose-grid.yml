@@ -21,8 +21,7 @@ services:
       - STORAGE_PORT=50051
       - VECTOR_DIMENSION=768
       # Unified Learning Pipeline Configuration
-      - SUTRA_OLLAMA_URL=http://host.docker.internal:11434
-      - SUTRA_EMBEDDING_MODEL=nomic-embed-text
+      - SUTRA_EMBEDDING_SERVICE_URL=http://sutra-embedding-service:8888
       - SUTRA_EMBEDDING_TIMEOUT_SEC=30
       - SUTRA_MIN_ASSOCIATION_CONFIDENCE=0.5
       - SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT=10
@@ -189,6 +188,39 @@ services:
       retries: 3
       start_period: 10s
 
+  # Sutra Embedding Service (High-Performance nomic-embed-text-v1.5)
+  sutra-embedding-service:
+    build:
+      context: ./packages/sutra-embedding-service
+      dockerfile: Dockerfile
+    image: sutra-embedding-service:latest
+    container_name: sutra-embedding-service
+    ports:
+      - "8888:8888"
+    environment:
+      - PORT=8888
+      - EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
+      - EMBEDDING_BATCH_SIZE=64
+      - EMBEDDING_MAX_WAIT_MS=50
+      - TRANSFORMERS_CACHE=/tmp/.cache/huggingface
+      - HF_HOME=/tmp/.cache/huggingface
+      - HOME=/tmp
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8888/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s  # Longer start period for model loading
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
   # Sutra Hybrid (Semantic Embeddings API)
   sutra-hybrid:
     build:
@@ -203,11 +235,13 @@ services:
       - SUTRA_STORAGE_MODE=server
       - SUTRA_STORAGE_SERVER=storage-server:50051
       - SUTRA_USE_SEMANTIC_EMBEDDINGS=true
-      - SUTRA_OLLAMA_URL=http://host.docker.internal:11434
+      - SUTRA_EMBEDDING_PROVIDER=service
+      - SUTRA_EMBEDDING_SERVICE_URL=http://sutra-embedding-service:8888
       - SUTRA_EMBEDDING_MODEL=nomic-embed-text
       - SUTRA_VECTOR_DIMENSION=768
     depends_on:
       - storage-server
+      - sutra-embedding-service
     networks:
       - sutra-network
     restart: unless-stopped
@@ -253,31 +287,6 @@ services:
       retries: 3
       start_period: 15s
 
-  # Ollama Service (Local LLM/Embedding Server)
-  sutra-ollama:
-    image: ollama/ollama:latest
-    container_name: sutra-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    networks:
-      - sutra-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # Pull and run nomic-embed-text model on startup
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        ollama serve &
-        sleep 10
-        ollama pull nomic-embed-text
-        wait
 
   # Sutra Client (Interactive AI Interface)
   sutra-client:
@@ -294,7 +303,6 @@ services:
     depends_on:
       - sutra-api
       - sutra-hybrid
-      - sutra-ollama
     networks:
       - sutra-network
     restart: unless-stopped
@@ -325,7 +333,7 @@ services:
       - RUST_LOG=info
       - SUTRA_STORAGE_MODE=server
       - SUTRA_STORAGE_SERVER=storage-server:50051
-      - SUTRA_OLLAMA_URL=http://sutra-ollama:11434
+      - SUTRA_EMBEDDING_SERVICE_URL=http://sutra-embedding-service:8888
       - SUTRA_GRID_MASTER=grid-master:7001
       - INGESTER_WORKERS=2
       - INGESTER_BATCH_SIZE=100
@@ -360,8 +368,6 @@ volumes:
   agent1-data:
     driver: local
   agent2-data:
-    driver: local
-  ollama-data:
     driver: local
   # New volume for bulk ingestion (only created when bulk-ingester profile used)
   ingestion-jobs:

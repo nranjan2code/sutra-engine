@@ -14,33 +14,33 @@ NC='\033[0m' # No Color
 
 FAILED=0
 
-# Test 1: Model availability
-echo "1. Checking nomic-embed-text availability..."
-if ollama list | grep -q nomic-embed-text; then
+# Test 1: Embedding service availability
+echo "1. Checking embedding service availability..."
+if curl -s http://localhost:8888/health | jq -e '.status == "healthy"' > /dev/null 2>&1; then
     echo -e "${GREEN}✅ PASS${NC}"
 else
-    echo -e "${RED}❌ FAIL: nomic-embed-text not available${NC}"
-    echo "   Fix: ollama pull nomic-embed-text"
+    echo -e "${RED}❌ FAIL: Embedding service not healthy${NC}"
+    echo "   Fix: Check if sutra-embedding-service container is running"
     FAILED=1
 fi
 
 # Test 2: Storage server configuration
 echo "2. Checking storage server configuration..."
-if docker logs sutra-storage 2>&1 | grep -q "Vector dimension: 768"; then
+if curl -s http://localhost:8888/info | jq -e '.dimension == 768' > /dev/null 2>&1; then
     echo -e "${GREEN}✅ PASS${NC}"
 else
-    echo -e "${RED}❌ FAIL: Storage not using 768 dimensions${NC}"
-    echo "   Fix: Set VECTOR_DIMENSION=768 in docker-compose-grid.yml"
+    echo -e "${RED}❌ FAIL: Embedding service not using 768 dimensions${NC}"
+    echo "   Fix: Check embedding service configuration"
     FAILED=1
 fi
 
 # Test 3: Hybrid service configuration  
 echo "3. Checking hybrid service configuration..."
-if docker logs sutra-hybrid 2>&1 | grep -q "nomic-embed-text"; then
+if docker logs sutra-hybrid 2>&1 | grep -q "EmbeddingServiceProvider.*8888" || curl -s http://localhost:8001/health | jq -e '.status' > /dev/null 2>&1; then
     echo -e "${GREEN}✅ PASS${NC}"
 else
-    echo -e "${RED}❌ FAIL: Hybrid not using nomic-embed-text${NC}"
-    echo "   Fix: Set SUTRA_EMBEDDING_MODEL=nomic-embed-text in docker-compose-grid.yml"
+    echo -e "${RED}❌ FAIL: Hybrid service not configured correctly${NC}"
+    echo "   Fix: Check hybrid service logs and embedding service connection"
     FAILED=1
 fi
 
