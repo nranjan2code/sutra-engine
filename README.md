@@ -161,6 +161,7 @@ Benefits:
 - **sutra-api**: Primary REST API - delegates learning to storage server
 - **sutra-hybrid**: Semantic layer + NLG - delegates learning to storage server
 - **sutra-bulk-ingester**: 🔥 High-performance Rust bulk data ingestion with unified learning (1K-10K articles/min)
+- **sutra-explorer**: 🔍 **NEW** Standalone storage explorer with read-only analysis and visualization (ports 8100, 3000)
 - **sutra-markdown-web**: Document processing API
 - **sutra-ollama**: Local LLM inference and embedding generation
 
@@ -334,15 +335,55 @@ Clean separation. Internal implementation can change without breaking users.
 ```
 sutra-models/
 ├── packages/
-│   ├── sutra-core/          # Graph reasoning engine
-│   ├── sutra-storage/        # Rust storage backend  
-│   ├── sutra-hybrid/         # Semantic embeddings
-│   └── sutra-api/            # REST API (FastAPI)
-├── test_direct_workflow.py   # End-to-end test
-├── test_api_workflow.py      # API integration test
-├── QUICK_START.md            # How to run and test
-└── README.md                 # This file
+│   ├── sutra-core/           # Graph reasoning engine
+│   ├── sutra-storage/         # Rust storage backend (57K writes/sec)
+│   ├── sutra-hybrid/          # Semantic embeddings + NLG
+│   ├── sutra-api/             # Primary REST API (FastAPI)
+│   ├── sutra-control/         # React control center + Grid UI
+│   ├── sutra-client/          # Streamlit interactive client
+│   ├── sutra-bulk-ingester/   # High-performance Rust bulk ingestion
+│   ├── sutra-explorer/        # 🆕 Standalone storage explorer (Rust + React)
+│   ├── sutra-grid-master/     # Grid orchestration service
+│   ├── sutra-grid-agent/      # Grid agent for node management
+│   └── sutra-embedding-service/ # Dedicated embedding service
+├── test_direct_workflow.py    # End-to-end test
+├── test_api_workflow.py       # API integration test
+├── DEPLOYMENT.md              # Complete deployment guide
+└── README.md                  # This file
 ```
+
+## Storage Explorer 🔍
+
+**NEW**: Standalone tool for deep exploration and visualization of storage files without running services.
+
+```bash
+# Quick start with Docker
+cd packages/sutra-explorer
+export STORAGE_FILE_PATH=/path/to/storage.dat
+docker-compose up -d
+
+# Access
+open http://localhost:3000      # Interactive UI
+open http://localhost:8100/docs # REST API
+```
+
+**Features:**
+- 📈 **Graph Visualization**: Interactive force-directed graphs with D3.js
+- 🔍 **Full-Text Search**: Find concepts by content substring
+- 🗺️ **Path Finding**: BFS shortest path discovery
+- 🎯 **Neighborhood Explorer**: N-hop subgraph visualization
+- 📊 **Vector Similarity**: Cosine similarity between embeddings
+- 📊 **Statistics**: Concept/edge counts, file size, vector dimensions
+- ✅ **Read-Only**: Safe exploration without modification risk
+- 🚀 **Independent**: No dependencies on running Sutra services
+
+**Use Cases:**
+- Debug storage issues offline
+- Audit knowledge graphs for compliance
+- Visualize concept relationships
+- Analyze storage files from production
+
+**Documentation**: See `packages/sutra-explorer/README.md`
 
 ## Testing
 

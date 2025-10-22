@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  sutra-explorer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sutra-explorer
+    ports:
+      - "8100:8100"  # Backend API
+      - "3000:3000"  # Frontend UI
+    volumes:
+      # Mount your storage.dat file (read-only recommended)
+      - ${STORAGE_FILE_PATH:-./storage.dat}:/data/storage.dat:ro
+    environment:
+      - STORAGE_PATH=/data/storage.dat
+      - API_HOST=0.0.0.0
+      - API_PORT=8100
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - explorer-network
+
+networks:
+  explorer-network:
+    driver: bridge

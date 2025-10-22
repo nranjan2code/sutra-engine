@@ -291,16 +291,22 @@ Sutra AI is an explainable graph-based AI system that learns in real-time withou
 
 ### Package Structure
 
+#### Core AI Packages
 - **sutra-core**: Core graph reasoning engine with concepts, associations, and multi-path plan aggregation (MPPA)
 - **sutra-storage**: Production-ready Rust storage with ConcurrentStorage (57K writes/sec, <0.01ms reads), single-file architecture, and lock-free concurrency  
 - **sutra-hybrid**: Semantic embeddings integration (SutraAI class) that combines graph reasoning with optional similarity matching
 - **sutra-nlg**: Grounded, template-driven NLG (no LLM) used by Hybrid for human-like, explainable responses
+
+#### Service Packages
 - **sutra-api**: Production REST API with FastAPI, rate limiting, and comprehensive endpoints
-- **sutra-hybrid**: Semantic embeddings integration (SutraAI class) that combines graph reasoning with optional similarity matching
+- **sutra-embedding-service**: Dedicated high-performance embedding service (nomic-embed-text-v1.5, 768-d)
+- **sutra-bulk-ingester**: High-performance Rust service for bulk data ingestion with TCP storage integration (production-ready)
+
+#### UI & Tooling Packages
 - **sutra-control**: Modern React-based control center with secure FastAPI gateway for system monitoring and management
 - **sutra-client**: Streamlit-based web interface for interactive AI queries and knowledge exploration
 - **sutra-markdown-web**: Markdown API service for document processing and content management
-- **sutra-bulk-ingester**: High-performance Rust service for bulk data ingestion with TCP storage integration (production-ready)
+- **sutra-explorer**: Standalone storage explorer for deep visualization and analysis of storage.dat files (NEW)
 - **sutra-cli**: Command-line interface (placeholder)
 
 ### Production Enhancements (NEW)
@@ -613,6 +619,21 @@ Modern React-based monitoring and management interface with **Complete UI Integr
 - **Access**: http://localhost:9000 (containerized deployment)
 - **Grid UI**: Accessible at http://localhost:9000/grid with real-time monitoring
 - **Bulk Ingester UI**: Accessible at http://localhost:9000/bulk-ingester with ingestion management
+
+### Sutra Storage Explorer (sutra-explorer)
+Standalone application for deep exploration and visualization of storage.dat files **independently** from running Sutra services:
+- **Read-Only**: Safe exploration without modification risk
+- **Rust Parser**: Zero-copy binary parser for storage.dat v2 format (concepts, edges, vectors)
+- **FastAPI Backend**: REST API with 10+ endpoints for exploration (port 8100)
+- **React Frontend**: Interactive UI with graph visualization, search, path finding
+- **Graph Features**: BFS pathfinding, N-hop neighborhoods, force-directed visualization (D3.js)
+- **Vector Operations**: Cosine similarity between concept embeddings
+- **Full-Text Search**: Content substring matching with highlighting
+- **Architecture**: Multi-stage Docker build (Rust → React → Python)
+- **Deployment**: Standalone container with volume mounting for storage files
+- **Access**: http://localhost:8100 (API), http://localhost:3000 (UI)
+- **Use Cases**: Debugging storage files, offline analysis, data auditing, knowledge graph visualization
+- **Documentation**: See `packages/sutra-explorer/README.md` for complete guide
 ### Configuration
 
 ### Environment Variables
@@ -739,6 +760,15 @@ The system has comprehensive testing at multiple levels:
 - Natural language queries for events ("Show me all crashed nodes today")
 - Advanced visualizations and network topology diagrams
 - Automated operations and auto-scaling capabilities
+
+### Using Sutra Storage Explorer
+1. **Standalone Deployment**: `cd packages/sutra-explorer && docker-compose up -d`
+2. **Mount Storage File**: Set `STORAGE_FILE_PATH` environment variable to your storage.dat location
+3. **Access UI**: Navigate to http://localhost:3000 for interactive exploration
+4. **API Access**: REST API available at http://localhost:8100/docs
+5. **Features**: Search concepts, visualize graphs, find paths, calculate similarities
+6. **Development**: See `packages/sutra-explorer/README.md` for local development setup
+7. **Use Cases**: Debugging storage issues, auditing knowledge graphs, offline analysis
 
 ## Troubleshooting
 
