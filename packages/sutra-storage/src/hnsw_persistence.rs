@@ -97,13 +97,33 @@ impl HnswPersistence {
     
     /// Check if persisted index exists
     pub fn exists(&self) -> bool {
-        self.index_path.exists()
+        // Check for both .hnsw.graph and .hnsw.data files
+        let parent = match self.index_path.parent() {
+            Some(p) => p,
+            None => return false,
+        };
+        let basename = match self.index_path.file_stem().and_then(|s| s.to_str()) {
+            Some(b) => b,
+            None => return false,
+        };
+        
+        let graph_file = parent.join(format!("{}.hnsw.graph", basename));
+        let data_file = parent.join(format!("{}.hnsw.data", basename));
+        
+        graph_file.exists() && data_file.exists()
     }
     
-    /// Load HNSW index from disk
+    /// Load HNSW index from disk (NOT YET IMPLEMENTED - architectural limitation)
     ///
-    /// Returns None if file doesn't exist or is corrupted.
-    /// Performance: ~100ms for 1M vectors vs 2 min rebuild
+    /// TODO: HNSW persistence requires architectural refactor:
+    /// 1. Store HnswIo in ConcurrentMemory (not in this module)
+    /// 2. Build HNSW once and reuse (currently rebuilds on every search)
+    /// 3. Use HnswIo.load_hnsw_with_dist() from ConcurrentMemory where lifetime can be managed
+    ///
+    /// Current workaround: Rebuild HNSW on each vector search (cached in-memory for query duration)
+    /// Impact: First search after restart takes 2 min for 1M vectors, subsequent searches are fast
+    ///
+    /// Returns None to indicate persistence not yet available
     pub fn load(&self) -> Result<Option<Hnsw<f32, DistCosine>>> {
         if !self.exists() {
             log::info!("No persisted HNSW index found at {:?}", self.index_path);
@@ -113,9 +133,17 @@ impl HnswPersistence {
         let start = Instant::now();
         log::info!("Loading HNSW index from {:?}", self.index_path);
         
-        // TODO: HNSW library doesn't support persistence yet
-        // For now, return None to trigger rebuild on every startup
-        log::info!("⚠️  HNSW persistence not yet supported - will rebuild index");
+        // Use hnsw-rs native persistence (HnswIo)
+        let parent = self.index_path.parent()
+            .ok_or_else(|| anyhow::anyhow!("Invalid index path"))?;
+        let basename = self.index_path.file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| anyhow::anyhow!("Invalid index filename"))?;
+        
+        // TODO: Implement proper loading - requires ConcurrentMemory refactor to store HnswIo
+        log::info!("⚠️  HNSW persistence requires architectural refactor - returning None");
+        log::info!("    Current behavior: HNSW rebuilt on each vector search (2 min for 1M vectors)");
+        log::info!("    Future fix: Store HnswIo in ConcurrentMemory and load once on startup");
         Ok(None)
     }
     
@@ -133,16 +161,27 @@ impl HnswPersistence {
         
         let num_vectors = hnsw.get_nb_point();
         
-        // TODO: HNSW library doesn't support file_dump yet
-        // Placeholder for when persistence is implemented
-        log::warn!("⚠️  HNSW persistence not yet supported - index will need rebuild on restart");
+        // Use hnsw-rs native persistence (file_dump)
+        // This creates two files: <basename>.hnsw.graph and <basename>.hnsw.data
+        let parent = self.index_path.parent()
+            .ok_or_else(|| anyhow::anyhow!("Invalid index path"))?;
+        let basename = self.index_path.file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| anyhow::anyhow!("Invalid index filename"))?;
+        
+        hnsw.file_dump(parent, basename)
+            .context("Failed to dump HNSW index")?;
         
         let elapsed = start.elapsed();
         
-        // Get file size for logging
-        let file_size_mb = std::fs::metadata(&self.index_path)
-            .map(|m| m.len() as f64 / 1024.0 / 1024.0)
-            .unwrap_or(0.0);
+        // Calculate total file size (graph + data files)
+        let graph_file = parent.join(format!("{}.hnsw.graph", basename));
+        let data_file = parent.join(format!("{}.hnsw.data", basename));
+        
+        let file_size_mb = [
+            std::fs::metadata(&graph_file).map(|m| m.len()).unwrap_or(0),
+            std::fs::metadata(&data_file).map(|m| m.len()).unwrap_or(0),
+        ].iter().sum::<u64>() as f64 / 1024.0 / 1024.0;
         
         log::info!(
             "✅ Saved HNSW index with {} vectors in {:.2}ms (size={:.1} MB)",

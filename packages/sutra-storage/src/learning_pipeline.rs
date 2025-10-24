@@ -4,8 +4,8 @@
 use anyhow::Result;
 use tracing::{info, warn, debug};
 
-use crate::association_extractor::{AssociationExtractor, AssociationExtractorConfig, AssocKind};
 use crate::embedding_client::EmbeddingClient;
+use crate::semantic_extractor::{SemanticExtractor, SemanticAssociation};
 use crate::storage_trait::LearningStorage;
 use crate::types::{ConceptId, AssociationType};
 
@@ -36,14 +36,17 @@ impl Default for LearnOptions {
 
 pub struct LearningPipeline {
     embedding_client: EmbeddingClient,
-    assoc_extractor: AssociationExtractor,
+    semantic_extractor: SemanticExtractor,
 }
 
 impl LearningPipeline {
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         let embedding_client = EmbeddingClient::with_defaults()?;
-        let assoc_extractor = AssociationExtractor::new(AssociationExtractorConfig::default())?;
-        Ok(Self { embedding_client, assoc_extractor })
+        
+        // Initialize semantic extractor (async - pre-computes relation embeddings)
+        let semantic_extractor = SemanticExtractor::new(embedding_client.clone()).await?;
+        
+        Ok(Self { embedding_client, semantic_extractor })
     }
 
     /// Learn a single concept end-to-end
@@ -77,30 +80,29 @@ impl LearningPipeline {
         )?;
         debug!("Stored concept seq={}", sequence);
 
-        // Step 4: Associations
+        // Step 4: Semantic associations (modern approach!)
         if options.extract_associations {
-            let extracted = self.assoc_extractor.extract(content)?;
+            let extracted = self.semantic_extractor.extract(content).await?;
             let mut stored = 0usize;
+            
             for assoc in extracted.into_iter().take(options.max_associations_per_concept) {
+                // Only store if confidence meets threshold
+                if assoc.confidence < options.min_association_confidence {
+                    continue;
+                }
+                
                 // Map target term to concept id (deterministic)
-                let target_id_hex = self.generate_concept_id(&assoc.target_term);
+                let target_id_hex = self.generate_concept_id(&assoc.target);
                 let target_id = ConceptId::from_string(&target_id_hex);
 
-                let assoc_type = match assoc.kind {
-                    AssocKind::Semantic => AssociationType::Semantic,
-                    AssocKind::Causal => AssociationType::Causal,
-                    AssocKind::Temporal => AssociationType::Temporal,
-                    AssocKind::Hierarchical => AssociationType::Hierarchical,
-                    AssocKind::Compositional => AssociationType::Compositional,
-                };
-
-                if let Err(e) = storage.learn_association(id, target_id, assoc_type, assoc.confidence) {
+                if let Err(e) = storage.learn_association(id, target_id, assoc.assoc_type, assoc.confidence) {
                     warn!("Association store failed: {}", e);
                 } else {
                     stored += 1;
                 }
             }
-            debug!("Stored {} associations", stored);
+            
+            debug!("Stored {} semantic associations", stored);
         }
 
         Ok(concept_id)
@@ -143,29 +145,28 @@ impl LearningPipeline {
             )?;
             debug!("Stored concept seq={}", sequence);
 
-            // Extract and store associations
+            // Extract and store semantic associations
             if options.extract_associations {
-                let extracted = self.assoc_extractor.extract(content)?;
+                let extracted = self.semantic_extractor.extract(content).await?;
                 let mut stored = 0usize;
+                
                 for assoc in extracted.into_iter().take(options.max_associations_per_concept) {
-                    let target_id_hex = self.generate_concept_id(&assoc.target_term);
+                    // Only store if confidence meets threshold
+                    if assoc.confidence < options.min_association_confidence {
+                        continue;
+                    }
+                    
+                    let target_id_hex = self.generate_concept_id(&assoc.target);
                     let target_id = ConceptId::from_string(&target_id_hex);
 
-                    let assoc_type = match assoc.kind {
-                        AssocKind::Semantic => AssociationType::Semantic,
-                        AssocKind::Causal => AssociationType::Causal,
-                        AssocKind::Temporal => AssociationType::Temporal,
-                        AssocKind::Hierarchical => AssociationType::Hierarchical,
-                        AssocKind::Compositional => AssociationType::Compositional,
-                    };
-
-                    if let Err(e) = storage.learn_association(id, target_id, assoc_type, assoc.confidence) {
+                    if let Err(e) = storage.learn_association(id, target_id, assoc.assoc_type, assoc.confidence) {
                         warn!("Association store failed: {}", e);
                     } else {
                         stored += 1;
                     }
                 }
-                debug!("Stored {} associations", stored);
+                
+                debug!("Stored {} semantic associations", stored);
             }
 
             concept_ids.push(concept_id);

@@ -125,6 +125,93 @@ pub enum GridEvent {
         reason: String,
         timestamp: DateTime<Utc>,
     },
+    
+    // Storage Performance Metrics
+    StorageMetrics {
+        node_id: String,
+        concept_count: usize,
+        edge_count: usize,
+        write_throughput: u64,  // concepts/sec
+        read_latency_us: u64,   // microseconds
+        memory_usage_mb: u64,
+        timestamp: DateTime<Utc>,
+    },
+    
+    // Query Performance Metrics
+    QueryPerformance {
+        node_id: String,
+        query_type: String,  // "semantic", "graph", "hybrid"
+        query_depth: u32,
+        result_count: usize,
+        latency_ms: u64,
+        confidence: f32,
+        timestamp: DateTime<Utc>,
+    },
+    
+    // Embedding Service Metrics
+    EmbeddingLatency {
+        service_instance: String,
+        batch_size: usize,
+        latency_ms: u64,
+        dimension: usize,
+        cache_hit: bool,
+        timestamp: DateTime<Utc>,
+    },
+    
+    // HNSW Index Operations
+    HnswIndexBuilt {
+        node_id: String,
+        vector_count: usize,
+        build_time_ms: u64,
+        dimension: usize,
+        timestamp: DateTime<Utc>,
+    },
+    
+    HnswIndexLoaded {
+        node_id: String,
+        vector_count: usize,
+        load_time_ms: u64,
+        persisted: bool,
+        timestamp: DateTime<Utc>,
+    },
+    
+    // Pathfinding Performance
+    PathfindingMetrics {
+        node_id: String,
+        source_id: String,
+        target_id: String,
+        path_length: u32,
+        paths_explored: u64,
+        latency_ms: u64,
+        strategy: String,  // "best_first", "breadth_first", "bidirectional"
+        timestamp: DateTime<Utc>,
+    },
+    
+    // Reconciliation Metrics
+    ReconciliationComplete {
+        node_id: String,
+        entries_processed: u64,
+        reconciliation_time_ms: u64,
+        disk_flush: bool,
+        timestamp: DateTime<Utc>,
+    },
+    
+    // Embedding Service Events
+    EmbeddingServiceHealthy {
+        instance_id: String,
+        endpoint: String,
+        success_rate: f32,
+        cache_hit_rate: f32,
+        timestamp: DateTime<Utc>,
+    },
+    
+    EmbeddingServiceDegraded {
+        instance_id: String,
+        endpoint: String,
+        error_rate: f32,
+        reason: String,
+        timestamp: DateTime<Utc>,
+    },
 }
 
 impl GridEvent {
@@ -148,6 +235,15 @@ impl GridEvent {
             GridEvent::ClusterHealthy { timestamp, .. } => *timestamp,
             GridEvent::ClusterDegraded { timestamp, .. } => *timestamp,
             GridEvent::ClusterCritical { timestamp, .. } => *timestamp,
+            GridEvent::StorageMetrics { timestamp, .. } => *timestamp,
+            GridEvent::QueryPerformance { timestamp, .. } => *timestamp,
+            GridEvent::EmbeddingLatency { timestamp, .. } => *timestamp,
+            GridEvent::HnswIndexBuilt { timestamp, .. } => *timestamp,
+            GridEvent::HnswIndexLoaded { timestamp, .. } => *timestamp,
+            GridEvent::PathfindingMetrics { timestamp, .. } => *timestamp,
+            GridEvent::ReconciliationComplete { timestamp, .. } => *timestamp,
+            GridEvent::EmbeddingServiceHealthy { timestamp, .. } => *timestamp,
+            GridEvent::EmbeddingServiceDegraded { timestamp, .. } => *timestamp,
         }
     }
     
@@ -171,6 +267,15 @@ impl GridEvent {
             GridEvent::ClusterHealthy { .. } => "cluster_healthy",
             GridEvent::ClusterDegraded { .. } => "cluster_degraded",
             GridEvent::ClusterCritical { .. } => "cluster_critical",
+            GridEvent::StorageMetrics { .. } => "storage_metrics",
+            GridEvent::QueryPerformance { .. } => "query_performance",
+            GridEvent::EmbeddingLatency { .. } => "embedding_latency",
+            GridEvent::HnswIndexBuilt { .. } => "hnsw_index_built",
+            GridEvent::HnswIndexLoaded { .. } => "hnsw_index_loaded",
+            GridEvent::PathfindingMetrics { .. } => "pathfinding_metrics",
+            GridEvent::ReconciliationComplete { .. } => "reconciliation_complete",
+            GridEvent::EmbeddingServiceHealthy { .. } => "embedding_service_healthy",
+            GridEvent::EmbeddingServiceDegraded { .. } => "embedding_service_degraded",
         }
     }
     
@@ -194,6 +299,15 @@ impl GridEvent {
             GridEvent::ClusterHealthy { .. } => "cluster".to_string(),
             GridEvent::ClusterDegraded { .. } => "cluster".to_string(),
             GridEvent::ClusterCritical { .. } => "cluster".to_string(),
+            GridEvent::StorageMetrics { node_id, .. } => node_id.clone(),
+            GridEvent::QueryPerformance { node_id, .. } => node_id.clone(),
+            GridEvent::EmbeddingLatency { service_instance, .. } => service_instance.clone(),
+            GridEvent::HnswIndexBuilt { node_id, .. } => node_id.clone(),
+            GridEvent::HnswIndexLoaded { node_id, .. } => node_id.clone(),
+            GridEvent::PathfindingMetrics { node_id, .. } => node_id.clone(),
+            GridEvent::ReconciliationComplete { node_id, .. } => node_id.clone(),
+            GridEvent::EmbeddingServiceHealthy { instance_id, .. } => instance_id.clone(),
+            GridEvent::EmbeddingServiceDegraded { instance_id, .. } => instance_id.clone(),
         }
     }
     
@@ -253,6 +367,45 @@ impl GridEvent {
             }
             GridEvent::ClusterCritical { total_agents, healthy_agents, reason, .. } => {
                 format!("Cluster critical: {}/{} agents - {}", healthy_agents, total_agents, reason)
+            }
+            GridEvent::StorageMetrics { node_id, concept_count, edge_count, write_throughput, read_latency_us, memory_usage_mb, .. } => {
+                format!("Storage {} metrics: {} concepts, {} edges, {}K writes/sec, {} μs reads, {} MB memory", 
+                    node_id, concept_count, edge_count, write_throughput / 1000, read_latency_us, memory_usage_mb)
+            }
+            GridEvent::QueryPerformance { node_id, query_type, query_depth, result_count, latency_ms, confidence, .. } => {
+                format!("Query {} on {}: type={}, depth={}, {} results, {}ms, conf={:.2}",
+                    node_id, query_type, query_depth, result_count, latency_ms, confidence)
+            }
+            GridEvent::EmbeddingLatency { service_instance, batch_size, latency_ms, dimension, cache_hit, .. } => {
+                let cache_status = if *cache_hit { "cached" } else { "computed" };
+                format!("Embedding {} latency: {} vectors ({}d) in {}ms ({})",
+                    service_instance, batch_size, dimension, latency_ms, cache_status)
+            }
+            GridEvent::HnswIndexBuilt { node_id, vector_count, build_time_ms, dimension, .. } => {
+                format!("HNSW index built on {}: {} vectors ({}d) in {}ms",
+                    node_id, vector_count, dimension, build_time_ms)
+            }
+            GridEvent::HnswIndexLoaded { node_id, vector_count, load_time_ms, persisted, .. } => {
+                let source = if *persisted { "disk" } else { "rebuild" };
+                format!("HNSW index loaded on {} from {}: {} vectors in {}ms",
+                    node_id, source, vector_count, load_time_ms)
+            }
+            GridEvent::PathfindingMetrics { node_id, source_id, target_id, path_length, paths_explored, latency_ms, strategy, .. } => {
+                format!("Pathfinding on {}: {} → {} via {}, path_len={}, explored={}, {}ms",
+                    node_id, source_id, target_id, strategy, path_length, paths_explored, latency_ms)
+            }
+            GridEvent::ReconciliationComplete { node_id, entries_processed, reconciliation_time_ms, disk_flush, .. } => {
+                let flush_status = if *disk_flush { "with flush" } else { "memory only" };
+                format!("Reconciliation on {}: {} entries in {}ms ({})",
+                    node_id, entries_processed, reconciliation_time_ms, flush_status)
+            }
+            GridEvent::EmbeddingServiceHealthy { instance_id, endpoint, success_rate, cache_hit_rate, .. } => {
+                format!("Embedding service {} healthy at {}: {:.1}% success, {:.1}% cache hits",
+                    instance_id, endpoint, success_rate * 100.0, cache_hit_rate * 100.0)
+            }
+            GridEvent::EmbeddingServiceDegraded { instance_id, endpoint, error_rate, reason, .. } => {
+                format!("Embedding service {} degraded at {}: {:.1}% errors - {}",
+                    instance_id, endpoint, error_rate * 100.0, reason)
             }
         }
     }

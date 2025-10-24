@@ -57,6 +57,7 @@ struct EmbeddingResponse {
 }
 
 /// Embedding client for generating vector embeddings
+#[derive(Clone)]
 pub struct EmbeddingClient {
     config: EmbeddingConfig,
     client: Client,
@@ -290,8 +291,9 @@ mod tests {
     fn test_config_defaults() {
         let config = EmbeddingConfig::default();
         assert!(!config.service_url.is_empty());
-        assert!(!config.default_model.is_empty());
         assert!(config.timeout_secs > 0);
+        assert!(config.max_retries > 0);
+        assert!(config.retry_delay_ms > 0);
     }
     
     #[tokio::test]

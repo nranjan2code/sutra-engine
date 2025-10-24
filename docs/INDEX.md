@@ -33,12 +33,13 @@ High-level system design, technical deep dives, and scalability architecture
 ### 🚀 Operations & Deployment
 Build, deploy, monitor, and scale Sutra AI in production
 
+- **[Production Guide](PRODUCTION.md)** 🔥 **NEW** - Complete P0 implementation with HA, monitoring, scale validation
 - **[Build & Deploy Guide](operations/BUILD_AND_DEPLOY.md)** - Complete build and deployment
 - **[Deployment Guide](operations/DEPLOYMENT_GUIDE.md)** - Deployment procedures and configurations
 - **[Production Requirements](operations/PRODUCTION_REQUIREMENTS.md)** - Production setup checklist
 - **[Optimization Guide](operations/OPTIMIZATION_GUIDE.md)** - Performance tuning and optimization
 - **[Scaling Guide](operations/SCALING_GUIDE.md)** - Horizontal and vertical scaling strategies
-- **[Monitoring Guide](operations/MONITORING.md)** 🆕 - Observability, metrics, and debugging
+- **[Monitoring Guide](operations/MONITORING.md)** - Observability, metrics, and debugging
 
 ### 📖 User Guides
 Step-by-step guides for developers and operators
@@ -71,23 +72,24 @@ High-performance bulk data ingestion
 
 ---
 
-## 🆕 What's New (2025-10-23)
+## 🆕 What's New (2025-10-24)
 
-### Recently Added Features
-1. **Sharded Storage Mode** - 16-256 shards for massive scale (160M-2.5B concepts)
-2. **HNSW Build-Once Optimization** - 100× faster vector search
-3. **Dedicated Embedding Service** - nomic-embed-text-v1.5 with 768-d vectors
-4. **Unified Learning Architecture** - Single source of truth in storage server
-5. **TCP Binary Protocol** - 10-50× lower latency than gRPC
+### 🎉 P0 Features Complete - Production-Ready!
+1. **✅ HA Embedding Service** - 3 replicas + HAProxy with automatic failover (<3s)
+2. **✅ Self-Monitoring** - 9 GridEvent types, Sutra monitors itself
+3. **✅ Scale Validation** - 10M concept benchmark with P50/P95/P99 tracking
+4. **✅ Sharded Storage** - 4-16 shards for horizontal scalability
+5. **✅ HNSW Build-Once** - 100× faster vector search on restart
+6. **✅ Unified Learning** - Storage server owns complete pipeline
+7. **✅ TCP Binary Protocol** - 10-50× lower latency than gRPC
 
 ### New Documentation (This Release)
-- ✅ `docs/architecture/SCALABILITY.md` - Complete scalability architecture
-- ✅ `docs/storage/SHARDING.md` - Sharded storage design and configuration
-- ✅ `docs/storage/HNSW_OPTIMIZATION.md` - HNSW index optimization guide
-- ✅ `docs/operations/MONITORING.md` - Observability and metrics guide
-- ✅ `docs/guides/BEST_PRACTICES.md` - Development best practices
-- ✅ `docs/embedding/HA_DESIGN.md` - HA embedding service design
-- ✅ **This file** - `docs/INDEX.md` - Master documentation index
+- 🔥 **`docs/PRODUCTION.md`** - Complete P0 implementation guide (CONSOLIDATED)
+- ✅ `docker/haproxy.cfg` - HAProxy configuration for HA embedding
+- ✅ `scripts/test-embedding-ha.sh` - Automated failover testing
+- ✅ `scripts/scale-validation.rs` - 10M concept benchmark
+- ✅ `packages/sutra-storage/src/event_emitter.rs` - Self-monitoring implementation
+- ✅ Updated `WARP.md` and `README.md` with P0 completion status
 
 ---
 

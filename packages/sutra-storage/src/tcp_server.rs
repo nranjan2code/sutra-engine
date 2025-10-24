@@ -148,9 +148,10 @@ pub struct StorageServer {
 
 impl StorageServer {
     /// Create new storage server
-    pub fn new(storage: ConcurrentMemory) -> Self {
-        let pipeline = LearningPipeline::new().expect("Failed to init learning pipeline");
-Self {
+    pub async fn new(storage: ConcurrentMemory) -> Self {
+        let pipeline = LearningPipeline::new().await
+            .expect("Failed to init learning pipeline");
+        Self {
             storage: Arc::new(storage),
             start_time: std::time::Instant::now(),
             pipeline,
@@ -411,8 +412,9 @@ pub struct ShardedStorageServer {
 
 impl ShardedStorageServer {
     /// Create new sharded storage server
-    pub fn new(storage: ShardedStorage) -> Self {
-        let pipeline = LearningPipeline::new().expect("Failed to init learning pipeline");
+    pub async fn new(storage: ShardedStorage) -> Self {
+        let pipeline = LearningPipeline::new().await
+            .expect("Failed to init learning pipeline");
         Self {
             storage: Arc::new(storage),
             start_time: std::time::Instant::now(),

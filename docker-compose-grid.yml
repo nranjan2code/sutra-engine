@@ -23,8 +23,8 @@ services:
       # Sharded Storage Configuration
       - SUTRA_STORAGE_MODE=sharded
       - SUTRA_NUM_SHARDS=4
-      # Unified Learning Pipeline Configuration
-      - SUTRA_EMBEDDING_SERVICE_URL=http://sutra-embedding-service:8888
+      # Unified Learning Pipeline Configuration (HA)
+      - SUTRA_EMBEDDING_SERVICE_URL=http://embedding-ha:8888
       - SUTRA_EMBEDDING_TIMEOUT_SEC=30
       - SUTRA_MIN_ASSOCIATION_CONFIDENCE=0.5
       - SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT=10
@@ -191,13 +191,138 @@ services:
       retries: 3
       start_period: 10s
 
-  # Sutra Embedding Service (High-Performance nomic-embed-text-v1.5)
-  sutra-embedding-service:
+  # ============================================================================
+  # EMBEDDING SERVICE HA (3 Replicas + HAProxy)
+  # ============================================================================
+  
+  # Embedding Service Replica 1
+  embedding-1:
     build:
       context: ./packages/sutra-embedding-service
       dockerfile: Dockerfile
     image: sutra-embedding-service:latest
-    container_name: sutra-embedding-service
+    container_name: embedding-1
+    environment:
+      - RUST_LOG=info
+      - EMBEDDING_PORT=8888
+      - MODEL_PATH=/models/nomic-embed-text-v1.5
+      - CACHE_SIZE=10000
+      - BATCH_SIZE=32
+      - EVENT_STORAGE=grid-event-storage:50051
+      - INSTANCE_ID=embedding-1
+    volumes:
+      - ./packages/sutra-embedding-service/models:/models:ro
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 2
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+  
+  # Embedding Service Replica 2
+  embedding-2:
+    build:
+      context: ./packages/sutra-embedding-service
+      dockerfile: Dockerfile
+    image: sutra-embedding-service:latest
+    container_name: embedding-2
+    environment:
+      - RUST_LOG=info
+      - EMBEDDING_PORT=8888
+      - MODEL_PATH=/models/nomic-embed-text-v1.5
+      - CACHE_SIZE=10000
+      - BATCH_SIZE=32
+      - EVENT_STORAGE=grid-event-storage:50051
+      - INSTANCE_ID=embedding-2
+    volumes:
+      - ./packages/sutra-embedding-service/models:/models:ro
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 2
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+  
+  # Embedding Service Replica 3
+  embedding-3:
+    build:
+      context: ./packages/sutra-embedding-service
+      dockerfile: Dockerfile
+    image: sutra-embedding-service:latest
+    container_name: embedding-3
+    environment:
+      - RUST_LOG=info
+      - EMBEDDING_PORT=8888
+      - MODEL_PATH=/models/nomic-embed-text-v1.5
+      - CACHE_SIZE=10000
+      - BATCH_SIZE=32
+      - EVENT_STORAGE=grid-event-storage:50051
+      - INSTANCE_ID=embedding-3
+    volumes:
+      - ./packages/sutra-embedding-service/models:/models:ro
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 2
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+  
+  # HAProxy Load Balancer for Embedding Services
+  embedding-ha:
+    image: haproxy:2.8-alpine
+    container_name: embedding-ha
+    ports:
+      - "8888:8888"  # Embedding service endpoint
+      - "8404:8404"  # HAProxy stats
+    volumes:
+      - ./docker/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - embedding-1
+      - embedding-2
+      - embedding-3
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+  
+  # Legacy alias for backward compatibility
+  sutra-embedding-service:
+    image: alpine:latest
+    container_name: sutra-embedding-service-deprecated
+    command: |
+      sh -c 'echo "⚠️  sutra-embedding-service is deprecated. Use embedding-ha instead." && tail -f /dev/null'
     ports:
       - "8888:8888"
     environment:

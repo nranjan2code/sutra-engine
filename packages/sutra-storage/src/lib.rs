@@ -25,7 +25,7 @@ mod reasoning_store;
 
 // Unified learning pipeline modules
 pub mod embedding_client;
-pub mod association_extractor;
+pub mod semantic_extractor;
 pub mod learning_pipeline;
 
 // New concurrent memory modules
@@ -34,11 +34,16 @@ mod read_view;
 mod reconciler;
 mod concurrent_memory;
 mod mmap_store;
+mod parallel_paths;
 
 // Scalability modules
 mod hnsw_persistence;
+mod hnsw_container;
 mod sharded_storage;
 mod storage_trait;
+
+// Self-monitoring module (eating our own dogfood)
+mod event_emitter;
 
 // Python bindings (OPTIONAL - conditional compilation)
 #[cfg(feature = "python-bindings")]
@@ -68,11 +73,16 @@ pub use write_log::{WriteLog, WriteEntry, WriteLogStats, WriteLogError};
 pub use read_view::{ReadView, GraphSnapshot, ConceptNode};
 pub use reconciler::{Reconciler, ReconcilerConfig, ReconcilerStats};
 pub use mmap_store::{MmapStore, MmapStats};
+pub use parallel_paths::{ParallelPathFinder, PathResult};
 
 // Scalability exports
 pub use hnsw_persistence::{HnswPersistence, HnswConfig, HnswStats as HnswPersistenceStats, DistanceMetric};
+pub use hnsw_container::{HnswContainer, HnswConfig as HnswContainerConfig, HnswContainerStats};
 pub use sharded_storage::{ShardedStorage, ShardConfig, ShardMap, ShardStats, AggregatedStats};
 pub use storage_trait::LearningStorage;
+
+// Self-monitoring exports
+pub use event_emitter::{StorageEventEmitter, StorageEvent};
 
 // Re-export Python bindings (conditional)
 #[cfg(feature = "python-bindings")]
