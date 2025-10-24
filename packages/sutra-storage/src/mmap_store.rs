@@ -251,8 +251,16 @@ impl MmapStore {
 
         // Compute concept write position
         let concept_base = self.header.concept_off;
-        let offset = concept_base + self.header.concept_count * (size_of::<ConceptRecord>() as u64);
-        let needed = offset + size_of::<ConceptRecord>() as u64;
+        // ✅ PRODUCTION: Use checked_mul() to prevent integer overflow
+        let record_offset = self.header.concept_count
+            .checked_mul(size_of::<ConceptRecord>() as u64)
+            .ok_or_else(|| anyhow::anyhow!("Concept count overflow"))?;
+        let offset = concept_base
+            .checked_add(record_offset)
+            .ok_or_else(|| anyhow::anyhow!("Offset overflow"))?;
+        let needed = offset
+            .checked_add(size_of::<ConceptRecord>() as u64)
+            .ok_or_else(|| anyhow::anyhow!("Size overflow"))?;
         self.ensure_capacity(needed + 1)?;
 
         // SAFETY: write raw bytes of ConceptRecord
@@ -273,8 +281,16 @@ impl MmapStore {
     /// Append an association record
     pub fn append_association(&mut self, record: &AssociationRecord) -> Result<u64> {
         let edge_base = self.header.edge_off;
-        let offset = edge_base + self.header.edge_count * (size_of::<AssociationRecord>() as u64);
-        let needed = offset + size_of::<AssociationRecord>() as u64;
+        // ✅ PRODUCTION: Use checked_mul() to prevent integer overflow
+        let record_offset = self.header.edge_count
+            .checked_mul(size_of::<AssociationRecord>() as u64)
+            .ok_or_else(|| anyhow::anyhow!("Edge count overflow"))?;
+        let offset = edge_base
+            .checked_add(record_offset)
+            .ok_or_else(|| anyhow::anyhow!("Offset overflow"))?;
+        let needed = offset
+            .checked_add(size_of::<AssociationRecord>() as u64)
+            .ok_or_else(|| anyhow::anyhow!("Size overflow"))?;
         self.ensure_capacity(needed + 1)?;
 
         unsafe {

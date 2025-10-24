@@ -56,6 +56,51 @@ impl Default for ConcurrentConfig {
     }
 }
 
+impl ConcurrentConfig {
+    /// ✅ PRODUCTION: Validate configuration before use
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // Vector dimension validation
+        if self.vector_dimension == 0 {
+            anyhow::bail!("vector_dimension must be > 0, got {}", self.vector_dimension);
+        }
+        if self.vector_dimension > 4096 {
+            log::warn!(
+                "⚠️  vector_dimension {} is unusually large (max recommended: 4096)",
+                self.vector_dimension
+            );
+        }
+        
+        // Memory threshold validation
+        if self.memory_threshold < 1000 {
+            anyhow::bail!(
+                "memory_threshold too low: {} (min: 1000)",
+                self.memory_threshold
+            );
+        }
+        if self.memory_threshold > 10_000_000 {
+            log::warn!(
+                "⚠️  memory_threshold {} is very high, may cause OOM",
+                self.memory_threshold
+            );
+        }
+        
+        // Storage path validation
+        if let Some(parent) = self.storage_path.parent() {
+            if parent.exists() && !parent.is_dir() {
+                anyhow::bail!(
+                    "storage_path parent is not a directory: {:?}",
+                    parent
+                );
+            }
+        }
+        
+        // Adaptive reconciler config validation
+        self.adaptive_reconciler_config.validate()?;
+        
+        Ok(())
+    }
+}
+
 /// Main concurrent memory system
 pub struct ConcurrentMemory {
     /// Write plane (append-only log)
@@ -93,6 +138,8 @@ impl ConcurrentMemory {
     /// Create and start a new concurrent memory system
     /// PRODUCTION: Now properly loads existing data from storage.dat + replays WAL for durability
     pub fn new(config: ConcurrentConfig) -> Self {
+        // ✅ PRODUCTION: Validate configuration before proceeding
+        config.validate().expect("Invalid configuration");
         let write_log = Arc::new(WriteLog::new());
         let mut read_view = Arc::new(ReadView::new());
         let mut vectors = HashMap::new();

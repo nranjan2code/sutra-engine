@@ -69,6 +69,81 @@ impl Default for AdaptiveReconcilerConfig {
     }
 }
 
+impl AdaptiveReconcilerConfig {
+    /// ✅ PRODUCTION: Validate configuration
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // Interval validation
+        if self.min_interval_ms == 0 {
+            anyhow::bail!("min_interval_ms must be > 0");
+        }
+        if self.min_interval_ms > self.base_interval_ms {
+            anyhow::bail!(
+                "min_interval_ms ({}) must be <= base_interval_ms ({})",
+                self.min_interval_ms,
+                self.base_interval_ms
+            );
+        }
+        if self.base_interval_ms > self.max_interval_ms {
+            anyhow::bail!(
+                "base_interval_ms ({}) must be <= max_interval_ms ({})",
+                self.base_interval_ms,
+                self.max_interval_ms
+            );
+        }
+        if self.max_interval_ms > 10_000 {
+            log::warn!(
+                "⚠️  max_interval_ms ({}) is very high, may cause staleness",
+                self.max_interval_ms
+            );
+        }
+        
+        // Batch size validation
+        if self.max_batch_size == 0 {
+            anyhow::bail!("max_batch_size must be > 0");
+        }
+        if self.max_batch_size > 1_000_000 {
+            log::warn!(
+                "⚠️  max_batch_size ({}) is very large, may cause high latency spikes",
+                self.max_batch_size
+            );
+        }
+        
+        // Threshold validation
+        if self.disk_flush_threshold == 0 {
+            anyhow::bail!("disk_flush_threshold must be > 0");
+        }
+        
+        // Warning threshold validation
+        if self.queue_warning_threshold <= 0.0 || self.queue_warning_threshold > 1.0 {
+            anyhow::bail!(
+                "queue_warning_threshold must be in (0.0, 1.0], got {}",
+                self.queue_warning_threshold
+            );
+        }
+        
+        // EMA alpha validation
+        if self.ema_alpha <= 0.0 || self.ema_alpha > 1.0 {
+            anyhow::bail!(
+                "ema_alpha must be in (0.0, 1.0], got {}",
+                self.ema_alpha
+            );
+        }
+        
+        // Trend window validation
+        if self.trend_window_size == 0 {
+            anyhow::bail!("trend_window_size must be > 0");
+        }
+        if self.trend_window_size > 1000 {
+            log::warn!(
+                "⚠️  trend_window_size ({}) is very large, may use excessive memory",
+                self.trend_window_size
+            );
+        }
+        
+        Ok(())
+    }
+}
+
 /// Reconciler statistics with predictive metrics
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AdaptiveReconcilerStats {

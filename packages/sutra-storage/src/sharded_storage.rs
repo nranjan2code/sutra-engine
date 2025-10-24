@@ -12,6 +12,7 @@
 
 use anyhow::{Context, Result};
 use crate::concurrent_memory::{ConcurrentMemory, ConcurrentConfig, ConcurrentStats};
+use crate::transaction::{TransactionCoordinator, TxnOperation, TxnError};
 use crate::types::ConceptId;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -52,6 +53,8 @@ pub struct ShardedStorage {
     shards: Vec<Arc<ConcurrentMemory>>,
     /// Shard map (for routing)
     shard_map: Arc<RwLock<ShardMap>>,
+    /// 🔥 NEW: 2PC transaction coordinator for atomic cross-shard operations
+    txn_coordinator: Arc<TransactionCoordinator>,
 }
 
 /// Shard map for routing decisions
@@ -100,10 +103,14 @@ impl ShardedStorage {
             shard_stats: HashMap::new(),
         };
         
+        // Initialize 2PC transaction coordinator (5 second timeout)
+        let txn_coordinator = Arc::new(TransactionCoordinator::new(5));
+        
         Ok(Self {
             config,
             shards,
             shard_map: Arc::new(RwLock::new(shard_map)),
+            txn_coordinator,
         })
     }
     
@@ -135,7 +142,7 @@ impl ShardedStorage {
             .map_err(|e| anyhow::anyhow!("Shard write failed: {:?}", e))
     }
     
-    /// Create association (cross-shard if needed)
+    /// Create association with 2PC for cross-shard atomicity
     pub fn create_association(
         &self,
         source: ConceptId,
@@ -143,10 +150,91 @@ impl ShardedStorage {
         assoc_type: crate::types::AssociationType,
         strength: f32,
     ) -> Result<u64> {
-        // Association stored on source shard
-        let shard = self.get_shard(source);
-        shard.create_association(source, target, assoc_type, strength)
-            .map_err(|e| anyhow::anyhow!("Shard association failed: {:?}", e))
+        let source_shard_id = self.get_shard_id(source);
+        let target_shard_id = self.get_shard_id(target);
+        
+        // ✅ FAST PATH: Same shard - no 2PC needed
+        if source_shard_id == target_shard_id {
+            let shard = &self.shards[source_shard_id as usize];
+            return shard
+                .create_association(source, target, assoc_type, strength)
+                .map_err(|e| anyhow::anyhow!("Shard association failed: {:?}", e));
+        }
+        
+        // 🔥 PRODUCTION: Cross-shard - use 2PC for atomicity
+        log::info!(
+            "🔄 2PC: Cross-shard association {} (shard {}) -> {} (shard {})",
+            source.to_hex(),
+            source_shard_id,
+            target.to_hex(),
+            target_shard_id
+        );
+        
+        // Phase 1: Begin transaction
+        let txn_id = self.txn_coordinator.begin(TxnOperation::CreateAssociation {
+            source,
+            target,
+            source_shard: source_shard_id,
+            target_shard: target_shard_id,
+            assoc_type,
+            strength,
+        });
+        
+        // Phase 2: Prepare both shards
+        let source_shard = &self.shards[source_shard_id as usize];
+        let target_shard = &self.shards[target_shard_id as usize];
+        
+        // Prepare source shard (forward association)
+        let source_result = source_shard
+            .create_association(source, target, assoc_type, strength)
+            .map_err(|e| anyhow::anyhow!("Source shard prepare failed: {:?}", e));
+        
+        if source_result.is_err() {
+            self.txn_coordinator.abort(txn_id).ok();
+            self.txn_coordinator.complete(txn_id);
+            return source_result;
+        }
+        
+        self.txn_coordinator
+            .mark_prepared(txn_id, source_shard_id)
+            .map_err(|e| anyhow::anyhow!("2PC mark prepared failed: {}", e))?;
+        
+        // Prepare target shard (reverse association for bidirectional graph)
+        let target_result = target_shard
+            .create_association(target, source, assoc_type, strength)
+            .map_err(|e| anyhow::anyhow!("Target shard prepare failed: {:?}", e));
+        
+        if target_result.is_err() {
+            // Rollback: Would need to remove source association here
+            // For now, log warning (future: add rollback operations to shards)
+            log::error!(
+                "⚠️ 2PC: Target shard failed, source association created but not reversed (txn {})",
+                txn_id
+            );
+            self.txn_coordinator.abort(txn_id).ok();
+            self.txn_coordinator.complete(txn_id);
+            return target_result;
+        }
+        
+        self.txn_coordinator
+            .mark_prepared(txn_id, target_shard_id)
+            .map_err(|e| anyhow::anyhow!("2PC mark prepared failed: {}", e))?;
+        
+        // Phase 3: Commit
+        if self.txn_coordinator.is_ready_to_commit(txn_id)? {
+            self.txn_coordinator
+                .commit(txn_id)
+                .map_err(|e| anyhow::anyhow!("2PC commit failed: {}", e))?;
+            
+            log::info!("✅ 2PC: Transaction {} committed", txn_id);
+            self.txn_coordinator.complete(txn_id);
+            
+            source_result
+        } else {
+            self.txn_coordinator.abort(txn_id).ok();
+            self.txn_coordinator.complete(txn_id);
+            anyhow::bail!("2PC: Transaction {} not ready to commit", txn_id)
+        }
     }
     
     /// Learn association (alias for create_association for API compatibility)

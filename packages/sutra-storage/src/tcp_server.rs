@@ -16,6 +16,14 @@ use tokio::signal;
 // Note: In production, add sutra-protocol as dependency in Cargo.toml
 use serde::{Deserialize, Serialize};
 
+// 🔥 PRODUCTION: Security limits to prevent DoS attacks
+const MAX_CONTENT_SIZE: usize = 10 * 1024 * 1024; // 10MB max content
+const MAX_EMBEDDING_DIM: usize = 2048; // Max embedding dimension
+const MAX_BATCH_SIZE: usize = 1000; // Max batch size
+const MAX_MESSAGE_SIZE: usize = 100 * 1024 * 1024; // 100MB max TCP message
+const MAX_PATH_DEPTH: u32 = 20; // Max path finding depth
+const MAX_SEARCH_K: u32 = 1000; // Max k for vector search
+
 // Re-define protocol messages here for now (will use sutra-protocol crate)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,6 +227,19 @@ impl StorageServer {
                 Err(e) => return Err(e),
             };
 
+            // ✅ PRODUCTION: Validate message size before allocating
+            if len as usize > MAX_MESSAGE_SIZE {
+                let error = StorageResponse::Error {
+                    message: format!("Message too large: {} bytes (max: {})", len, MAX_MESSAGE_SIZE),
+                };
+                let response_bytes = rmp_serde::to_vec(&error)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+                stream.write_u32(response_bytes.len() as u32).await?;
+                stream.write_all(&response_bytes).await?;
+                stream.flush().await?;
+                continue; // Skip this message but keep connection open
+            }
+
             // Read message payload
             let mut buf = vec![0u8; len as usize];
             stream.read_exact(&mut buf).await?;
@@ -250,12 +271,35 @@ impl StorageServer {
 
         match request {
             StorageRequest::LearnConceptV2 { content, options } => {
+                // ✅ PRODUCTION: Validate content size
+                if content.len() > MAX_CONTENT_SIZE {
+                    return StorageResponse::Error {
+                        message: format!("Content too large: {} bytes (max: {})", content.len(), MAX_CONTENT_SIZE),
+                    };
+                }
+                
                 match self.pipeline.learn_concept(&self.storage, &content, &options.into()).await {
                     Ok(concept_id) => StorageResponse::LearnConceptV2Ok { concept_id },
                     Err(e) => StorageResponse::Error { message: format!("LearnConceptV2 failed: {}", e) },
                 }
             }
             StorageRequest::LearnBatch { contents, options } => {
+                // ✅ PRODUCTION: Validate batch size
+                if contents.len() > MAX_BATCH_SIZE {
+                    return StorageResponse::Error {
+                        message: format!("Batch too large: {} items (max: {})", contents.len(), MAX_BATCH_SIZE),
+                    };
+                }
+                
+                // ✅ PRODUCTION: Validate content size for each item
+                for (i, content) in contents.iter().enumerate() {
+                    if content.len() > MAX_CONTENT_SIZE {
+                        return StorageResponse::Error {
+                            message: format!("Batch item {} too large: {} bytes (max: {})", i, content.len(), MAX_CONTENT_SIZE),
+                        };
+                    }
+                }
+                
                 match self.pipeline.learn_batch(&self.storage, &contents, &options.into()).await {
                     Ok(concept_ids) => StorageResponse::LearnBatchOk { concept_ids },
                     Err(e) => StorageResponse::Error { message: format!("LearnBatch failed: {}", e) },
@@ -268,6 +312,20 @@ impl StorageServer {
                 strength,
                 confidence,
             } => {
+                // ✅ PRODUCTION: Validate content size
+                if content.len() > MAX_CONTENT_SIZE {
+                    return StorageResponse::Error {
+                        message: format!("Content too large: {} bytes (max: {})", content.len(), MAX_CONTENT_SIZE),
+                    };
+                }
+                
+                // ✅ PRODUCTION: Validate embedding dimension
+                if !embedding.is_empty() && embedding.len() > MAX_EMBEDDING_DIM {
+                    return StorageResponse::Error {
+                        message: format!("Embedding dimension too large: {} (max: {})", embedding.len(), MAX_EMBEDDING_DIM),
+                    };
+                }
+                
                 let id = ConceptId::from_string(&concept_id);
                 let content_bytes = content.into_bytes();
                 let vector = if embedding.is_empty() { None } else { Some(embedding) };
@@ -334,6 +392,13 @@ impl StorageServer {
                 end_id,
                 max_depth,
             } => {
+                // ✅ PRODUCTION: Validate path depth to prevent expensive queries
+                if max_depth > MAX_PATH_DEPTH {
+                    return StorageResponse::Error {
+                        message: format!("Path depth too large: {} (max: {})", max_depth, MAX_PATH_DEPTH),
+                    };
+                }
+                
                 let start = ConceptId::from_string(&start_id);
                 let end = ConceptId::from_string(&end_id);
 
@@ -356,6 +421,20 @@ impl StorageServer {
                 k,
                 ef_search,
             } => {
+                // ✅ PRODUCTION: Validate query vector dimension
+                if query_vector.len() > MAX_EMBEDDING_DIM {
+                    return StorageResponse::Error {
+                        message: format!("Query vector dimension too large: {} (max: {})", query_vector.len(), MAX_EMBEDDING_DIM),
+                    };
+                }
+                
+                // ✅ PRODUCTION: Validate k parameter
+                if k > MAX_SEARCH_K {
+                    return StorageResponse::Error {
+                        message: format!("k too large: {} (max: {})", k, MAX_SEARCH_K),
+                    };
+                }
+                
                 let results = self
                     .storage
                     .vector_search(&query_vector, k as usize, ef_search as usize);

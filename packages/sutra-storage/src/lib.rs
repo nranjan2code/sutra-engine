@@ -42,6 +42,7 @@ mod parallel_paths;
 mod hnsw_container;
 mod sharded_storage;
 mod storage_trait;
+mod transaction; // 🔥 NEW: 2PC transaction coordinator for cross-shard atomicity
 
 // Self-monitoring module (eating our own dogfood)
 mod event_emitter;
@@ -82,6 +83,7 @@ pub use parallel_paths::{ParallelPathFinder, PathResult};
 pub use hnsw_container::{HnswContainer, HnswConfig, HnswContainerStats};
 pub use sharded_storage::{ShardedStorage, ShardConfig, ShardMap, ShardStats, AggregatedStats};
 pub use storage_trait::LearningStorage;
+pub use transaction::{TransactionCoordinator, TxnOperation, TxnState, TxnError, Transaction, TxnCoordinatorStats}; // 🔥 NEW
 
 // Self-monitoring exports
 pub use event_emitter::{StorageEventEmitter, StorageEvent};
