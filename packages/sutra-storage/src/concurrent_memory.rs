@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 /// Concurrent memory configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConcurrentConfig {
     /// Storage base path
     pub storage_path: PathBuf,
@@ -492,7 +492,7 @@ impl ConcurrentMemory {
     }
     
     /// Vector similarity search (k-NN) - builds HNSW on demand
-    pub fn vector_search(&self, query: &[f32], k: usize, _ef_search: usize) -> Vec<(ConceptId, f32)> {
+    pub fn vector_search(&self, query: &[f32], k: usize, ef_search: usize) -> Vec<(ConceptId, f32)> {
         let vectors_guard = self.vectors.read();
         
         log::info!("🔍 Vector search: query_dim={}, k={}, indexed_vectors={}", query.len(), k, vectors_guard.len());
@@ -503,35 +503,36 @@ impl ConcurrentMemory {
         }
         
         // Build HNSW index from stored vectors
-        let data_with_ids: Vec<(&Vec<f32>, ConceptId)> = vectors_guard
+        let data_with_ids: Vec<(&Vec<f32>, usize)> = vectors_guard
             .iter()
-            .map(|(id, vec)| (vec, *id))
+            .enumerate()
+            .map(|(idx, (_id, vec))| (vec, idx))
             .collect();
         
-        // Build HNSW
-        let hnsw = Hnsw::<f32, DistCosine>::new(
+        let mut hnsw = Hnsw::<f32, DistCosine>::new(
             16,
             data_with_ids.len(),
-            16,
+            200,
             100,
             DistCosine {},
         );
         
-        // Insert all vectors
-        for (idx, (vec, _concept_id)) in data_with_ids.iter().enumerate() {
-            hnsw.insert((vec.as_slice(), idx));
-        }
+        // Build concept_id mapping
+        let id_mapping: Vec<ConceptId> = vectors_guard.keys().copied().collect();
+        
+        // Parallel insert all vectors
+        hnsw.parallel_insert(&data_with_ids);
         
         // Search
-        let results = hnsw.search(query, k, 50);
+        let results = hnsw.search(query, k, ef_search.max(50));
         
         // Convert to (ConceptId, similarity)
         results
             .into_iter()
             .filter_map(|neighbor| {
-                data_with_ids.get(neighbor.d_id).map(|(_, concept_id)| {
+                id_mapping.get(neighbor.d_id).map(|concept_id| {
                     // Convert distance to similarity
-                    (*concept_id, 1.0 - neighbor.distance)
+                    (*concept_id, 1.0 - neighbor.distance.min(1.0))
                 })
             })
             .collect()
@@ -547,6 +548,40 @@ impl ConcurrentMemory {
             dimension: self.config.vector_dimension,
             index_ready: indexed_count > 0,
         }
+    }
+    
+    /// High-level semantic search API
+    pub fn semantic_search(&self, query_vector: Vec<f32>, top_k: usize) -> anyhow::Result<Vec<(ConceptId, f32)>> {
+        if query_vector.len() != self.config.vector_dimension {
+            anyhow::bail!(
+                "Query vector dimension mismatch: expected {}, got {}",
+                self.config.vector_dimension,
+                query_vector.len()
+            );
+        }
+        
+        Ok(self.vector_search(&query_vector, top_k, 50))
+    }
+    
+    /// Get read snapshot for external use
+    pub fn get_snapshot(&self) -> Arc<crate::read_view::GraphSnapshot> {
+        self.read_view.load()
+    }
+    
+    /// Get configuration
+    pub fn config(&self) -> &ConcurrentConfig {
+        &self.config
+    }
+    
+    /// Create association (alias for learn_association)
+    pub fn create_association(
+        &self,
+        source: ConceptId,
+        target: ConceptId,
+        assoc_type: AssociationType,
+        strength: f32,
+    ) -> Result<u64, WriteLogError> {
+        self.learn_association(source, target, assoc_type, strength)
     }
     
     // ========================
@@ -606,7 +641,7 @@ impl Drop for ConcurrentMemory {
 }
 
 /// Snapshot metadata
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct SnapshotInfo {
     pub sequence: u64,
     pub timestamp: u64,
@@ -615,7 +650,7 @@ pub struct SnapshotInfo {
 }
 
 /// Complete system statistics
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ConcurrentStats {
     pub write_log: WriteLogStats,
     pub reconciler: ReconcilerStats,
@@ -623,7 +658,7 @@ pub struct ConcurrentStats {
 }
 
 /// HNSW index statistics
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct HnswStats {
     pub indexed_vectors: usize,
     pub dimension: usize,

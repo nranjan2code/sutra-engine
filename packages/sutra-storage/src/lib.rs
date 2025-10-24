@@ -35,6 +35,11 @@ mod reconciler;
 mod concurrent_memory;
 mod mmap_store;
 
+// Scalability modules
+mod hnsw_persistence;
+mod sharded_storage;
+mod storage_trait;
+
 // Python bindings (OPTIONAL - conditional compilation)
 #[cfg(feature = "python-bindings")]
 mod python_concurrent;
@@ -63,6 +68,11 @@ pub use write_log::{WriteLog, WriteEntry, WriteLogStats, WriteLogError};
 pub use read_view::{ReadView, GraphSnapshot, ConceptNode};
 pub use reconciler::{Reconciler, ReconcilerConfig, ReconcilerStats};
 pub use mmap_store::{MmapStore, MmapStats};
+
+// Scalability exports
+pub use hnsw_persistence::{HnswPersistence, HnswConfig, HnswStats as HnswPersistenceStats, DistanceMetric};
+pub use sharded_storage::{ShardedStorage, ShardConfig, ShardMap, ShardStats, AggregatedStats};
+pub use storage_trait::LearningStorage;
 
 // Re-export Python bindings (conditional)
 #[cfg(feature = "python-bindings")]

@@ -20,6 +20,9 @@ services:
       - STORAGE_HOST=0.0.0.0
       - STORAGE_PORT=50051
       - VECTOR_DIMENSION=768
+      # Sharded Storage Configuration
+      - SUTRA_STORAGE_MODE=sharded
+      - SUTRA_NUM_SHARDS=4
       # Unified Learning Pipeline Configuration
       - SUTRA_EMBEDDING_SERVICE_URL=http://sutra-embedding-service:8888
       - SUTRA_EMBEDDING_TIMEOUT_SEC=30

@@ -204,7 +204,7 @@ impl Default for WriteLog {
 }
 
 /// Write log statistics
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct WriteLogStats {
     pub sequence: u64,
     pub written: u64,

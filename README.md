@@ -10,7 +10,7 @@ Version 2.0 includes enterprise-grade production features:
 - **Streaming Responses**: Progressive answer refinement (10x faster perceived performance)
 - **Event System**: Zero external dependencies - monitors itself using its own reasoning
 
-**📖 [Complete Production Guide](docs/PRODUCTION_GUIDE.md)** | [Architecture](WARP.md) | [Deployment](DEPLOYMENT.md)
+**📖 [Deployment Guide](DEPLOYMENT_GUIDE.md)** | [Architecture](WARP.md) | [Storage Guide](docs/storage/STORAGE_GUIDE.md)
 
 ## Why This Exists
 

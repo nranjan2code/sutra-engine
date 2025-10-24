@@ -121,6 +121,20 @@ class EmbeddingServiceProvider(EmbeddingProvider):
         except requests.RequestException as e:
             raise ConnectionError(f"Cannot connect to embedding service at {self.service_url}: {e}")
 
+    def encode_single(self, text: str, prompt_name: Optional[str] = None) -> np.ndarray:
+        """
+        Encode a single text into embedding (convenience wrapper for QueryProcessor).
+        
+        Args:
+            text: Text string to encode
+            prompt_name: Optional prompt name (ignored, for compatibility)
+        
+        Returns:
+            numpy array of shape (768,) - single embedding vector
+        """
+        result = self.encode([text])
+        return result[0] if len(result) > 0 else np.zeros(768, dtype=np.float32)
+    
     def encode(self, texts: List[str]) -> np.ndarray:
         """
         Encode texts into embeddings using the embedding service.

@@ -134,7 +134,7 @@ impl Drop for Reconciler {
 }
 
 /// Reconciler statistics
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ReconcilerStats {
     pub reconciliations: u64,
     pub entries_processed: u64,

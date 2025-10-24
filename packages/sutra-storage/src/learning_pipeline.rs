@@ -6,7 +6,7 @@ use tracing::{info, warn, debug};
 
 use crate::association_extractor::{AssociationExtractor, AssociationExtractorConfig, AssocKind};
 use crate::embedding_client::EmbeddingClient;
-use crate::concurrent_memory::ConcurrentMemory;
+use crate::storage_trait::LearningStorage;
 use crate::types::{ConceptId, AssociationType};
 
 #[derive(Debug, Clone)]
@@ -47,9 +47,9 @@ impl LearningPipeline {
     }
 
     /// Learn a single concept end-to-end
-    pub async fn learn_concept(
+    pub async fn learn_concept<S: LearningStorage>(
         &self,
-        storage: &ConcurrentMemory,
+        storage: &S,
         content: &str,
         options: &LearnOptions,
     ) -> Result<String> {
@@ -107,9 +107,9 @@ impl LearningPipeline {
     }
 
     /// Learn concepts in batch with basic optimizations
-    pub async fn learn_batch(
+    pub async fn learn_batch<S: LearningStorage>(
         &self,
-        storage: &ConcurrentMemory,
+        storage: &S,
         contents: &[String],
         options: &LearnOptions,
     ) -> Result<Vec<String>> {

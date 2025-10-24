@@ -5,10 +5,11 @@
 
 use std::env;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
-use sutra_storage::{ConcurrentConfig, ConcurrentMemory};
-use sutra_storage::tcp_server::StorageServer;
-use tracing::{info, error};
+use sutra_storage::{ConcurrentConfig, ConcurrentMemory, ShardedStorage, ShardConfig};
+use sutra_storage::tcp_server::{StorageServer, ShardedStorageServer};
+use tracing::{info, error, warn};
 use tracing_subscriber;
 
 #[tokio::main]
@@ -48,41 +49,102 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "768".to_string())
         .parse::<usize>()
         .unwrap_or(768);
+    
+    // Sharding configuration
+    let storage_mode = env::var("SUTRA_STORAGE_MODE")
+        .unwrap_or_else(|_| "single".to_string());
+    
+    let num_shards = env::var("SUTRA_NUM_SHARDS")
+        .unwrap_or_else(|_| "16".to_string())
+        .parse::<u32>()
+        .unwrap_or(16);
 
     info!("Configuration:");
+    info!("  Storage mode: {}", storage_mode);
     info!("  Storage path: {}", storage_path);
     info!("  Listen address: {}:{}", host, port);
     info!("  Reconcile interval: {}ms", reconcile_interval_ms);
     info!("  Memory threshold: {} writes", memory_threshold);
     info!("  Vector dimension: {}", vector_dimension);
+    if storage_mode == "sharded" {
+        info!("  Number of shards: {}", num_shards);
+    }
 
-    // Initialize storage
-    let config = ConcurrentConfig {
-        storage_path: storage_path.into(),
-        reconcile_interval_ms,
-        memory_threshold,
-        vector_dimension,
-    };
-
-    info!("Initializing storage...");
-    let storage = ConcurrentMemory::new(config);
-    
-    let stats = storage.stats();
-    info!("Storage initialized:");
-    info!("  Concepts: {}", stats.snapshot.concept_count);
-    info!("  Edges: {}", stats.snapshot.edge_count);
-    info!("  Sequence: {}", stats.snapshot.sequence);
-
-    // Create server
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
-    let server = Arc::new(StorageServer::new(storage));
 
-    info!("Starting TCP server on {}", addr);
-    
-    // Start server (blocks until shutdown)
-    if let Err(e) = server.serve(addr).await {
-        error!("Server error: {}", e);
-        return Err(e.into());
+    // Initialize storage based on mode
+    match storage_mode.as_str() {
+        "sharded" => {
+            info!("Initializing SHARDED storage with {} shards...", num_shards);
+            
+            let shard_config = ConcurrentConfig {
+                storage_path: PathBuf::from(&storage_path), // Will be overridden per shard
+                reconcile_interval_ms,
+                memory_threshold,
+                vector_dimension,
+            };
+            
+            let config = ShardConfig {
+                num_shards,
+                base_path: PathBuf::from(&storage_path),
+                shard_config,
+            };
+            
+            let sharded_storage = ShardedStorage::new(config)
+                .map_err(|e| format!("Failed to initialize sharded storage: {}", e))?;
+            
+            let stats = sharded_storage.stats();
+            info!("✅ Sharded storage initialized:");
+            info!("  Total concepts: {}", stats.total_concepts);
+            info!("  Total edges: {}", stats.total_edges);
+            info!("  Total vectors: {}", stats.total_vectors);
+            info!("  Total writes: {}", stats.total_writes);
+            info!("  Shards: {}", stats.num_shards);
+            
+            // Create sharded server
+            let server = Arc::new(ShardedStorageServer::new(sharded_storage));
+            
+            info!("🚀 Starting SHARDED TCP server on {}", addr);
+            
+            // Start server (blocks until shutdown)
+            if let Err(e) = server.serve(addr).await {
+                error!("Server error: {}", e);
+                return Err(e.into());
+            }
+        }
+        "single" | _ => {
+            if storage_mode != "single" {
+                warn!("Unknown storage mode '{}', defaulting to 'single'", storage_mode);
+            }
+            
+            info!("Initializing SINGLE storage...");
+            
+            let config = ConcurrentConfig {
+                storage_path: storage_path.into(),
+                reconcile_interval_ms,
+                memory_threshold,
+                vector_dimension,
+            };
+            
+            let storage = ConcurrentMemory::new(config);
+            
+            let stats = storage.stats();
+            info!("✅ Single storage initialized:");
+            info!("  Concepts: {}", stats.snapshot.concept_count);
+            info!("  Edges: {}", stats.snapshot.edge_count);
+            info!("  Sequence: {}", stats.snapshot.sequence);
+            
+            // Create server
+            let server = Arc::new(StorageServer::new(storage));
+            
+            info!("🚀 Starting SINGLE TCP server on {}", addr);
+            
+            // Start server (blocks until shutdown)
+            if let Err(e) = server.serve(addr).await {
+                error!("Server error: {}", e);
+                return Err(e.into());
+            }
+        }
     }
 
     info!("Server shutdown complete");

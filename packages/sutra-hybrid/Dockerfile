@@ -17,10 +17,12 @@ COPY packages/sutra-core ./packages/sutra-core
 COPY packages/sutra-nlg ./packages/sutra-nlg
 
 # Requirements (minimal versions only)
+# Fixed numpy/scipy compatibility: numpy 2.0+ required for scipy 1.14+
 RUN cat > hybrid-requirements.txt <<EOF
 typing_extensions>=4.12.0
-numpy>=1.24.0,<2.0.0
-scikit-learn>=1.3.0,<1.4.0
+numpy>=2.0.0
+scipy>=1.14.0
+scikit-learn>=1.5.0
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 pydantic>=2.0.0
