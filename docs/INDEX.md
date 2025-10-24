@@ -1,113 +1,71 @@
 # Sutra AI Documentation Index
 
-**Complete documentation navigation for Sutra AI - An explainable AI system that learns in real-time**
-
-Version: 2.0.0 | Last Updated: 2025-10-23
+**Complete documentation map for Sutra Models**
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-**New to Sutra AI?** Start here:
-- 📖 [Project Overview](../README.md) - What is Sutra AI and why use it
-- 🏃 [Quick Start Guide](guides/QUICK_START.md) - Get up and running in 10 minutes
-- 🏗️ [Architecture Overview](../ARCHITECTURE.md) - System design at a glance
-- 🔧 [Build & Deploy](operations/BUILD_AND_DEPLOY.md) - Production deployment guide
+- [README](../README.md) - Project overview
+- [Quick Start Guide](guides/QUICK_START.md)
+- [Deployment Guide](operations/DEPLOYMENT.md)
 
 ---
 
-## 📚 Core Documentation
+## Package Documentation
 
-### 🏗️ Architecture & Design
-High-level system design, technical deep dives, and scalability architecture
+### Core Packages
+- [sutra-storage](../packages/sutra-storage/README.md) - Storage engine (Rust)
+- [sutra-core](../packages/sutra-core/README.md) - Reasoning engine (Python)
+- [sutra-hybrid](../packages/sutra-hybrid/README.md) - Semantic orchestration
+- [sutra-api](../packages/sutra-api/README.md) - REST API
 
-- **[System Architecture](../ARCHITECTURE.md)** - Main architecture document (root)
-- **[Deep Dive](architecture/DEEP_DIVE.md)** - Detailed technical design and storage architecture
-- **[Scalability Architecture](architecture/SCALABILITY.md)** 🆕 - Sharding, HNSW, HA, distributed features
-- **[TCP Binary Protocol](TCP_PROTOCOL_ARCHITECTURE.md)** - Custom 10-50× faster protocol
-- **[Unified Learning Architecture](UNIFIED_LEARNING_ARCHITECTURE.md)** - Single source of truth learning
-- **[Runtime Architecture](RUNTIME_ARCHITECTURE.md)** - Process communication and deployment
-- **[Technical Analysis](architecture/TECHNICAL_ANALYSIS.md)** - SWOT analysis and trade-offs
-- **[Enterprise Architecture](architecture/enterprise.md)** - Enterprise deployment patterns
+### Support Packages
+- [sutra-nlg](../packages/sutra-nlg/README.md) - Natural language generation
+- [sutra-storage-client-tcp](../packages/sutra-storage-client-tcp/README.md) - TCP client
 
-### 🚀 Operations & Deployment
-Build, deploy, monitor, and scale Sutra AI in production
+### Grid Infrastructure
+- [sutra-grid-master](../packages/sutra-grid-master/README.md) - Orchestration
+- [sutra-grid-agent](../packages/sutra-grid-agent/README.md) - Node management
+- [sutra-grid-events](../packages/sutra-grid-events/README.md) - Event system
 
-- **[Production Guide](PRODUCTION.md)** 🔥 **NEW** - Complete P0 implementation with HA, monitoring, scale validation
-- **[Build & Deploy Guide](operations/BUILD_AND_DEPLOY.md)** - Complete build and deployment
-- **[Deployment Guide](operations/DEPLOYMENT_GUIDE.md)** - Deployment procedures and configurations
-- **[Production Requirements](operations/PRODUCTION_REQUIREMENTS.md)** - Production setup checklist
-- **[Optimization Guide](operations/OPTIMIZATION_GUIDE.md)** - Performance tuning and optimization
-- **[Scaling Guide](operations/SCALING_GUIDE.md)** - Horizontal and vertical scaling strategies
-- **[Monitoring Guide](operations/MONITORING.md)** - Observability, metrics, and debugging
-
-### 📖 User Guides
-Step-by-step guides for developers and operators
-
-- **[Quick Start](guides/QUICK_START.md)** - Get started in 10 minutes
-- **[Best Practices](guides/BEST_PRACTICES.md)** 🆕 - Development best practices and patterns
-- **[Troubleshooting](../TROUBLESHOOTING.md)** - Common issues and solutions (root)
+### UI & Tools
+- [sutra-control](../packages/sutra-control/README.md) - Control center
+- [sutra-client](../packages/sutra-client/README.md) - Web UI
+- [sutra-explorer](../packages/sutra-explorer/README.md) - Storage explorer
 
 ---
 
-## 🔧 Component Documentation
+## Architecture
 
-### 💾 Storage Layer
-High-performance Rust storage engine with sharding and vector search
-
-- **[Sharded Storage](storage/SHARDING.md)** 🆕 - Multi-shard architecture for massive scale
-- **[HNSW Optimization](storage/HNSW_OPTIMIZATION.md)** 🆕 - Build-once vector index strategy
-
-### 🧠 Embedding Service
-Dedicated high-performance embedding service with 768-dimensional vectors
-
-- **[Service Overview](embedding/SERVICE_OVERVIEW.md)** - Architecture and features
-- **[Migration Guide](embedding/MIGRATION_GUIDE.md)** - Migration from Ollama to dedicated service
-- **[HA Design](embedding/HA_DESIGN.md)** 🆕 - High availability architecture (planned)
-
-### 📥 Data Ingestion
-High-performance bulk data ingestion
-
-- **[Integration Guide](ingestion/INTEGRATION_GUIDE.md)** - Bulk ingester setup
+- [System Architecture](ARCHITECTURE.md) - High-level design
+- [Storage Architecture](storage/ARCHITECTURE.md) - Storage engine
+- [TCP Protocol](TCP_PROTOCOL_ARCHITECTURE.md) - Binary protocol
 
 ---
 
-## 🆕 What's New (2025-10-24)
+## Operations
 
-### 🎉 P0 Features Complete - Production-Ready!
-1. **✅ HA Embedding Service** - 3 replicas + HAProxy with automatic failover (<3s)
-2. **✅ Self-Monitoring** - 9 GridEvent types, Sutra monitors itself
-3. **✅ Scale Validation** - 10M concept benchmark with P50/P95/P99 tracking
-4. **✅ Sharded Storage** - 4-16 shards for horizontal scalability
-5. **✅ HNSW Build-Once** - 100× faster vector search on restart
-6. **✅ Unified Learning** - Storage server owns complete pipeline
-7. **✅ TCP Binary Protocol** - 10-50× lower latency than gRPC
-
-### New Documentation (This Release)
-- 🔥 **`docs/PRODUCTION.md`** - Complete P0 implementation guide (CONSOLIDATED)
-- ✅ `docker/haproxy.cfg` - HAProxy configuration for HA embedding
-- ✅ `scripts/test-embedding-ha.sh` - Automated failover testing
-- ✅ `scripts/scale-validation.rs` - 10M concept benchmark
-- ✅ `packages/sutra-storage/src/event_emitter.rs` - Self-monitoring implementation
-- ✅ Updated `WARP.md` and `README.md` with P0 completion status
+- [Deployment](operations/DEPLOYMENT.md) - Production deployment
+- [Monitoring](operations/MONITORING.md) - Observability
+- [Production Requirements](operations/PRODUCTION_REQUIREMENTS.md) - Critical config
+- [Troubleshooting](../TROUBLESHOOTING.md) - Common issues
 
 ---
 
-## 🎯 Quick Reference
+## Development
 
-| I want to... | Read this... |
-|--------------|--------------|
-| Get started quickly | [Quick Start Guide](guides/QUICK_START.md) |
-| Understand the architecture | [ARCHITECTURE.md](../ARCHITECTURE.md) |
-| Deploy to production | [Build & Deploy](operations/BUILD_AND_DEPLOY.md) |
-| Scale to millions of concepts | [Sharded Storage](storage/SHARDING.md) |
-| Optimize performance | [Optimization Guide](operations/OPTIMIZATION_GUIDE.md) |
-| Configure embedding service | [Embedding Service](embedding/SERVICE_OVERVIEW.md) |
-| Troubleshoot issues | [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) |
-| Contribute code | [CONTRIBUTING.md](../CONTRIBUTING.md) |
+- [Development Guide](guides/DEVELOPMENT.md) - Setup
+- [Contributing](../CONTRIBUTING.md) - How to contribute
+- [Testing](development/testing.md) - Test procedures
 
 ---
 
-**🔥 Pro Tip**: Bookmark this page for easy navigation to all Sutra AI documentation!
+## Reference
 
-Last Updated: 2025-10-23 | Version: 2.0.0
+- [Documentation Audit](DOCUMENTATION_AUDIT_2025.md) - Complete analysis
+- [Completion Summary](DOCUMENTATION_COMPLETION_SUMMARY.md) - Roadmap
+
+---
+
+**Last Updated**: October 24, 2025

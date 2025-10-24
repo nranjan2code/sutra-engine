@@ -1,6 +1,6 @@
-# sutra | sed 's/\b\(.\)/\u\1/g'grid | sed 's/\b\(.\)/\u\1/g'master
+# sutra | sed 's/\b\(.\)/\u\1/g'grid | sed 's/\b\(.\)/\u\1/g'events
 
-**sutra-grid-master - Part of Sutra AI ecosystem**
+**sutra-grid-events - Part of Sutra AI ecosystem**
 
 License: MIT
 
@@ -16,7 +16,7 @@ See main documentation for details.
 
 ```bash
 # Docker
-docker-compose -f docker-compose-grid.yml up -d sutra-grid-master
+docker-compose -f docker-compose-grid.yml up -d sutra-grid-events
 ```
 
 ---

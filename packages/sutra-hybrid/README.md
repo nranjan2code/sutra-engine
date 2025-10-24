@@ -1,57 +1,109 @@
-# Sutra Hybrid (with Grounded NLG)
+# Sutra Hybrid
 
-Production-ready hybrid API that combines semantic retrieval over the Sutra Storage gRPC server with optional grounded, template-driven NLG (no LLMs).
+**Semantic embeddings orchestration combining graph reasoning with vector search.**
 
-## Build (Docker)
+Version: 2.0.0 | Language: Python | License: MIT
 
-```bash
-# From repo root
-docker build -f packages/sutra-hybrid/Dockerfile -t sutra-hybrid:nlg .
+---
+
+## Overview
+
+Sutra Hybrid orchestrates graph-based reasoning with semantic embeddings, providing the **SutraAI** class - the main user-facing interface.
+
+### Key Features
+
+- **🎯 Multi-Strategy**: Compare graph vs semantic results
+- **🔗 Unified Learning**: Delegates to storage server
+- **📊 Explainability**: Complete reasoning paths
+- **🌐 Distributed**: TCP-based architecture
+- **🔒 Production**: Mandatory embedding service
+
+---
+
+## Quick Start
+
+```python
+from sutra_hybrid import SutraAI
+
+ai = SutraAI(
+    storage_server="storage-server:50051",
+    enable_semantic=True,
+)
+
+# Learn
+ai.learn("The Eiffel Tower is in Paris")
+
+# Query
+result = ai.ask("Where is the Eiffel Tower?")
+print(result.answer)
 ```
 
-## Run
+---
 
-```bash
-docker run --rm -p 8001:8000 \
-  -e SUTRA_STORAGE_SERVER=storage-server:50051 \
-  -e SUTRA_NLG_ENABLED=true \
-  -e SUTRA_NLG_TONE=friendly \
-  --name sutra-hybrid sutra-hybrid:nlg
+## API Reference
+
+### SutraAI
+
+```python
+from sutra_hybrid import SutraAI
+
+ai = SutraAI(
+    storage_server="storage-server:50051",
+    enable_semantic=True,  # Required in production
+)
+
+# Learn
+result = ai.learn("Paris is in France")
+
+# Query
+result = ai.ask(
+    query="What is in Paris?",
+    explain=True,
+    semantic_boost=True,
+    num_paths=5,
+)
+
+# Result includes
+print(result.answer)
+print(result.final_confidence)
+print(result.reasoning_paths)
+print(result.semantic_support)
 ```
 
-## Environment variables
+---
 
-- SUTRA_STORAGE_SERVER: gRPC address of storage-server (host:port)
-- SUTRA_NLG_ENABLED: true|false (enable grounded NLG post-processing; default: true)
-- SUTRA_NLG_TONE: friendly|formal|concise|regulatory (default: friendly)
+## Configuration
 
-## API (selected)
+### Environment Variables
 
-- POST /sutra/learn
-- POST /sutra/query
-  - Body fields:
-    - query: string
-    - semantic_boost: boolean
-    - max_depth: int
-    - max_paths: int
-    - tone: optional string (friendly|formal|concise|regulatory)
-    - moves: optional array of strings (e.g., ["define","evidence"])
+| Variable | Required | Default |
+|----------|----------|---------|
+| `SUTRA_EMBEDDING_SERVICE_URL` | ✅ | `http://sutra-embedding-service:8888` |
+| `SUTRA_VECTOR_DIMENSION` | ✅ | `768` |
+| `SUTRA_USE_SEMANTIC_EMBEDDINGS` | ✅ | `true` |
+| `SUTRA_STORAGE_SERVER` | ✅ | `storage-server:50051` |
 
-## Example
+---
+
+## Troubleshooting
+
+### Embedding service unhealthy
 
 ```bash
-curl -s http://localhost:8001/sutra/query \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"What is Python?","tone":"friendly","moves":["define","evidence"]}' | jq .
+curl http://localhost:8888/health
+docker restart sutra-embedding-service
 ```
 
-## Guarantees
+### Dimension mismatch
 
-- Grounded responses only: every clause derives from stored concepts or marked hedge tokens.
-- On any NLG failure or low evidence, system falls back to raw, retrieved answer.
-- Full audit trail remains intact.
+```bash
+export SUTRA_VECTOR_DIMENSION=768
+```
 
-## Notes
+---
 
-- The NLG layer lives in packages/sutra-nlg and is installed into this image.
-- No LLMs are used; generation is template-driven and deterministic.
+## License
+
+MIT License
+
+**Built with ❤️ by the Sutra AI Team**

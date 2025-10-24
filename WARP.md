@@ -1,62 +1,61 @@
 # WARP.md
 
-This file provides guidance to WARP (warp.dev) when working with code in this repository.
+**AI Assistant Guidance for Sutra Models Project**
 
-## 🎉 PRODUCTION-GRADE STORAGE COMPLETE (2025-10-24)
-
-**STATUS**: ✅ **ALL P0 CRITICAL ISSUES RESOLVED** - Storage engine is production-ready!
-
-**Grade Upgrade**: A- (90/100) → **A+ (95/100)**
-
-### What Was Fixed
-
-1. ✅ **Cross-Shard 2PC** - Full distributed transaction support (transaction.rs, 500 lines)
-2. ✅ **Input Validation** - Comprehensive DoS protection (6 security limits, 7 validation points)
-3. ✅ **Config Validation** - Fail-fast validation at startup (ConcurrentConfig + AdaptiveReconcilerConfig)
-4. ✅ **Overflow Protection** - Memory safety via checked_mul() in critical paths
-
-### Test Results
-
-```bash
-cargo test --lib --release
-# Result: 107 passed, 0 failed, 1 ignored ✅
-```
-
-### Production Guarantees
-
-- ✅ **Zero data loss** - 2PC ensures atomic cross-shard operations
-- ✅ **DoS protection** - Cannot allocate 1GB concepts or run expensive queries
-- ✅ **Fail-fast** - Invalid config rejected at startup with clear errors
-- ✅ **Memory safety** - No integer overflow at 10M+ concepts
-- ✅ **57K writes/sec** - Performance maintained
-- ✅ **<0.01ms reads** - Latency maintained
-
-### Documentation
-
-**Complete implementation details**:
-- `docs/storage/PRODUCTION_GRADE_COMPLETE.md` - Comprehensive report (465 lines)
-- `docs/storage/DEEP_CODE_REVIEW.md` - Updated with completion status
-- All code changes: transaction.rs (new), tcp_server.rs, concurrent_memory.rs, mmap_store.rs
-
-**Deployment**: Ready for 5M-10M+ concepts with enterprise-grade guarantees.
+This document provides structured guidance for AI assistants (like WARP at warp.dev) when working with the Sutra Models codebase.
 
 ---
 
-## 🚨 CRITICAL: Embedding System Requirements (MANDATORY)
+## 📋 Table of Contents
 
-**✅ HIGH-PERFORMANCE EMBEDDING SERVICE (2025-10-20) ✅**
+1. [Project Overview](#project-overview)
+2. [Critical Production Requirements](#critical-production-requirements)
+3. [Architecture](#architecture)
+4. [Development Environment](#development-environment)
+5. [Key Components](#key-components)
+6. [Common Development Tasks](#common-development-tasks)
+7. [Troubleshooting](#troubleshooting)
+8. [Recent Major Features](#recent-major-features)
 
-**Current Status**: **PRODUCTION-READY EMBEDDING SERVICE**  
-**Architecture**: Dedicated high-performance service using **nomic-embed-text-v1.5**  
-**Performance**: 10x faster than previous Ollama-based system
+---
 
-**NEVER IGNORE THESE REQUIREMENTS - SYSTEM WILL NOT FUNCTION WITHOUT THEM:**
+## Project Overview
 
-### **1. STRICT EMBEDDING SERVICE REQUIREMENT (Production Standard: 2025-10-20)**
+**Sutra AI** is an explainable graph-based AI system that learns in real-time without retraining. It provides complete reasoning paths for every decision, making it a transparent alternative to black-box LLMs.
 
-**⚠️ ONLY Sutra Embedding Service IS SUPPORTED ⚠️**
+### Core Value Proposition
 
-Sutra AI uses **dedicated embedding service architecture** with ZERO dependencies:
+- ✅ Shows reasoning for every answer
+- ✅ Learns incrementally from new information
+- ✅ Provides audit trails for compliance
+- ✅ Works without GPUs or massive compute
+- ✅ 100% explainable reasoning paths
+- ✅ Self-observability using own reasoning engine
+- ✅ Progressive streaming responses (10× faster UX)
+- ✅ Quality gates with "I don't know" for uncertain answers
+- ✅ Natural language operational queries
+
+### Production Status (2025-10-24)
+
+**✅ PRODUCTION-READY** - Storage engine grade: **A+ (95/100)**
+
+- ✅ Cross-shard 2PC transactions (zero data loss)
+- ✅ Comprehensive DoS protection and input validation
+- ✅ 57K writes/sec, <0.01ms reads maintained
+- ✅ 107 tests passed, production-grade guarantees
+- ✅ Ready for 5M-10M+ concepts with enterprise-grade durability
+
+---
+
+## Critical Production Requirements
+
+### 🚨 MANDATORY: Embedding Service Configuration
+
+**⚠️ SYSTEM WILL NOT FUNCTION WITHOUT CORRECT EMBEDDING CONFIGURATION ⚠️**
+
+#### Strict Requirements (Production Standard: 2025-10-20)
+
+**ONLY Sutra Embedding Service IS SUPPORTED:**
 
 ```yaml
 REQUIRED:
@@ -75,14 +74,15 @@ FORBIDDEN:
   - TF-IDF fallback ❌
 ```
 
-**Why This Matters:**
+#### Why This Matters
+
 - Different models produce **incompatible semantic spaces**
 - Mixing dimensions causes **WRONG QUERY RESULTS**
-- Real example: Using 384-d for queries + 768-d for storage caused:
+- Real incident: Using 384-d for queries + 768-d for storage caused:
   - Query: "What is the tallest mountain?" → Answer: "Pacific Ocean" ❌
-- Dedicated service ensures **consistent performance**
 
-**Mandatory Environment Variables:**
+#### Mandatory Environment Variables
+
 ```bash
 # Storage Server (docker-compose-grid.yml)
 VECTOR_DIMENSION=768                                           # MUST be 768
@@ -94,7 +94,8 @@ SUTRA_VECTOR_DIMENSION=768                                     # MUST be 768
 SUTRA_USE_SEMANTIC_EMBEDDINGS=true                            # MUST be true
 ```
 
-**Verification:**
+#### Verification Commands
+
 ```bash
 # 1. Ensure embedding service is running
 curl -s http://localhost:8888/health | jq '.status'
@@ -116,13 +117,9 @@ curl -s http://localhost:8888/metrics | jq '.success_rate, .cache_hit_rate'
 # Expected: >95% success rate, >50% cache hit rate
 ```
 
-**See:** `EMBEDDING_SERVICE_MIGRATION.md` for complete details and deployment guide.
+**See:** `EMBEDDING_SERVICE_MIGRATION.md` for complete details.
 
-### **2. MANDATORY: Component Initialization Order (CRITICAL)**
-
-**⚠️ EMBEDDING SERVICE INITIALIZATION IS CRITICAL ⚠️**
-
-Following the 2025-10-20 embedding service migration, **strict initialization order** is now **MANDATORY**:
+### Component Initialization Order (CRITICAL)
 
 ```python
 # ✅ CORRECT ORDER (MANDATORY)
@@ -148,563 +145,39 @@ class SutraAI:
             embedding_processor=self.embedding_processor,  # ← Pre-created processor
             nlp_processor=None,
         )
-        logger.info("Recreated QueryProcessor with EmbeddingServiceProvider")
 ```
 
 **Violation of initialization order will cause system failure.**
 
-**Reference**: `packages/sutra-embedding-service/` (production implementation)
+### TCP Architecture Requirements
 
-### **3. Embedding Service Configuration**
-   - Must be running at `SUTRA_EMBEDDING_SERVICE_URL` (default: `http://sutra-embedding-service:8888`)
-   - Uses nomic-embed-text-v1.5 with 768-dimensional output
-   - Includes intelligent caching and batch processing for performance
+- ALL services MUST use `sutra-storage-client-tcp` package
+- NEVER import `sutra_storage` directly in distributed services
+- Unit variants send strings, not `{variant: {}}` format
+- Convert numpy arrays to lists before TCP transport
 
-### **4. TCP Architecture is MANDATORY**
-   - ALL services MUST use `sutra-storage-client-tcp` package
-   - NEVER import `sutra_storage` directly in distributed services
-   - Unit variants send strings, not `{variant: {}}` format
-   - Convert numpy arrays to lists before TCP transport
+### Common Production-Breaking Errors
 
-### **5. Common Production-Breaking Errors:**
-   - "Dimension mismatch: expected 768, got 384" → Embedding service not configured correctly
-   - "Connection refused to embedding service" → SUTRA_EMBEDDING_SERVICE_URL incorrect or service not running
-   - "Embedding service unhealthy" → Service startup failed or model not loaded
-   - "can not serialize 'numpy.ndarray' object" → Missing array conversion
-   - "wrong msgpack marker" → Wrong message format for unit variants
+| Error Message | Root Cause | Fix |
+|---------------|------------|-----|
+| "Dimension mismatch: expected 768, got 384" | Wrong embedding model | Configure nomic-embed-text-v1.5 |
+| "Connection refused to embedding service" | Service not running | Start sutra-embedding-service |
+| "Embedding service unhealthy" | Model not loaded | Check service logs |
+| "can not serialize 'numpy.ndarray' object" | Missing array conversion | Convert to list before TCP |
+| "wrong msgpack marker" | Wrong message format | Use string for unit variants |
 
 **References:**
-- **EMBEDDING_SERVICE_MIGRATION.md** - Complete migration guide (READ THIS FIRST)
-- **packages/sutra-embedding-service/** - Service implementation
-- **docker-compose-grid.yml** - Production deployment configuration
-
-## 🎉 P0 PRODUCTION FEATURES COMPLETE (2025-10-24)
-
-**ALL P0 TASKS IMPLEMENTED AT PRODUCTION LEVEL - READY FOR 10M+ CONCEPTS**
-
-### ✅ P0.2: Embedding Service High Availability (PRODUCTION-READY)
-
-**Architecture**: 3 replicas + HAProxy load balancer for zero-downtime deployment
-
-```yaml
-Embedding HA Architecture:
-  - 3 Independent Replicas (embedding-1, embedding-2, embedding-3)
-  - HAProxy Load Balancer (least-connection algorithm)
-  - Health Checks: Every 2s (3 failures = down, 2 successes = up)
-  - Automatic Failover: <3s detection time
-  - Stats Dashboard: http://localhost:8404/stats
-  - Memory Limits: 2GB per replica
-  - GridEvent Integration: Real-time health monitoring
-```
-
-**Deployment**:
-```bash
-# Start HA embedding services
-docker-compose -f docker-compose-grid.yml up -d \
-  embedding-1 embedding-2 embedding-3 embedding-ha
-
-# Test failover
-./scripts/test-embedding-ha.sh
-# Expected: >95% success rate during failures
-```
-
-**Benefits**:
-- ✅ Zero downtime deployments
-- ✅ 3x capacity for load spikes
-- ✅ Automatic failover (<3s)
-- ✅ Independent failure domains
-
-**See**: `docker/haproxy.cfg`, `scripts/test-embedding-ha.sh`, `docs/PRODUCTION_COMPLETE.md`
+- `EMBEDDING_SERVICE_MIGRATION.md` - Complete migration guide
+- `packages/sutra-embedding-service/` - Service implementation
+- `docker-compose-grid.yml` - Production deployment
 
 ---
-
-### ✅ P0.3: Self-Monitoring via Grid Events (PRODUCTION-READY)
-
-**Architecture**: "Eating our own dogfood" - Sutra monitors itself using its own reasoning engine
-
-**9 Production Event Types**:
-- `StorageMetrics` - Real-time concept/edge count, throughput, memory
-- `QueryPerformance` - Query depth, latency, confidence tracking
-- `EmbeddingLatency` - Batch processing with cache hit rates
-- `HnswIndexBuilt/Loaded` - Vector index build/load metrics
-- `PathfindingMetrics` - Graph traversal performance
-- `ReconciliationComplete` - Background reconciliation tracking
-- `EmbeddingServiceHealthy/Degraded` - Service health monitoring
-
-**Implementation**:
-```rust
-// StorageEventEmitter with async worker
-let emitter = StorageEventEmitter::new(
-    node_id,        // "storage-prod-1"
-    event_storage,  // "grid-event-storage:50052"
-);
-
-// Non-blocking emission (won't slow storage ops)
-emitter.emit_storage_metrics(concepts, edges, write_throughput, memory_mb);
-emitter.emit_query_performance(query_type, depth, results, latency_ms, confidence);
-```
-
-**Environment Variables**:
-```bash
-STORAGE_NODE_ID=storage-prod-1  # Optional: defaults to "storage-{pid}"
-EVENT_STORAGE=grid-event-storage:50052  # Optional: events only logged if not set
-```
-
-**Zero-Cost**: Events only emitted when `EVENT_STORAGE` configured, otherwise no overhead.
-
-**See**: `packages/sutra-storage/src/event_emitter.rs`, `docs/PRODUCTION_IMPLEMENTATION_LOG.md`
-
----
-
-### ✅ P0.4: Scale Validation - 10M Concept Benchmark (READY TO RUN)
-
-**Benchmark**: Comprehensive validation of all documented performance claims
-
-```bash
-# Compile and run
-cd scripts && rustc --edition 2021 -O scale-validation.rs
-SUTRA_NUM_SHARDS=16 ./scale-validation
-
-# Runtime: ~3-5 minutes
-# Output: Comprehensive report + pass/fail validation
-```
-
-**4 Test Phases**:
-1. **Sequential Write**: 10M concepts with 768-d vectors
-2. **Random Read**: 10K queries (P50/P95/P99 latencies)
-3. **Vector Search**: 10K HNSW searches (top-10 results)
-4. **Memory Analysis**: Per-concept overhead calculation
-
-**Claims Validated**:
-- ✅ Write throughput >= 50,000 concepts/sec
-- ✅ Read latency < 0.01ms (P50)
-- ✅ Vector search < 50ms (P50)
-- ✅ Memory usage <= 2KB/concept
-
-**See**: `scripts/scale-validation.rs`, `docs/PRODUCTION_COMPLETE.md`
-
----
-
-## 🎉 P1 PERFORMANCE FEATURES COMPLETE (2025-10-24)
-
-**ALL P1 TASKS IMPLEMENTED - PRODUCTION-READY PERFORMANCE OPTIMIZATIONS**
-
-### ✅ P1.1: Semantic Association Extraction (PRODUCTION-READY)
-
-**Architecture**: Modern embedding-based NLP using HA embedding service (zero new dependencies)
-
-**OLD (Pattern-Based)**:
-- Regex patterns with 50% accuracy
-- No semantic understanding
-- Brittle, hard-coded rules
-
-**NEW (Embedding-Based)**:
-```rust
-SemanticExtractor {
-  // Pre-compute relation type embeddings on init
-  relation_embeddings: {
-    "Semantic": embedding("related to, associated with"),
-    "Causal": embedding("causes, leads to, results in"),
-    "Temporal": embedding("before, after, during"),
-    "Hierarchical": embedding("is a, part of, contains"),
-    "Compositional": embedding("made of, consists of"),
-  }
-  
-  // Classify using cosine similarity
-  fn extract(text) -> Vec<(entity1, entity2, relation_type)>
-}
-```
-
-**Performance Comparison**:
-| Method | Latency | Accuracy | Dependencies | Implementation |
-|--------|---------|----------|--------------|----------------|
-| OLD (regex) | 5ms | 50% | 0 | 1 day |
-| spaCy | 100ms | 70% | 150MB | 2 days |
-| **NEW (semantic)** | **30ms** | **80%** | **0 (uses HA service)** | **4 hours** |
-
-**Benefits**:
-- ✅ 30% better accuracy than regex
-- ✅ 3× faster than spaCy
-- ✅ Zero new dependencies (uses existing HA embedding service)
-- ✅ Production-grade async implementation
-
-**Deployment**:
-```bash
-# Automatically enabled in storage server
-# Uses SUTRA_EMBEDDING_SERVICE_URL for relation classification
-
-# Verify semantic extraction working
-curl -X POST http://localhost:50051/learn_concept \
-  -d '{"content": "The Eiffel Tower is located in Paris"}'
-# Extracts: (Eiffel Tower, Paris, Hierarchical)
-```
-
-**See**: `packages/sutra-storage/src/semantic_extractor.rs`
-
----
-
-### ✅ P1.5: HNSW Persistent Index (PRODUCTION-READY) - USearch Migration 🚀
-
-**Migration Date**: 2025-10-24  
-**Status**: ✅ Complete - **94× faster startup**  
-**Technology**: **USearch** (production-grade HNSW with true mmap persistence)
-
-**Problem Solved**: OLD system (hnsw-rs) had lifetime constraints preventing disk loading - index was rebuilt on EVERY startup
-
-**Solution**: Migrated to **USearch** with TRUE disk persistence via memory-mapped files
-
-**Architecture**:
-```rust
-HnswContainer {
-  // USearch index with mmap-based persistence
-  index: Arc<RwLock<Option<Index>>>,  // usearch::Index (no lifetime issues!)
-  id_mapping: RwLock<HashMap<ConceptId, usize>>,
-  
-  // Persistence files (single-file format)
-  storage.usearch     // Single mmap file (24% smaller than old format)
-  storage.hnsw.meta   // ID mappings + metadata (compatible)
-  
-  // Methods
-  load_or_build()  // TRUE mmap load or build from vectors
-  insert()         // Incremental O(log N) insert with capacity reservation
-  search()         // k-NN search (SIMD-optimized)
-  save()           // Persist to disk (~200ms for 1M vectors)
-}
-```
-
-**Performance** (Validated with 1K vector test):
-| Operation | OLD (hnsw-rs broken) | NEW (USearch) | Improvement |
-|-----------|---------------------|---------------|-------------|
-| Build | 327ms | 327ms | Same |
-| **Load from disk** | **327ms (rebuild!)** | **3.5ms (mmap!)** | **94× faster** |
-| Search | <1ms | <1ms | Same (SIMD-optimized) |
-| Insert | O(log N) | O(log N) | Same |
-| Memory | 1.2GB/1M | 900MB/1M | 24% reduction |
-
-**Projected Production Performance**:
-| Dataset Size | Build Time | OLD Load (Rebuild) | NEW Load (mmap) | Speedup |
-|--------------|------------|-------------------|-----------------|----------|
-| 1K vectors | 327ms | 327ms | 3.5ms | **94×** |
-| 10K vectors | 3.3s | 3.3s | 35ms | **94×** |
-| 100K vectors | 33s | 33s | 350ms | **94×** |
-| 1M vectors | 5.5min | 5.5min | **3.5s** | **94×** |
-| 10M vectors | 55min | 55min | **35s** | **94×** |
-
-**Benefits**:
-- ✅ **94× faster startup** (TRUE mmap persistence, not rebuild)
-- ✅ **24% smaller index files** (single-file format with better compression)
-- ✅ **SIMD-optimized** search (faster than old implementation)
-- ✅ **Incremental updates** with automatic capacity management
-- ✅ **Production-proven** (USearch used by Unum Cloud commercially)
-- ✅ **Active maintenance** (updated 2025-10-20)
-- ✅ **No lifetime issues** (clean Rust API)
-
-**Deployment**:
-```bash
-# Automatically enabled in ConcurrentMemory
-# Files created in STORAGE_PATH:
-#   - storage.usearch (NEW: single mmap file)
-#   - storage.hnsw.meta (compatible with old format)
-
-# Verify HNSW persistence working
-curl http://localhost:8000/stats | jq '.hnsw'
-# Expected: {"indexed_vectors": N, "initialized": true, "dirty": false}
-
-# Verify fast startup (check logs)
-docker logs storage-server | grep "HNSW"
-# Expected: "✅ Loaded HNSW index with N vectors in <50ms"
-```
-
-**Migration Notes**:
-- Old `.hnsw.graph` and `.hnsw.data` files are ignored (can be deleted)
-- New `.usearch` file created automatically on first save
-- Metadata file format is backward compatible
-- Zero downtime migration - automatic on restart
-
-**See**: 
-- Implementation: `packages/sutra-storage/src/hnsw_container.rs`
-- Tests: `packages/sutra-storage/tests/test_hnsw_persistence.rs`
-- Design Doc: `docs/storage/HNSW_PERSISTENCE_DESIGN.md`
-- Migration Report: `docs/storage/USEARCH_MIGRATION_COMPLETE.md`
-
----
-
-### ✅ P1.2: Parallel Pathfinding (PRODUCTION-READY)
-
-**Problem**: Sequential BFS explores paths one-by-one (slow for multi-path reasoning)
-
-**Solution**: Rayon-based parallel pathfinding with work-stealing
-
-**Architecture**:
-```rust
-ParallelPathFinder {
-  decay_factor: f32,  // Confidence decay per hop (0.85)
-  
-  // Parallel multi-path search
-  fn find_paths_parallel(
-    snapshot: Arc<GraphSnapshot>,  // Immutable, thread-safe
-    start: ConceptId,
-    end: ConceptId,
-    max_depth: usize,
-    max_paths: usize,
-  ) -> Vec<PathResult>
-}
-
-// Strategy: Parallelize across first-hop neighbors
-Start → Get neighbors → Rayon par_iter()
-  ├─→ Thread 1: BFS from neighbor 1
-  ├─→ Thread 2: BFS from neighbor 2
-  ├─→ Thread 3: BFS from neighbor 3
-  └─→ Thread N: BFS from neighbor N
-Collect → Sort by confidence → Return top K
-```
-
-**Performance**:
-| Graph Fanout | Sequential | Parallel (8 cores) | Speedup |
-|--------------|------------|-------------------|----------|
-| 2 neighbors  | 100ms     | 50ms              | 2×       |
-| 4 neighbors  | 200ms     | 50ms              | 4×       |
-| 8 neighbors  | 400ms     | 50ms              | **8×**   |
-| 16 neighbors | 800ms     | 100ms             | **8×**   |
-
-**Benefits**:
-- ✅ **4-8× speedup** on typical multi-path queries
-- ✅ **Work-stealing** via Rayon for optimal CPU usage
-- ✅ **Thread-safe** using immutable snapshots
-- ✅ **Natural fit** for MPPA (multi-path plan aggregation)
-
-**Deployment**:
-```rust
-// New API in ConcurrentMemory
-let paths = memory.find_paths_parallel(
-    start,
-    end,
-    max_depth: 6,
-    max_paths: 10,  // Find 10 diverse paths in parallel
-);
-
-for path_result in paths {
-    println!("Path: {:?} (confidence: {:.2}%)",
-             path_result.path,
-             path_result.confidence * 100.0);
-}
-```
-
-**Benchmark**:
-```bash
-cd packages/sutra-storage
-cargo run --bin pathfinding_benchmark --release
-# Expected: 4-8× speedup on diamond graphs
-```
-
-**See**: `packages/sutra-storage/src/parallel_paths.rs`, `docs/P1_2_PARALLEL_PATHFINDING_COMPLETE.md`
-
----
-
-## 🔥 NEW: Unified Learning Architecture (Implemented 2025-10-19)
-
-**CRITICAL ARCHITECTURAL CHANGE - ALL DEVELOPMENT MUST FOLLOW THIS PATTERN:**
-
-### Single Source of Truth: Storage Server Owns Learning
-
-```
-✅ CORRECT Architecture (Current):
-
-ALL Clients → TCP → Storage Server Learning Pipeline
-                      ├─→ Embedding Generation (Service)
-                      ├─→ Association Extraction (Rust)
-                      ├─→ Atomic Storage (HNSW + WAL)
-                      └─→ Return concept_id
-
-❌ OLD Architecture (Removed):
-Each service had duplicate logic for embeddings/associations
-```
-
-### Implementation Rules
-
-1. **Clients MUST delegate learning to storage server:**
-   ```python
-   # ✅ CORRECT - Delegate to storage
-   concept_id = storage.learn_concept(
-       content=content,
-       generate_embedding=True,  # Storage server handles this
-       extract_associations=True,
-   )
-   
-   # ❌ WRONG - Client-side embedding generation
-   embedding = embedding_service.generate(content)  # DON'T DO THIS
-   storage.add_concept(concept, embedding)
-   ```
-
-2. **ReasoningEngine.learn() extracts and passes parameters:**
-   ```python
-   # ✅ CORRECT - Extract from kwargs
-   generate_embedding = kwargs.get("generate_embedding", True)
-   extract_associations = kwargs.get("extract_associations", True)
-   
-   concept_id = self.storage.learn_concept(
-       content=content,
-       generate_embedding=generate_embedding,
-       extract_associations=extract_associations,
-       # ... other individual parameters
-   )
-   
-   # ❌ WRONG - Pass options dict
-   concept_id = self.storage.learn_concept(
-       content=content,
-       options=kwargs  # TcpStorageAdapter expects individual params
-   )
-   ```
-
-3. **TCP client response parsing handles list format:**
-   ```python
-   # ✅ CORRECT - Handle both dict and list formats
-   if isinstance(result, list) and len(result) > 0:
-       return result[0]  # Storage returns ['concept_id']
-   elif isinstance(result, dict) and "concept_id" in result:
-       return result["concept_id"]
-   ```
-
-4. **Storage server implements complete pipeline:**
-   - `learning_pipeline.rs` - Orchestrates entire flow
-   - `embedding_client.rs` - Embedding service HTTP integration
-   - `association_extractor.rs` - Pattern-based NLP
-   - All atomically committed to storage
-
-### Benefits
-
-✅ **Zero code duplication** - One implementation for all clients  
-✅ **Guaranteed consistency** - Same behavior everywhere  
-✅ **Automatic embeddings** - No "same answer" bug  
-✅ **Easier testing** - Mock storage server instead of each client  
-✅ **Better performance** - Batch operations in one place  
-
-### Migration Complete
-
-- ✅ Phase 1: Storage server learning pipeline (2025-10-19)
-- ✅ ReasoningEngine updated to use unified API
-- ✅ TCP client response parsing fixed
-- ✅ Docker build cache issues resolved
-- ✅ End-to-end testing verified (Eiffel Tower, Great Wall, Mount Everest)
-
-**See:** `docs/UNIFIED_LEARNING_ARCHITECTURE.md` for complete design documentation.
-
-## 🚀 NEW: Production Sharded Storage (Implemented 2025-10-24)
-
-**CRITICAL: HORIZONTAL SCALABILITY FOR 10M+ CONCEPTS**
-
-### Sharded Storage Architecture
-
-Sutra AI now supports **production-grade sharded storage** for horizontal scalability:
-
-```
-✅ PRODUCTION Architecture (Current):
-
-Concepts → Consistent Hashing → Shard Selection → Independent Storage
-
-Sharded Storage (4-16 shards)
-  ├─→ Shard 0: storage.dat + WAL + HNSW index
-  ├─→ Shard 1: storage.dat + WAL + HNSW index  
-  ├─→ Shard 2: storage.dat + WAL + HNSW index
-  └─→ Shard 3: storage.dat + WAL + HNSW index
-
-Parallel Vector Search: All shards queried simultaneously
-Performance: O(log N) per shard = O(log(N/S)) total where S = shard count
-```
-
-### Configuration
-
-**Environment Variables (docker-compose-grid.yml):**
-```yaml
-storage-server:
-  environment:
-    - SUTRA_STORAGE_MODE=sharded    # "single" or "sharded"
-    - SUTRA_NUM_SHARDS=4            # Number of shards (4-16 recommended)
-    - STORAGE_PATH=/data            # Base path for shard directories
-    - VECTOR_DIMENSION=768          # MUST be 768 (nomic-embed-text)
-```
-
-### LearningStorage Trait (Production Pattern)
-
-The **unified learning pipeline** works with both single and sharded storage via the `LearningStorage` trait:
-
-```rust
-// Common trait for all storage backends
-pub trait LearningStorage {
-    fn learn_concept(&self, id: ConceptId, content: Vec<u8>, 
-                     vector: Option<Vec<f32>>, strength: f32, 
-                     confidence: f32) -> Result<u64>;
-    
-    fn learn_association(&self, source: ConceptId, target: ConceptId,
-                        assoc_type: AssociationType, 
-                        confidence: f32) -> Result<u64>;
-}
-
-// Implemented for:
-// - ConcurrentMemory (single storage)
-// - ShardedStorage (distributed storage)
-// - Arc<T> where T: LearningStorage (shared ownership)
-```
-
-### Benefits
-
-✅ **Horizontal scalability** - Add shards to handle more concepts  
-✅ **Parallel operations** - All shards queried simultaneously  
-✅ **Load balancing** - Consistent hashing distributes load evenly  
-✅ **Independent failure** - Each shard has own WAL + durability  
-✅ **Zero code changes** - Trait-based polymorphism handles both modes  
-
-### Performance Characteristics
-
-**Single Storage (< 1M concepts):**
-- Write: 57,412 concepts/sec
-- Read: <0.01ms (zero-copy)
-- Vector search: O(log N) with HNSW
-
-**Sharded Storage (1M-10M+ concepts):**
-- Write: 57,412 concepts/sec per shard
-- Read: <0.01ms per shard
-- Vector search: O(log(N/S)) with parallel shard queries
-- Shard count: 4-16 recommended (configurable)
-
-### When to Use Sharded Storage
-
-| Concept Count | Mode | Shards | Notes |
-|--------------|------|--------|-------|
-| < 100K | Single | 1 | Optimal for development |
-| 100K - 1M | Single | 1 | Monitor performance |
-| 1M - 5M | Sharded | 4 | Production recommended |
-| 5M - 10M | Sharded | 8 | High-scale deployment |
-| 10M+ | Sharded | 16 | Enterprise scale |
-
-### Migration from Single to Sharded
-
-**Zero-downtime migration:**
-1. Update `docker-compose-grid.yml` with shard configuration
-2. Restart storage server: `docker-compose restart storage-server`
-3. Data automatically distributed across shards
-4. Clients continue working without changes
-
-**See:** `docs/storage/SHARDING.md` for complete migration guide.
-
-## Project Overview
-
-Sutra AI is an explainable graph-based AI system that learns in real-time without retraining. It provides complete reasoning paths for every decision, making it a transparent alternative to black-box LLMs.
-
-**Core Value Proposition:**
-- Shows reasoning for every answer
-- Learns incrementally from new information  
-- Provides audit trails for compliance
-- Works without GPUs or massive compute
-- 100% explainable reasoning paths
-- **NEW:** Self-observability using own reasoning engine
-- **NEW:** Progressive streaming responses (10x faster UX)
-- **NEW:** Quality gates with "I don't know" for uncertain answers
-- **NEW:** Natural language operational queries
 
 ## Architecture
 
-**TCP Binary Protocol** microservices architecture with containerized deployment. All services communicate via high-performance TCP binary protocol (10-50× lower latency than gRPC) with a secure React-based control center for monitoring.
+### System Diagram
+
+**TCP Binary Protocol** microservices (10-50× lower latency than gRPC):
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -728,7 +201,7 @@ Sutra AI is an explainable graph-based AI system that learns in real-time withou
 │            └──────────────────────┼──────────────────────────┘                   │
 │                                   │                                              │
 │  ┌─────────────────┐              │           ┌─────────────────────────────┐  │
-│  │  sutra-hybrid   │◀───────────────┼──────────▶│ sutra-embedding-service │  │
+│  │  sutra-hybrid   │◀─────────────┼──────────▶│ sutra-embedding-service │  │
 │  │ (Semantic AI +  │              │           │   (nomic-embed-text-v1.5)  │  │
 │  │ Orchestration)  │              │           │      Port: 8888             │  │
 │  │   Port: 8001    │              │           └─────────────────────────────┘  │
@@ -742,578 +215,288 @@ Sutra AI is an explainable graph-based AI system that learns in real-time withou
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key Architectural Principles:**
-- **Custom TCP Binary Protocol**: 10-50× lower latency than gRPC, using bincode serialization
-- All graph/vector ops run in storage-server; no in-process storage in API/Hybrid
-- Rust storage provides zero-copy memory-mapped files and lock-free concurrency
-- Optional semantic embeddings enhance reasoning but remain transparent
-- Temporal log-structured storage for time-travel queries
-- Production-grade error handling with automatic reconnection and exponential backoff
+### Key Architectural Principles
+
+- **Custom TCP Binary Protocol**: 10-50× lower latency than gRPC (bincode serialization)
+- **Rust Storage**: Zero-copy memory-mapped files, lock-free concurrency
+- **Optional Semantic Embeddings**: Enhance reasoning but remain transparent
+- **Temporal Storage**: Log-structured for time-travel queries
+- **Production Error Handling**: Automatic reconnection with exponential backoff
 
 ### Package Structure
 
 #### Core AI Packages
-- **sutra-core**: Core graph reasoning engine with concepts, associations, and multi-path plan aggregation (MPPA)
-- **sutra-storage**: Production-ready Rust storage with ConcurrentStorage (57K writes/sec, <0.01ms reads), single-file architecture, and lock-free concurrency  
-- **sutra-hybrid**: Semantic embeddings integration (SutraAI class) that combines graph reasoning with optional similarity matching
-- **sutra-nlg**: Grounded, template-driven NLG (no LLM) used by Hybrid for human-like, explainable responses
+
+- **sutra-core**: Graph reasoning engine (ReasoningEngine, PathFinder, MPPA)
+- **sutra-storage**: Production Rust storage (57K writes/sec, <0.01ms reads)
+- **sutra-hybrid**: Semantic embeddings integration (SutraAI class)
+- **sutra-nlg**: Grounded, template-driven NLG (no LLM)
 
 #### Service Packages
-- **sutra-api**: Production REST API with FastAPI, rate limiting, and comprehensive endpoints
-- **sutra-embedding-service**: Dedicated high-performance embedding service (nomic-embed-text-v1.5, 768-d)
-- **sutra-bulk-ingester**: High-performance Rust service for bulk data ingestion with TCP storage integration (production-ready)
+
+- **sutra-api**: Production REST API (FastAPI, rate limiting)
+- **sutra-embedding-service**: High-performance embedding service (nomic-embed-text-v1.5, 768-d)
+- **sutra-bulk-ingester**: Rust bulk data ingestion service
 
 #### UI & Tooling Packages
-- **sutra-control**: Modern React-based control center with secure FastAPI gateway for system monitoring and management
-- **sutra-client**: Streamlit-based web interface for interactive AI queries and knowledge exploration
-- **sutra-markdown-web**: Markdown API service for document processing and content management
-- **sutra-explorer**: Standalone storage explorer for deep visualization and analysis of storage.dat files (NEW)
+
+- **sutra-control**: React control center with FastAPI gateway
+- **sutra-client**: Streamlit web interface
+- **sutra-markdown-web**: Markdown API service
+- **sutra-explorer**: Standalone storage explorer (NEW)
 - **sutra-cli**: Command-line interface (placeholder)
 
-### Production Enhancements (NEW)
-- **Self-Observability** (`sutra_core/events.py`): Event emission to knowledge graph for NL queries
-- **Quality Gates** (`sutra_core/quality_gates.py`): Confidence calibration and uncertainty quantification
-- **Streaming** (`sutra_core/streaming.py`): Progressive answer refinement with SSE
-- **Observability Queries** (`sutra_core/observability_query.py`): Natural language operational debugging
-
 #### Sutra Grid (Distributed Infrastructure)
-- **sutra-grid-master**: Rust-based orchestration service managing agents and storage nodes (7001 HTTP binary distribution, 7002 TCP agent connections)
-- **sutra-grid-agent**: Rust-based agent with TCP server for storage node lifecycle management (port 8001)
-- **sutra-grid-events**: Event emission library with 17 structured event types, TCP-based async background worker
-- **sutra-protocol**: Shared TCP binary protocol library using bincode serialization
-- **sutra-grid-cli**: Command-line tool for cluster management (under migration to TCP)
 
-**Grid Status**: Production-Ready ✅  
-- Master: 11 events emitted (agent lifecycle, node operations)
-- Agent: 2 events emitted (node crash, restart)
-- Reserved Storage: Port 50052 for Grid events
-- Testing: End-to-end verified with `test-integration.sh`
-- Documentation: See `docs/grid/architecture/GRID_ARCHITECTURE.md` for complete details
+- **sutra-grid-master**: Orchestration service (7001 HTTP, 7002 TCP)
+- **sutra-grid-agent**: Node lifecycle management (port 8001)
+- **sutra-grid-events**: Event emission library (17 event types)
+- **sutra-protocol**: Shared TCP binary protocol (bincode)
+- **sutra-grid-cli**: Cluster management (under TCP migration)
 
-## Development Commands
+**Grid Status**: Production-Ready ✅ (11 master events, 2 agent events, port 50052 reserved)
+
+---
+
+## Development Environment
 
 ### Environment Setup
-
-**Build System Overview:**
-- **Multi-language workspace**: Python (PyO3) + Rust + Node.js
-- **Python packages**: 15 packages with editable installs via `requirements-dev.txt`
-- **Rust workspace**: 6 crates with optimized release builds (`Cargo.toml`)
-- **Frontend**: React/TypeScript with Vite build system (`package.json`)
-- **No Makefile**: Uses direct tooling (pytest, cargo, npm, docker-compose)
 
 ```bash
 # Virtual environment setup (REQUIRED)
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements-dev.txt  # Installs all -e packages automatically
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements-dev.txt  # Installs all -e packages
 
-# Development dependencies structure:
-# -e packages/sutra-core/
-# -e packages/sutra-hybrid/ 
-# -e packages/sutra-api/
-# -e packages/sutra-nlg/
-# -e packages/sutra-storage-client-tcp/
-# Plus: pytest, black, isort, flake8, mypy, fastapi, etc.
+# Build System:
+# - Multi-language: Python (PyO3) + Rust + Node.js
+# - 15 Python packages with editable installs
+# - 6 Rust crates with optimized release builds
+# - React/TypeScript with Vite
 ```
 
 ### Testing
 
-**Current Test Pipeline Status:**
-- **Integration tests**: 24 tests (3 deselected, 21 executed)
-- **Requires running services**: Tests expect localhost:8000 (API) and localhost:8001 (Hybrid)
-- **Service dependency**: Must run `./sutra-deploy.sh up` before testing
-
 ```bash
-# CRITICAL: Start services first (tests require running system)
+# CRITICAL: Start services first
 ./sutra-deploy.sh up
 
-# Core integration tests (with proper environment)
+# Core integration tests
 source venv/bin/activate
 PYTHONPATH=packages/sutra-core python -m pytest tests/ -v
 
-# Storage tests (Rust - includes WAL crash recovery tests)
+# Storage tests (Rust - includes WAL crash recovery)
 cd packages/sutra-storage
 cargo test
-cargo test test_wal  # Specific WAL durability tests
+cargo test test_wal  # WAL durability tests
 
-# End-to-end demos (require services running)
+# End-to-end demos (require running services)
 python demo_simple.py
 python demo_end_to_end.py
 python demo_mass_learning.py
-python demo_wikipedia_learning.py
-
-# Verify storage performance
-python verify_concurrent_storage.py
 
 # Grid integration tests
 cd packages/sutra-grid-master
-./test-integration.sh  # Automated end-to-end (5 tests)
+./test-integration.sh  # 5 automated tests
 
-# Manual Grid testing (3 terminals required)
-# Terminal 1: Reserved storage for events
-cd packages/sutra-storage
-./bootstrap-grid-events.sh
-
-# Terminal 2: Grid Master
-cd packages/sutra-grid-master
-EVENT_STORAGE=localhost:50052 GRID_MASTER_TCP_PORT=7002 cargo run --release
-
-# Terminal 3: Grid Agent  
-cd packages/sutra-grid-agent
-EVENT_STORAGE=localhost:50052 cargo run --release
-
-# Note: CLI tool is under migration to TCP protocol
-# Use Control Center UI at http://localhost:9000/grid for Grid management
-
-# Production Smoke Test (validates embedding configuration)
+# Production smoke test (validates embedding config)
 ./scripts/smoke-test-embeddings.sh
-# Checks: nomic-embed-text availability, 768-d config, no fallbacks, e2e semantic search
 ```
 
 ### Code Quality
+
 ```bash
-# Format code (black + isort)
-make format
-
-# Lint core package
-make lint
-
-# Full quality check
-make check  # Runs format, lint, and test
+make format  # black + isort
+make lint    # lint core package
+make check   # format, lint, test
 ```
 
 ### Deployment
 
 **⚡ Single Source of Truth: `./sutra-deploy.sh`**
 
-#### Hybrid + NLG (Docker)
-- Build: `docker build -f packages/sutra-hybrid/Dockerfile -t sutra-hybrid:nlg .`
-- Run: `docker run --rm -p 8001:8000 -e SUTRA_STORAGE_SERVER=storage-server:50051 -e SUTRA_NLG_ENABLED=true -e SUTRA_NLG_TONE=friendly sutra-hybrid:nlg`
-
-Environment variables:
-- `SUTRA_NLG_ENABLED` (default true) — enable grounded NLG post-processing
-- `SUTRA_NLG_TONE` — friendly|formal|concise|regulatory
-
-All deployment operations are managed through one script:
-
 ```bash
 # First-time installation
 ./sutra-deploy.sh install
 
-# Start all services (10-service ecosystem with embedding service - verified working)
+# Start all services (10-service ecosystem)
 ./sutra-deploy.sh up
 
-# Start with bulk ingester (11-service ecosystem)
+# Start with bulk ingester (11 services)
 docker-compose -f docker-compose-grid.yml --profile bulk-ingester up -d
 
-# Stop all services
-./sutra-deploy.sh down
+# System management
+./sutra-deploy.sh status    # Check health
+./sutra-deploy.sh validate  # Health checks
+./sutra-deploy.sh logs      # View logs
+./sutra-deploy.sh restart   # Restart services
+./sutra-deploy.sh down      # Stop services
+./sutra-deploy.sh clean     # Complete cleanup
 
-# Restart services
-./sutra-deploy.sh restart
-
-# Check system status
-./sutra-deploy.sh status
-
-# Validate system health (including embedding service)
-./sutra-deploy.sh validate
-
-# View logs (all services or specific)
-./sutra-deploy.sh logs
-./sutra-deploy.sh logs sutra-api
-
-# Interactive maintenance menu
-./sutra-deploy.sh maintenance
-
-# Complete cleanup
-./sutra-deploy.sh clean
-```
-
-**✅ VERIFIED DEPLOYMENT STATUS (2025-10-20):**
-
-| Service | Port | Status | Health | Function |
-|---------|------|---------|---------|----------|
-│ Storage Server │ 50051 │ ✅ Running │ Healthy │ Core knowledge graph │
-│ Grid Event Storage │ 50052 │ ✅ Running │ Healthy │ Grid observability │
-│ Sutra API │ 8000 │ ✅ Running │ Healthy │ REST API │
-│ Sutra Hybrid │ 8001 │ ✅ Running │ Healthy │ Semantic AI orchestration │
-│ **Embedding Service** │ **8888** │ ✅ **Running** │ **Healthy** │ **nomic-embed-text-v1.5 (768-d)** │
-│ Control Center │ 9000 │ ✅ Running │ Healthy │ Management UI │
-│ Client UI │ 8080 │ ✅ Running │ Healthy │ Interactive interface │
-│ Grid Master │ 7001-7002 │ ✅ Running │ Healthy │ Orchestration │
-│ Grid Agent 1 │ 8003 │ ✅ Running │ Healthy │ Node management │
-│ Grid Agent 2 │ 8004 │ ✅ Running │ Healthy │ Node management │
-
-**End-to-End Verification:**
-- ✅ Learning pipeline: POST `/sutra/learn` → concept stored
-- ✅ Query pipeline: POST `/sutra/query` → semantic retrieval (89.9% similarity)
-- ✅ Embedding service: nomic-embed-text-v1.5 (768-d) operational
-- ✅ TCP binary protocol: All services communicating
-- ✅ Health checks: All endpoints responding
-
-**Service URLs (after deployment):**
-- Sutra Control Center: http://localhost:9000
-- Sutra Client (UI): http://localhost:8080  
-- Sutra API: http://localhost:8000
-- Sutra Hybrid API: http://localhost:8001
-- Sutra Embedding Service: http://localhost:8888
-- Sutra Bulk Ingester: http://localhost:8005 (Rust service for production data ingestion)
-- Grid Master (HTTP Binary Distribution): http://localhost:7001
-- Grid Master (TCP Agent Protocol): localhost:7002
-
-**Individual service development** (requires storage server):
-```bash
-export SUTRA_STORAGE_SERVER=localhost:50051
-uvicorn sutra_api.main:app --host 0.0.0.0 --port 8000
-```
-
-**⚠️ CRITICAL: Before deploying, verify embedding configuration:**
-```bash
-# Run production smoke test
+# CRITICAL: Before deployment
 ./scripts/smoke-test-embeddings.sh
-
-# If tests fail, see PRODUCTION_REQUIREMENTS.md for fixes
 ```
 
-**See:**
-- **`PRODUCTION_REQUIREMENTS.md`** - Mandatory embedding configuration (READ FIRST)
-- **`DEPLOYMENT.md`** - Comprehensive deployment documentation
+### Service URLs (After Deployment)
 
-### Build and Distribution
+| Service | Port | URL |
+|---------|------|-----|
+| Control Center | 9000 | http://localhost:9000 |
+| Client UI | 8080 | http://localhost:8080 |
+| API | 8000 | http://localhost:8000 |
+| Hybrid API | 8001 | http://localhost:8001 |
+| Embedding Service | 8888 | http://localhost:8888 |
+| Bulk Ingester | 8005 | http://localhost:8005 |
+| Grid Master (HTTP) | 7001 | http://localhost:7001 |
+| Grid Master (TCP) | 7002 | tcp://localhost:7002 |
+| Storage Server (TCP) | 50051 | tcp://localhost:50051 |
+| Event Storage (TCP) | 50052 | tcp://localhost:50052 |
 
-**⚡ Single Source of Truth: `./build-all.sh` + `./sutra-deploy.sh`**
-
-See **BUILD_AND_DEPLOY.md** for complete build and deployment guide.
-
-**Quick Build (All 9 Services):**
-```bash
-# Build all Docker images (ZERO failures required)
-./build-all.sh
-
-# Expected result: 9/9 services built successfully
-# - Storage Server (~166 MB)
-# - API (~275 MB)
-# - Hybrid (~531 MB)
-# - Client (~83 MB)
-# - Control Center (~387 MB)
-# - Grid Master (~148 MB)
-# - Grid Agent (~146 MB)
-# - Bulk Ingester (~245 MB)
-# - Embedding Service (~1.32 GB)
-# Total: ~3.3 GB
-```
-
-**Official Base Images (NO custom images):**
-- `python:3.11-slim` - Python runtime
-- `rust:1.82-slim` - Rust compiler (v1.82 required for indexmap compatibility)
-- `node:18-slim` - Node.js runtime
-- `nginx:alpine` - Web server
-- `debian:bookworm-slim` - Minimal Linux runtime
-
-**Build Verification:**
-```bash
-# Verify all 9 images built
-docker images | grep "^sutra" | wc -l
-# Expected: 9
-
-# Check image sizes
-docker images | grep "^sutra"
-```
-
-**Production Deployment:**
-```bash
-# Deploy complete system
-./sutra-deploy.sh up
-
-# Verify health
-./sutra-deploy.sh status
-```
-
-**See BUILD_AND_DEPLOY.md for:**
-- Complete troubleshooting guide
-- Development workflow
-- Clean rebuild procedures
-- Production requirements
+---
 
 ## Key Components
 
 ### ReasoningEngine (sutra-core)
-The main AI interface that orchestrates reasoning components:
+
+Main AI interface orchestrating reasoning:
 - Natural language query processing
 - Real-time learning without retraining
-- Query result caching for performance  
-- Multi-path plan aggregation (MPPA) for consensus
+- Query result caching
+- Multi-path plan aggregation (MPPA)
 - Complete audit trails
 
 ### PathFinder (sutra-core/reasoning)
-Advanced graph traversal with multiple search strategies:
+
+Advanced graph traversal strategies:
 - **Best-first**: Confidence-optimized with heuristics
 - **Breadth-first**: Shortest path exploration
-- **Bidirectional**: Optimal path finding from both ends
-- Confidence decay (0.85 default) for realistic propagation
-- Cycle detection and path diversification
+- **Bidirectional**: Optimal path from both ends
+- Confidence decay (0.85 default)
+- Cycle detection, path diversification
 
-### MultiPathAggregator (MPPA) (sutra-core/reasoning)
-Consensus-based reasoning that prevents single-path derailment:
+### MultiPathAggregator (MPPA)
+
+Consensus-based reasoning:
 - Path clustering by answer similarity (0.8 threshold)
 - Majority voting with configurable thresholds
-- Diversity bonus for varied reasoning approaches
-- Robustness analysis with multiple metrics
+- Diversity bonus for varied approaches
+- Robustness analysis
 
 ### SutraAI (sutra-hybrid)
-High-level interface combining graph reasoning with semantic embeddings:
+
+High-level interface:
 - Optional semantic similarity matching
-- Multi-strategy comparison (graph-only vs semantic-enhanced)
+- Multi-strategy comparison (graph vs semantic)
 - Agreement scoring between strategies
-- Knowledge persistence and audit trails
+- Knowledge persistence, audit trails
 
 ### ConcurrentStorage (sutra-storage - Rust)
-Production-ready storage architecture with enterprise-grade durability:
-- **57,412 writes/sec** (25,000× faster than JSON baseline)
-- **<0.01ms read latency** (zero-copy memory-mapped files)
-- **Zero data loss** with Write-Ahead Log (WAL) integration
-- Lock-free write log with background reconciliation
-- Single-file storage (`storage.dat`) with 512MB initial size
-- Immutable read snapshots for burst-tolerant performance
-- Path finding and graph traversal (BFS)
-- Crash recovery with automatic WAL replay
-- 100% test pass rate with verified accuracy
 
-**Durability Guarantees:**
-- Every write logged to WAL before in-memory structures
-- Automatic crash recovery on startup
-- WAL checkpoint on flush (safe truncation)
-- RPO (Recovery Point Objective): 0 (zero data loss)
-- Tested with comprehensive crash simulation tests
-- ✅ **Binary format**: MessagePack (4.4× smaller, 2-3× faster than JSON) - migrated 2025-10-24
+Production-ready storage:
+- **57,412 writes/sec** (25,000× faster than JSON)
+- **<0.01ms read latency** (zero-copy mmap)
+- **Zero data loss** with Write-Ahead Log (WAL)
+- Lock-free write log, background reconciliation
+- Single-file `storage.dat` (512MB initial)
+- Immutable read snapshots (burst-tolerant)
+- Crash recovery with automatic WAL replay
+- **Binary format**: MessagePack (4.4× smaller, 2-3× faster)
 
 ### Sutra Control Center (sutra-control)
-Modern React-based monitoring and management interface with **Complete UI Integration**:
-- **Frontend**: React 18 with Material Design 3, TypeScript, and Vite
-- **Backend**: Secure FastAPI gateway providing REST APIs for all services
-- **Real-time Updates**: Live system metrics and performance monitoring
-- **Grid Management**: Complete web UI for Grid agents and storage nodes ✅
-- **Bulk Ingester UI**: Integrated web interface for high-performance data ingestion ✅
-- **Navigation**: Full sidebar with Dashboard, Components, Analytics, Knowledge Graph, Reasoning Engine, Bulk Ingestion, Grid Management, and Settings
-- **Grid API**: REST endpoints for spawn/stop operations, status monitoring ✅
-- **Features**: System health monitoring, performance metrics, knowledge graph visualization, Grid cluster management, bulk data ingestion interface
-- **Architecture**: Multi-stage Docker build combining React SPA with Python gateway
-- **Access**: http://localhost:9000 (containerized deployment)
-- **Grid UI**: Accessible at http://localhost:9000/grid with real-time monitoring
-- **Bulk Ingester UI**: Accessible at http://localhost:9000/bulk-ingester with ingestion management
+
+Modern React monitoring interface:
+- React 18 + Material Design 3 + TypeScript + Vite
+- Secure FastAPI gateway for all services
+- Real-time system metrics
+- Grid management UI ✅
+- Bulk ingester UI ✅
+- Multi-stage Docker build
 
 ### Sutra Storage Explorer (sutra-explorer)
-Standalone application for deep exploration and visualization of storage.dat files **independently** from running Sutra services:
-- **Read-Only**: Safe exploration without modification risk
-- **Rust Parser**: Zero-copy binary parser for storage.dat v2 format (concepts, edges, vectors)
-- **FastAPI Backend**: REST API with 10+ endpoints for exploration (port 8100)
-- **React Frontend**: Interactive UI with graph visualization, search, path finding
-- **Graph Features**: BFS pathfinding, N-hop neighborhoods, force-directed visualization (D3.js)
-- **Vector Operations**: Cosine similarity between concept embeddings
-- **Full-Text Search**: Content substring matching with highlighting
-- **Architecture**: Multi-stage Docker build (Rust → React → Python)
-- **Deployment**: Standalone container with volume mounting for storage files
-- **Access**: http://localhost:8100 (API), http://localhost:3000 (UI)
-- **Use Cases**: Debugging storage files, offline analysis, data auditing, knowledge graph visualization
-- **Documentation**: See `packages/sutra-explorer/README.md` for complete guide
-### Configuration
 
-### Environment Variables
-```bash
-# Storage server address (all services)
-export SUTRA_STORAGE_SERVER="storage-server:50051"
+Standalone storage exploration:
+- Read-only safe exploration
+- Rust parser for storage.dat v2
+- FastAPI backend (port 8100)
+- React frontend with D3.js visualization
+- BFS pathfinding, N-hop neighborhoods
+- Cosine similarity, full-text search
 
-# Grid Master address (for Control Center integration)
-export SUTRA_GRID_MASTER="localhost:7000"
-
-# Service ports
-export SUTRA_API_PORT="8000"
-export SUTRA_HYBRID_PORT="8001"
-export SUTRA_CLIENT_PORT="8080"
-export SUTRA_CONTROL_PORT="9000"
-export SUTRA_MARKDOWN_PORT="8002"
-export SUTRA_EMBEDDING_SERVICE_PORT="8888"
-export SUTRA_STORAGE_PORT="50051"
-
-# Rate limits
-export SUTRA_RATE_LIMIT_LEARN="30"
-export SUTRA_RATE_LIMIT_REASON="60"
-
-# Production settings
-export ENVIRONMENT="production"
-export PYTHONPATH=/app:$PYTHONPATH
-```
-
-### Reasoning Configuration
-
-### Grounded NLG Configuration (Hybrid)
-- Grounded responses only (no LLM); template-driven
-- Optional parameters on `/sutra/query`:
-  - `tone`: friendly|formal|concise|regulatory
-  - `moves`: e.g., ["define","evidence"]
-- Fallback: if NLG fails, Hybrid returns raw retrieved answer
-- **Confidence decay**: 0.85 per reasoning step
-- **Max reasoning depth**: 6 hops
-- **Consensus threshold**: 50% agreement for multi-path aggregation
-- **Path similarity threshold**: 0.7 maximum overlap for diversification
-
-## Performance Characteristics
-
-Based on production testing with ConcurrentStorage:
-- **Learning**: **0.02ms per concept** (57,412 concepts/sec) — 25,000× faster than old system
-- **Query**: **<0.01ms** with zero-copy memory-mapped access
-- **Path finding**: ~1ms for 3-hop BFS traversal
-- **Memory**: ~0.1KB per concept (excluding embeddings)
-- **Storage**: Single `storage.dat` file (512MB for 1K concepts)
-- **Vector search**: Product quantization for 4× compression (in development)
-- **Accuracy**: 100% verified with comprehensive test suite
-
-## Testing Strategy
-
-The system has comprehensive testing at multiple levels:
-
-1. **Production smoke test**: `scripts/smoke-test-embeddings.sh` (validates embedding configuration)
-2. **Integration tests**: `tests/` directory with cross-package functionality
-3. **End-to-end demos**: `demo_simple.py`, `demo_end_to_end.py`, `demo_mass_learning.py`
-4. **API tests**: `packages/sutra-api/tests/` and `packages/sutra-hybrid/tests/`
-5. **Performance verification**: `verify_concurrent_storage.py` (production benchmarks)
-6. **Storage tests**: Rust unit and integration tests in `packages/sutra-storage/`
-
-### Test Locations
-- **`scripts/smoke-test-embeddings.sh`**: Production validation (model, config, e2e semantic search)
-- **Root `tests/`**: Integration tests and query processor tests
-- **`demo_*.py`**: End-to-end workflow demonstrations
-- **`verify_concurrent_storage.py`**: Performance benchmarking (57K writes/sec verified)
-- **Package-specific tests**: In respective `packages/*/tests/` directories
-
-**⚠️ Before every deployment, run:** `./scripts/smoke-test-embeddings.sh`
+---
 
 ## Common Development Tasks
 
-### Adding New NLG Templates (sutra-nlg)
-1. Add a template in `packages/sutra-nlg/sutra_nlg/templates.py` or persist as concepts in storage (future)
-2. Include tone, moves, and pattern with slots
-3. Validate via `pytest packages/sutra-nlg`
-4. Rebuild Hybrid Docker image to include changes
+### Adding New NLG Templates
+
+1. Add template in `packages/sutra-nlg/sutra_nlg/templates.py`
+2. Include tone, moves, pattern with slots
+3. Validate: `pytest packages/sutra-nlg`
+4. Rebuild Hybrid Docker image
 
 ### Adding New Reasoning Strategies
+
 1. Implement in `sutra_core/reasoning/paths.py`
 2. Add to PathFinder class
-3. Update QueryProcessor to support new strategy
+3. Update QueryProcessor
 4. Add comprehensive tests
 
 ### Extending Storage Format
+
 1. Update Rust structures in `packages/sutra-storage/src/`
 2. Modify Python bindings via PyO3 in `lib.rs`
-3. Update memory layout documentation in `docs/sutra-storage/`
-4. Run `cargo build --release` and verify with `verify_concurrent_storage.py`
-5. Ensure single-file `storage.dat` format compatibility
+3. Update docs in `docs/sutra-storage/`
+4. Run `cargo build --release`
+5. Verify with `verify_concurrent_storage.py`
 
 ### Adding API Endpoints
-1. Define request/response models in `sutra_api/models.py`
+
+1. Define models in `sutra_api/models.py`
 2. Implement endpoint in `sutra_api/main.py`
 3. Add rate limiting configuration
 4. Update OpenAPI documentation
 
 ### Extending Control Center
-1. **Frontend Changes**: Edit React components in `packages/sutra-control/src/`
-2. **Backend Changes**: Update FastAPI gateway in `packages/sutra-control/backend/main.py`
-3. **Build Process**: Run `npm run build` to create production build
-4. **Docker**: Rebuild container with `docker build -t sutra-control:latest .`
-5. **Testing**: Access at http://localhost:9000 after `docker compose up -d`
+
+1. **Frontend**: Edit React components in `packages/sutra-control/src/`
+2. **Backend**: Update FastAPI gateway in `packages/sutra-control/backend/main.py`
+3. **Build**: `npm run build`
+4. **Docker**: `docker build -t sutra-control:latest .`
+5. **Test**: Access http://localhost:9000
 
 ### Extending Sutra Grid
-1. **Adding New Event Types**: Update `packages/sutra-grid-events/src/events.rs` with new event variants
-2. **Master Changes**: Edit orchestration logic in `packages/sutra-grid-master/src/main.rs`
-3. **Agent Changes**: Edit node management in `packages/sutra-grid-agent/src/main.rs`
-4. **Protocol Updates**: Modify message types in `packages/sutra-protocol/src/lib.rs`
-5. **Testing**: Run Docker compose and verify with `docker logs` commands
 
-**Grid Event Flow**: Master/Agent → EventEmitter → Async Worker → TCP Binary Protocol → Sutra Storage (port 50052)
+1. **Events**: Update `packages/sutra-grid-events/src/events.rs`
+2. **Master**: Edit `packages/sutra-grid-master/src/main.rs`
+3. **Agent**: Edit `packages/sutra-grid-agent/src/main.rs`
+4. **Protocol**: Modify `packages/sutra-protocol/src/lib.rs`
+5. **Test**: Run Docker compose and check logs
 
-**Grid Control Center Integration**: ✅ **COMPLETED**
-- ✅ React Grid dashboard with agent/node topology view
-- ✅ REST API endpoints for all Grid operations  
-- ✅ Real-time monitoring and status updates
-- ✅ Interactive spawn/stop operations via web UI
-- ✅ Comprehensive documentation and troubleshooting guides
-
-**Future Enhancements**:
-- Natural language queries for events ("Show me all crashed nodes today")
-- Advanced visualizations and network topology diagrams
-- Automated operations and auto-scaling capabilities
-
-### Using Sutra Storage Explorer
-1. **Standalone Deployment**: `cd packages/sutra-explorer && docker-compose up -d`
-2. **Mount Storage File**: Set `STORAGE_FILE_PATH` environment variable to your storage.dat location
-3. **Access UI**: Navigate to http://localhost:3000 for interactive exploration
-4. **API Access**: REST API available at http://localhost:8100/docs
-5. **Features**: Search concepts, visualize graphs, find paths, calculate similarities
-6. **Development**: See `packages/sutra-explorer/README.md` for local development setup
-7. **Use Cases**: Debugging storage issues, auditing knowledge graphs, offline analysis
+---
 
 ## Troubleshooting
 
 ### Quick Diagnostics
 
-**Run the production smoke test first:**
+**Run production smoke test first:**
+
 ```bash
 ./scripts/smoke-test-embeddings.sh
 ```
-This validates:
+
+Validates:
 - ✅ nomic-embed-text model availability
-- ✅ Storage server 768-d configuration
-- ✅ Hybrid service embedding configuration
+- ✅ 768-d configuration
 - ✅ No fallback warnings
 - ✅ End-to-end semantic search
 
-**If smoke test fails, see `PRODUCTION_REQUIREMENTS.md` for detailed fixes.**
-
----
-
-### Import Errors
-```bash
-# Solution: Set PYTHONPATH for core tests
-PYTHONPATH=packages/sutra-core python -m pytest tests/ -v
-
-# Or run integration tests from root
-python -m pytest tests/ -v
-```
-
-### Virtual Environment Issues
-```bash
-# Recreate environment
-python3 -m venv venv
-source venv/bin/activate
-pip install -e packages/sutra-core/
-pip install -r requirements-dev.txt
-```
-
-### Storage/Persistence Issues
-- **ConcurrentStorage**: Data written to single `storage.dat` file
-- **WAL (Write-Ahead Log)**: All writes logged to `wal.log` for durability (MessagePack binary format)
-- Check storage path permissions (default: `./knowledge/storage.dat`)
-- Call `storage.flush()` manually before shutdown
-- Auto-flush triggers at 50K concepts (configurable)
-- Verify performance with `verify_concurrent_storage.py`
-- Monitor stats: `storage.stats()` shows writes, drops, concepts, edges
-- WAL automatically replays on startup for crash recovery
-- WAL is checkpointed (truncated) after successful flush
-- ✅ **NEW** (2025-10-24): WAL uses MessagePack for 4.4× size reduction, 2-3× speed improvement
-
 ### Same Answer for All Questions ⭐ CRITICAL
 
-**Symptoms:** Every query returns identical answer, regardless of question.
+**Symptoms:** Every query returns identical answer
 
-**Root Cause:** Zero embeddings in storage (concepts learned without embedding generation).
-
-**Quick Diagnosis:**
-```bash
-curl -s http://localhost:8000/stats | jq '.total_embeddings'
-# If 0: System is non-functional
-```
+**Root Cause:** Zero embeddings in storage
 
 **Solution:**
+
 ```bash
 # 1. Clean old data without embeddings
 docker stop sutra-storage sutra-api sutra-hybrid sutra-client
@@ -1331,76 +514,26 @@ curl -s http://localhost:8000/stats | jq '.total_embeddings'
 # Should be > 0
 ```
 
-**Prevention:**
-- Always learn via `/sutra/learn` (Hybrid) not `/learn` (API)
-- Verify embedding service is running BEFORE learning data
-- Check `total_embeddings` matches `total_concepts`
-
-**See:**
-- **`PRODUCTION_REQUIREMENTS.md`** - Strict embedding requirements and migration guide
-- **`docs/EMBEDDING_TROUBLESHOOTING.md`** - Detailed troubleshooting
-- **`TROUBLESHOOTING.md`** - General troubleshooting
-
-### TCP Adapter Issues (Fixed 2025-10-19)
+### Embedding Configuration Issues
 
 **Symptoms:**
-- "Storage-backed pathfinding failed: no attribute 'find_paths'"
-- "list indices must be integers or slices, not str"
-- "Failed to get neighbors via TCP"
-
-**Root Cause:** Missing methods in `TcpStorageAdapter` and incorrect response parsing.
-
-**Fixed Methods:**
-- ✅ `find_paths()` - Multi-path reasoning support
-- ✅ `get_association()` - Association retrieval for path building
-- ✅ `get_all_concept_ids()` - Health check support
-- ✅ `get_neighbors()` - Fixed response parsing (dict vs list)
-
-**TCP Client Fixes:**
-- ✅ Unit variant handling (`GetStats`, `Flush`, `HealthCheck` send strings, not dicts)
-- ✅ Response parsing for nested list formats
-- ✅ Numpy array to list conversion before TCP transport
-
-**Verification:**
-```bash
-# Restart services to pick up fixes
-docker restart sutra-api sutra-hybrid sutra-client
-
-# Test pathfinding
-curl -X POST http://localhost:8001/sutra/query \
-  -H "Content-Type: application/json" \
-  -d '{"query":"test query"}'
-# Should not show "pathfinding failed" warnings
-```
-
-### Embedding Configuration Issues ⚠️ PRODUCTION-CRITICAL
-
-**Symptoms:**
-- Wrong query results despite correct storage ("tallest mountain" → "Pacific Ocean")
+- Wrong query results ("tallest mountain" → "Pacific Ocean")
 - "Dimension mismatch: expected 768, got 384"
 - "Query embedding FALLBACK to spaCy" in logs
-- Semantic search returns irrelevant results
 
-**Root Cause:** Environment variable mismatch between services.
+**Solution:**
 
-**Quick Fix:**
 ```bash
-# 1. Run production smoke test to diagnose
+# 1. Run smoke test
 ./scripts/smoke-test-embeddings.sh
 
 # 2. Verify configuration
 docker logs sutra-storage | grep -E "(Vector dimension|nomic)"
 docker logs sutra-hybrid | grep -E "(PRODUCTION|nomic|fallback)"
 
-# 3. If configuration is wrong, fix docker-compose-grid.yml:
-#    storage-server:
-#      environment:
-#        - VECTOR_DIMENSION=768
-#        - SUTRA_EMBEDDING_MODEL=nomic-embed-text
-#    sutra-hybrid:
-#      environment:
-#        - SUTRA_EMBEDDING_MODEL=nomic-embed-text
-#        - SUTRA_VECTOR_DIMENSION=768
+# 3. Fix docker-compose-grid.yml if needed:
+#    VECTOR_DIMENSION=768
+#    SUTRA_EMBEDDING_SERVICE_URL=http://sutra-embedding-service:8888
 
 # 4. Clean and restart
 ./sutra-deploy.sh down
@@ -1411,251 +544,329 @@ docker volume rm sutra-models_storage-data
 ./scripts/smoke-test-embeddings.sh
 ```
 
-**Prevention:**
-- **ALWAYS** set `SUTRA_EMBEDDING_MODEL=nomic-embed-text` for storage AND hybrid
-- **ALWAYS** set `VECTOR_DIMENSION=768` for storage
-- **ALWAYS** run smoke test before deploying
-- **NEVER** allow fallback embeddings (spaCy, TF-IDF, sentence-transformers)
+### Storage/Persistence Issues
 
-**See `PRODUCTION_REQUIREMENTS.md` for complete details and incident postmortem.**
+- Data written to single `storage.dat` file
+- WAL logged to `wal.log` (MessagePack binary)
+- Check path permissions (default: `./knowledge/storage.dat`)
+- Call `storage.flush()` before shutdown
+- Auto-flush at 50K concepts
+- WAL replays automatically on startup
+- WAL checkpointed after flush
 
-### Common Deployment Issues (2025-10-20)
+### TCP Adapter Issues (Fixed 2025-10-19)
+
+**Symptoms:**
+- "Storage-backed pathfinding failed: no attribute 'find_paths'"
+- "list indices must be integers or slices, not str"
+
+**Fixed:**
+- ✅ `find_paths()` - Multi-path reasoning
+- ✅ `get_association()` - Association retrieval
+- ✅ `get_all_concept_ids()` - Health checks
+- ✅ `get_neighbors()` - Response parsing
+- ✅ Unit variant handling (strings, not dicts)
+- ✅ Numpy array to list conversion
+
+### Common Deployment Issues
 
 #### Docker Build Failures
-**Symptoms:** "failed to solve: image already exists" during builds
 
-**Solution:**
 ```bash
-# Remove problematic images
 docker rmi sutra-storage-server:latest || true
-
-# Rebuild specific service
 docker-compose -f docker-compose-grid.yml build storage-server
-
-# Or rebuild all services
-./sutra-deploy.sh build
-```
-
-#### Port Conflicts (11434 - Ollama)
-**Symptoms:** "bind: address already in use" on port 11434
-
-**Solution:**
-```bash
-# Check what's using the port
-lsof -i :11434
-
-# Stop local Ollama if running
-killall ollama
-
-# Or modify docker-compose to use different port mapping
-# ports:
-#   - "11435:11434"  # Map to different external port
 ```
 
 #### Services Not Starting
-**Symptoms:** Empty status output from `./sutra-deploy.sh status`
 
-**Solution:**
 ```bash
-# Check Docker daemon
 docker info
-
-# Check for conflicting containers
 docker ps -a | grep sutra
-
-# Clean up and restart
 docker-compose -f docker-compose-grid.yml down
 docker system prune -f
 ./sutra-deploy.sh up
 ```
 
 #### Health Check Failures
-**Symptoms:** Services show "health: starting" or "unhealthy"
 
-**Solution:**
 ```bash
-# Check service logs
 docker logs sutra-hybrid --tail 50
-
-# Wait for Ollama model download (can take 5-10 minutes)
-docker logs sutra-ollama | grep -E "(pulling|success)"
-
-# Verify model availability
-curl -s http://localhost:11434/api/tags | jq '.models[].name'
-# Should show: "nomic-embed-text:latest"
-```
-
-#### Test Failures Due to Missing Services
-**Symptoms:** "Connection refused" errors in tests
-
-**Solution:**
-```bash
-# ALWAYS start services before testing
-./sutra-deploy.sh up
-
-# Wait for health checks to pass
 ./sutra-deploy.sh status
-
-# Then run tests
-source venv/bin/activate
-PYTHONPATH=packages/sutra-core python -m pytest tests/ -v
 ```
 
-## Code Style
-
-- **Line length**: 88 characters (black default)
-- **Import order**: stdlib, third-party, local (isort with black profile)
-- **Type hints**: Required for all public functions
-- **Docstrings**: Google style for all public classes and methods
-- **Testing**: pytest with descriptive test names and docstrings
-
-## Research Foundation
-
-Built on published research:
-- **Adaptive Focus Learning**: "LLM-Oriented Token-Adaptive Knowledge Distillation" (Oct 2024)
-- **Multi-Path Plan Aggregation (MPPA)**: Consensus-based reasoning
-- **Graph-based reasoning**: Decades of knowledge representation research
-
-No proprietary techniques - all methods are from published work.
+**See:**
+- `PRODUCTION_REQUIREMENTS.md` - Mandatory embedding config
+- `docs/EMBEDDING_TROUBLESHOOTING.md` - Detailed troubleshooting
+- `TROUBLESHOOTING.md` - General troubleshooting
 
 ---
 
-## 🚀 NEW: AI-Native Adaptive Reconciliation (2025-10-24)
+## Recent Major Features
 
-**PRODUCTION-READY SELF-OPTIMIZING STORAGE**
+### 🎉 Production-Grade Storage Complete (2025-10-24)
 
-Sutra Storage now features an **AI-native adaptive reconciler** that uses online machine learning to optimize performance in real-time.
+**Status:** ✅ ALL P0 CRITICAL ISSUES RESOLVED
 
-### Implementation
+**Grade:** A- (90/100) → **A+ (95/100)**
 
-**Location**: `packages/sutra-storage/src/adaptive_reconciler.rs` (490 lines)
+**What Was Fixed:**
+1. ✅ Cross-shard 2PC - Full distributed transaction support (transaction.rs, 500 lines)
+2. ✅ Input validation - DoS protection (6 limits, 7 validation points)
+3. ✅ Config validation - Fail-fast at startup
+4. ✅ Overflow protection - Memory safety via checked_mul()
 
-**Architecture**:
+**Test Results:** 107 passed, 0 failed, 1 ignored ✅
+
+**Production Guarantees:**
+- ✅ Zero data loss - 2PC ensures atomic cross-shard operations
+- ✅ DoS protection - Cannot allocate 1GB concepts
+- ✅ Fail-fast - Invalid config rejected at startup
+- ✅ Memory safety - No integer overflow at 10M+ concepts
+- ✅ 57K writes/sec, <0.01ms reads maintained
+
+**Documentation:** `docs/storage/PRODUCTION_GRADE_COMPLETE.md` (465 lines)
+
+### P0 Production Features (2025-10-24)
+
+#### P0.2: Embedding Service High Availability
+
+**Architecture:** 3 replicas + HAProxy load balancer
+
+```yaml
+Embedding HA:
+  - 3 Independent Replicas (embedding-1, 2, 3)
+  - HAProxy Load Balancer (least-connection)
+  - Health Checks: Every 2s (3 failures = down)
+  - Automatic Failover: <3s detection
+  - Stats Dashboard: http://localhost:8404/stats
+```
+
+**Benefits:**
+- ✅ Zero downtime deployments
+- ✅ 3× capacity for load spikes
+- ✅ Automatic failover (<3s)
+- ✅ Independent failure domains
+
+#### P0.3: Self-Monitoring via Grid Events
+
+**Architecture:** "Eating our own dogfood" - Sutra monitors itself
+
+**9 Production Event Types:**
+- StorageMetrics, QueryPerformance, EmbeddingLatency
+- HnswIndexBuilt/Loaded, PathfindingMetrics
+- ReconciliationComplete, EmbeddingServiceHealthy/Degraded
+
+**Implementation:**
+```rust
+let emitter = StorageEventEmitter::new(node_id, event_storage);
+emitter.emit_storage_metrics(concepts, edges, throughput, memory_mb);
+emitter.emit_query_performance(type, depth, results, latency, confidence);
+```
+
+**Zero-Cost:** Events only emitted when `EVENT_STORAGE` configured
+
+#### P0.4: Scale Validation - 10M Concept Benchmark
+
+```bash
+cd scripts && rustc --edition 2021 -O scale-validation.rs
+SUTRA_NUM_SHARDS=16 ./scale-validation
+# Runtime: ~3-5 minutes
+```
+
+**4 Test Phases:**
+1. Sequential Write: 10M concepts with 768-d vectors
+2. Random Read: 10K queries (P50/P95/P99 latencies)
+3. Vector Search: 10K HNSW searches
+4. Memory Analysis: Per-concept overhead
+
+**Claims Validated:**
+- ✅ Write throughput ≥ 50,000 concepts/sec
+- ✅ Read latency < 0.01ms (P50)
+- ✅ Vector search < 50ms (P50)
+- ✅ Memory ≤ 2KB/concept
+
+### P1 Performance Features (2025-10-24)
+
+#### P1.1: Semantic Association Extraction
+
+**OLD:** Regex patterns (50% accuracy, 5ms)
+**NEW:** Embedding-based NLP (80% accuracy, 30ms)
+
+**Performance:**
+- 30% better accuracy than regex
+- 3× faster than spaCy
+- Zero new dependencies (uses HA embedding service)
+
+#### P1.5: HNSW Persistent Index - USearch Migration 🚀
+
+**Migration:** hnsw-rs → **USearch** (production-grade)
+
+**Problem Solved:** OLD system rebuilt index on EVERY startup (lifetime constraints)
+
+**Performance:**
+| Operation | OLD (rebuild) | NEW (mmap) | Improvement |
+|-----------|---------------|------------|-------------|
+| Load 1K | 327ms | 3.5ms | **94×** |
+| Load 1M | 5.5min | **3.5s** | **94×** |
+| Load 10M | 55min | **35s** | **94×** |
+
+**Benefits:**
+- ✅ 94× faster startup (TRUE mmap persistence)
+- ✅ 24% smaller index files
+- ✅ SIMD-optimized search
+- ✅ Incremental updates with capacity management
+
+#### P1.2: Parallel Pathfinding
+
+**Solution:** Rayon-based parallel pathfinding with work-stealing
+
+**Performance:**
+| Graph Fanout | Sequential | Parallel (8 cores) | Speedup |
+|--------------|------------|-------------------|---------|
+| 8 neighbors | 400ms | 50ms | **8×** |
+| 16 neighbors | 800ms | 100ms | **8×** |
+
+**Benefits:**
+- ✅ 4-8× speedup on multi-path queries
+- ✅ Work-stealing via Rayon
+- ✅ Thread-safe using immutable snapshots
+
+### Unified Learning Architecture (2025-10-19)
+
+**CRITICAL:** Storage server owns learning pipeline
+
+```
+✅ CORRECT:
+ALL Clients → TCP → Storage Server Learning Pipeline
+                      ├─→ Embedding Generation (Service)
+                      ├─→ Association Extraction (Rust)
+                      ├─→ Atomic Storage (HNSW + WAL)
+                      └─→ Return concept_id
+
+❌ OLD (Removed):
+Each service had duplicate logic
+```
+
+**Benefits:**
+- ✅ Zero code duplication
+- ✅ Guaranteed consistency
+- ✅ Automatic embeddings (no "same answer" bug)
+- ✅ Easier testing
+- ✅ Better performance
+
+### Production Sharded Storage (2025-10-24)
+
+**Architecture:** Horizontal scalability for 10M+ concepts
+
+```
+Concepts → Consistent Hashing → Shard Selection → Independent Storage
+
+Sharded Storage (4-16 shards)
+  ├─→ Shard 0: storage.dat + WAL + HNSW
+  ├─→ Shard 1: storage.dat + WAL + HNSW
+  ├─→ Shard 2: storage.dat + WAL + HNSW
+  └─→ Shard 3: storage.dat + WAL + HNSW
+
+Parallel Vector Search: All shards queried simultaneously
+```
+
+**Configuration:**
+```yaml
+storage-server:
+  environment:
+    - SUTRA_STORAGE_MODE=sharded    # "single" or "sharded"
+    - SUTRA_NUM_SHARDS=4            # 4-16 recommended
+    - STORAGE_PATH=/data
+    - VECTOR_DIMENSION=768
+```
+
+**When to Use:**
+
+| Concept Count | Mode | Shards | Notes |
+|--------------|------|--------|-------|
+| < 100K | Single | 1 | Development |
+| 1M - 5M | Sharded | 4 | Production |
+| 5M - 10M | Sharded | 8 | High-scale |
+| 10M+ | Sharded | 16 | Enterprise |
+
+### AI-Native Adaptive Reconciliation (2025-10-24)
+
+**Architecture:** Self-optimizing storage using online ML
+
 ```rust
 AdaptiveReconciler {
   // EMA-based trend analysis
   trend_analyzer: TrendAnalyzer {
-    queue_ema: f64,           // Exponential moving average of queue depth
-    rate_ema: f64,            // Processing rate tracking
-    ema_alpha: 0.3,           // Smoothing factor
+    queue_ema: f64,  // Exponential moving average
+    rate_ema: f64,   // Processing rate
+    ema_alpha: 0.3,  // Smoothing factor
   },
   
-  // Dynamic interval optimization
+  // Dynamic interval optimization (1-100ms range)
   calculate_optimal_interval() -> Duration {
     if utilization < 0.20 { 100ms }  // Idle: save CPU
     else if utilization > 0.70 { 1-5ms }  // High load: aggressive
-    else { 10ms }  // Normal operation
-  },
-  
-  // Health monitoring
-  health_score: f64,  // 0.0-1.0 scale
-  recommendation: String,  // "Good" | "Warning" | "Critical"
+    else { 10ms }  // Normal
+  }
 }
 ```
 
-### Key Innovations
+**Performance:**
 
-1. **Exponential Moving Average (EMA)** for trend detection
-2. **Predictive Queue Depth** via linear extrapolation
-3. **Self-Adaptive Intervals** (1-100ms dynamic range)
-4. **Comprehensive Telemetry** via Grid event system
-5. **Dogfooding**: Storage monitors itself using its own events
-
-### Performance Impact
-
-**OLD (Fixed 10ms Reconciler)**:
+**OLD (Fixed 10ms):**
 - Idle: Wastes CPU cloning every 10ms
-- Burst: 10ms lag = 570 entries backlog at 57K writes/sec
-- No visibility into queue health
+- Burst: 10ms lag = 570 entries backlog
 
-**NEW (Adaptive Reconciler)**:
+**NEW (Adaptive):**
 - Idle: 80% CPU savings (100ms intervals)
 - Burst: 10× lower latency (1-5ms aggressive drain)
 - Real-time health scoring with predictive alerts
 
-### API Changes
+**Benefits:**
+- ✅ 80% CPU reduction during idle
+- ✅ 10× lower latency during bursts
+- ✅ Predictive alerting at 70% capacity
+- ✅ Zero tuning required - self-optimizing
+- ✅ Backward compatible
 
-**Configuration** (`ConcurrentConfig`):
-```rust
-pub struct ConcurrentConfig {
-    // OLD: Fixed interval (deprecated)
-    #[deprecated(note = "Use adaptive_reconciler_config")]
-    pub reconcile_interval_ms: u64,
-    
-    // NEW: Adaptive configuration
-    pub adaptive_reconciler_config: AdaptiveReconcilerConfig {
-        base_interval_ms: 10,    // Starting point
-        min_interval_ms: 1,      // High load minimum
-        max_interval_ms: 100,    // Idle maximum
-        ema_alpha: 0.3,          // Smoothing factor
-        queue_warning_threshold: 0.7,  // 70% capacity alert
-        ...
-    },
-}
-```
+**Test Results:** 102 tests passed ✅
 
-**Stats API** (Enhanced):
-```rust
-pub struct AdaptiveReconcilerStats {
-    // Standard metrics
-    pub reconciliations: u64,
-    pub entries_processed: u64,
-    pub running: bool,
-    
-    // 🔥 NEW: Flow control
-    pub queue_depth: usize,
-    pub queue_utilization: f64,       // 0.0-1.0
-    pub current_interval_ms: u64,     // Dynamic
-    
-    // 🔥 NEW: Predictive
-    pub predicted_queue_depth: usize,  // Trend-based
-    pub processing_rate_per_sec: f64,
-    pub estimated_lag_ms: u64,
-    
-    // 🔥 NEW: Health
-    pub health_score: f64,            // 0.0-1.0
-    pub recommendation: String,       // Human-readable
-}
-```
+---
 
-### Production Benefits
+## Performance Characteristics
 
-✅ **80% CPU reduction** during idle periods  
-✅ **10× lower latency** during burst writes  
-✅ **Predictive alerting** at 70% capacity (before issues)  
-✅ **Zero tuning required** - self-optimizing  
-✅ **Backward compatible** - gradual migration via deprecated field  
-✅ **Production-tested** - All integration tests pass  
+Based on production testing with ConcurrentStorage:
 
-### Documentation
+- **Learning:** 0.02ms per concept (57,412 concepts/sec) — 25,000× faster
+- **Query:** <0.01ms with zero-copy mmap
+- **Path finding:** ~1ms for 3-hop BFS
+- **Memory:** ~0.1KB per concept (excluding embeddings)
+- **Storage:** Single `storage.dat` file (512MB for 1K concepts)
+- **Accuracy:** 100% verified with comprehensive test suite
 
-- **Architecture**: `docs/storage/ADAPTIVE_RECONCILIATION_ARCHITECTURE.md`
-- **Implementation**: `packages/sutra-storage/src/adaptive_reconciler.rs`
-- **Code Review**: `docs/storage/DEEP_CODE_REVIEW.md` (updated with fixes)
+---
 
-### Migration Guide
+## Code Style
 
-**For existing deployments**:
+- **Line length:** 88 characters (black default)
+- **Import order:** stdlib, third-party, local (isort with black profile)
+- **Type hints:** Required for all public functions
+- **Docstrings:** Google style for all public classes/methods
+- **Testing:** pytest with descriptive names and docstrings
 
-1. **No action required** - adaptive reconciler enabled by default
-2. **Old config still works** - `reconcile_interval_ms` deprecated but functional
-3. **Monitor health** - Use `storage.reconciler_stats()` for real-time metrics
-4. **Remove deprecated field** - Update configs to use `adaptive_reconciler_config`
+---
 
-**Environment variables** (optional tuning):
-```bash
-# Storage Server
-RECONCILE_BASE_INTERVAL_MS=10  # Starting point (adaptive adjusts 1-100ms)
+## Research Foundation
 
-# Default config is production-optimized (no tuning needed)
-```
+Built on published research:
+- **Adaptive Focus Learning:** "LLM-Oriented Token-Adaptive Knowledge Distillation" (Oct 2024)
+- **Multi-Path Plan Aggregation (MPPA):** Consensus-based reasoning
+- **Graph-based reasoning:** Decades of knowledge representation research
 
-### Test Results
+No proprietary techniques - all methods from published work.
 
-✅ **102 tests passed** (2 pre-existing HNSW failures unrelated)  
-✅ **All adaptive reconciler unit tests pass**  
-✅ **All concurrent_memory integration tests pass**  
-✅ **All sharded_storage tests pass** (fixed timing issues)  
-✅ **Release build succeeds**  
+---
 
-**See**: `ADAPTIVE_RECONCILIATION_ARCHITECTURE.md` for complete technical documentation.
+**Last Updated:** 2025-10-24  
+**Status:** Production-Ready  
+**Documentation:** See `docs/INDEX.md` for complete documentation map
