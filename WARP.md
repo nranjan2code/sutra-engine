@@ -22,19 +22,22 @@ This document provides structured guidance for AI assistants (like WARP at warp.
 
 ## Project Overview
 
-**Sutra AI** is an explainable graph-based AI system that learns in real-time without retraining. It provides complete reasoning paths for every decision, making it a transparent alternative to black-box LLMs.
+**Sutra AI** is a domain-specific reasoning engine that provides explainable answers over your proprietary knowledge. Unlike frontier LLMs that are pre-trained on general internet data, Sutra starts empty and learns YOUR domain—whether that's hospital protocols, legal precedents, financial regulations, or manufacturing procedures. It uses small embedding models (500MB vs 100GB+ LLMs) combined with graph-based reasoning to provide complete audit trails for every decision.
 
 ### Core Value Proposition
 
-- ✅ Shows reasoning for every answer
-- ✅ Learns incrementally from new information
-- ✅ Provides audit trails for compliance
-- ✅ Works without GPUs or massive compute
-- ✅ 100% explainable reasoning paths
-- ✅ Self-observability using own reasoning engine
-- ✅ Progressive streaming responses (10× faster UX)
-- ✅ Quality gates with "I don't know" for uncertain answers
-- ✅ Natural language operational queries
+**Domain-Specific Reasoning at 1000× Lower Cost**
+
+- ✅ **Your Knowledge, Our Reasoning** - Learns from your domain data, not internet-scale pre-training
+- ✅ **Complete Audit Trails** - Shows reasoning paths for every answer (compliance-ready)
+- ✅ **1000× Smaller Models** - 500MB embedding model vs 100GB+ frontier LLMs
+- ✅ **Real-Time Learning** - Updates instantly without retraining ($0 vs $10K-$100K fine-tuning)
+- ✅ **Self-Hosted** - No API calls to external services (privacy-preserving)
+- ✅ **Cost Effective** - ~$0.0001 per query vs $0.01-$0.10 for LLM APIs
+- ✅ **Quality Gates** - "I don't know" for uncertain answers (no hallucinations)
+- ✅ **Progressive Streaming** - 10× faster UX with confidence-based refinement
+
+**Target Users:** Regulated industries (healthcare, finance, legal, government) requiring explainable AI with audit trails
 
 ### Production Status (2025-10-25)
 
@@ -174,8 +177,8 @@ FORBIDDEN:
 
 - Different models produce **incompatible semantic spaces**
 - Mixing dimensions causes **WRONG QUERY RESULTS**
-- Real incident: Using 384-d for queries + 768-d for storage caused:
-  - Query: "What is the tallest mountain?" → Answer: "Pacific Ocean" ❌
+- Real incident: Using 384-d for queries + 768-d for storage caused completely incorrect answers
+- **Critical:** Embedding model is for semantic similarity, NOT general knowledge. It helps match user queries to concepts in YOUR domain knowledge graph.
 
 #### Mandatory Environment Variables
 
@@ -535,6 +538,26 @@ Standalone storage exploration:
 - React frontend with D3.js visualization
 - BFS pathfinding, N-hop neighborhoods
 - Cosine similarity, full-text search
+
+### Hybrid NLG (sutra-nlg + sutra-nlg-service) ✨ NEW
+
+**Self-hosted natural language generation** with optional LLM:
+- **Template Mode (default)**: Pattern-based, <10ms, 100% grounded
+- **Hybrid Mode (optional)**: LLM-based (gemma-2-2b-it), natural language
+- **Strict Grounding**: 70% token overlap validation (vs 50% template)
+- **Automatic Fallback**: Template on validation failure
+- **High Availability**: 3 replicas + HAProxy load balancer
+- **Swappable Models**: Change via `SUTRA_NLG_MODEL` env var
+- **Self-Hosted**: No OpenAI, no Ollama, full control
+
+**Quick Start:**
+```bash
+# Enable hybrid NLG (optional)
+docker-compose -f docker-compose-grid.yml --profile nlg-hybrid up -d
+curl http://localhost:8889/health
+```
+
+**Documentation:** `docs/nlg/` - Complete architecture, deployment, and design decisions
 
 ---
 

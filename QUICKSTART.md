@@ -1,4 +1,6 @@
-# Sutra Grid - Quick Start
+# Sutra AI - Quick Start
+
+**Domain-Specific Reasoning Engine for Your Knowledge**
 
 ## 🚀 Deploy in 2 Commands
 
@@ -9,9 +11,11 @@
 
 That's it! The system will:
 1. ✅ Build all Docker images (handles HA properly)
-2. ✅ Start all 13 services
+2. ✅ Start all 13 services (storage, reasoning, embeddings)
 3. ✅ Validate critical components
 4. ✅ Show access URLs
+
+**Note:** Sutra starts empty. You provide the domain knowledge (protocols, cases, procedures), Sutra provides the explainable reasoning.
 
 ## 📊 Access Your System
 

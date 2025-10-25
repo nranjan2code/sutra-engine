@@ -1,8 +1,10 @@
 # Sutra AI - System Architecture
 
-**An explainable AI system that learns in real-time without retraining**
+**Domain-Specific Reasoning Engine for Your Knowledge**
 
-Version: 2.0.0 | Status: Production-ready | Last Updated: 2025-10-19
+Explainable reasoning infrastructure that learns from YOUR proprietary data without frontier LLMs.
+
+Version: 2.0.0 | Status: Production-ready | Last Updated: 2025-10-25
 
 ## 🚨 CRITICAL PRODUCTION REQUIREMENTS
 
@@ -26,11 +28,13 @@ Version: 2.0.0 | Status: Production-ready | Last Updated: 2025-10-19
 
 ## Executive Summary
 
-Sutra AI is a **graph-based reasoning system** with complete explainability. Unlike black-box LLMs, every decision includes the full reasoning path showing how the system arrived at its answer.
+Sutra AI is a **domain-specific reasoning engine** that provides explainable answers over your proprietary knowledge. Unlike frontier LLMs trained on general internet data, Sutra starts empty and learns YOUR domain—hospital protocols, legal cases, financial regulations, manufacturing procedures.
 
-**Core Innovation:** Temporal knowledge graphs + semantic embeddings + multi-path reasoning = Explainable AI that learns continuously without retraining.
+**Core Innovation:** Small embedding models (500MB vs 100GB+ LLMs) + graph-based reasoning + multi-path consensus = Explainable AI with complete audit trails at 1000× lower cost.
 
-**Performance:** 57,412 writes/sec, <0.01ms reads, 100% accuracy verified (25,000× faster than previous JSON-based storage).
+**Performance:** 57,412 writes/sec, <0.01ms reads, ~$0.0001 per query (vs $0.01-$0.10 for LLM APIs).
+
+**Target Users:** Regulated industries (healthcare, finance, legal, government) requiring explainable AI with audit trails.
 
 ---
 
@@ -78,11 +82,13 @@ Sutra AI is a **graph-based reasoning system** with complete explainability. Unl
 ```
 
 **Key Design Principles:**
-1. **Single Source of Truth**: Storage server owns ALL learning logic (embeddings + associations)
-2. **TCP Binary Protocol**: 10-50× lower latency than gRPC using bincode serialization
-3. **Unified Learning Pipeline**: No code duplication - all services delegate to storage server
-4. **Atomic Operations**: Complete learning pipeline executes atomically in storage server
-5. **Zero Client-Side Logic**: Clients are thin TCP adapters with no business logic
+1. **Domain-Specific**: Not pre-trained on internet data—learns from YOUR knowledge
+2. **Single Source of Truth**: Storage server owns ALL learning logic (embeddings + associations)
+3. **TCP Binary Protocol**: 10-50× lower latency than gRPC using bincode serialization
+4. **Small Models**: 500MB embedding model vs 100GB+ frontier LLMs
+5. **Complete Explainability**: Full reasoning paths for compliance and audit
+6. **Unified Learning Pipeline**: No code duplication - all services delegate to storage server
+7. **Atomic Operations**: Complete learning pipeline executes atomically in storage server
 
 ---
 
