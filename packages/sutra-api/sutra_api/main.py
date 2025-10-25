@@ -23,13 +23,23 @@ from .exceptions import SutraError
 from .models import (
     BatchLearnRequest,
     BatchLearnResponse,
+    CausalChainRequest,
+    CausalChainResponse,
     ConceptDetail,
+    ContradictionRequest,
+    ContradictionResponse,
     ErrorResponse,
     HealthResponse,
     LearnRequest,
     LearnResponse,
     SearchResult,
+    SemanticPathRequest,
+    SemanticPathResponse,
+    SemanticQueryRequest,
+    SemanticQueryResponse,
     SystemStats,
+    TemporalChainRequest,
+    TemporalChainResponse,
 )
 
 # Configure logging
@@ -286,4 +296,204 @@ async def vector_search(
         raise HTTPException(
             status_code=500,
             detail=f"Vector search failed: {str(e)}"
+        )
+
+
+# ======================== SEMANTIC REASONING ENDPOINTS ========================
+
+@app.post(
+    "/sutra/semantic/path",
+    response_model=SemanticPathResponse,
+    tags=["Semantic Reasoning"],
+)
+async def semantic_path(
+    request: SemanticPathRequest,
+    client=Depends(get_storage_client)
+):
+    """
+    Find semantic path between concepts with optional filter.
+    
+    Uses graph-based pathfinding with semantic pruning for efficient
+    filtered path discovery.
+    """
+    try:
+        # Convert filter to dict if provided
+        filter_dict = None
+        if request.filter:
+            filter_dict = request.filter.dict(exclude_none=True)
+        
+        paths = client.find_path_semantic(
+            start_id=request.start_query,
+            end_id=request.end_query,
+            max_depth=request.max_depth,
+            semantic_filter=filter_dict,
+        )
+        
+        return SemanticPathResponse(
+            start_query=request.start_query,
+            end_query=request.end_query,
+            paths=paths,
+            execution_time_ms=0.0,  # Client doesn't track this
+            filter_applied=filter_dict is not None,
+        )
+    except Exception as e:
+        logger.error(f"Semantic path failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Semantic path query failed: {str(e)}"
+        )
+
+
+@app.post(
+    "/sutra/semantic/temporal",
+    response_model=TemporalChainResponse,
+    tags=["Semantic Reasoning"],
+)
+async def temporal_chain(
+    request: TemporalChainRequest,
+    client=Depends(get_storage_client)
+):
+    """
+    Find temporal reasoning chain between concepts.
+    
+    Discovers temporal relationships and time-ordered event sequences.
+    """
+    try:
+        chains = client.find_temporal_chain(
+            start_id=request.start_query,
+            end_id=request.end_query,
+            max_depth=request.max_depth,
+            after=request.after,
+            before=request.before,
+        )
+        
+        return TemporalChainResponse(
+            start_query=request.start_query,
+            end_query=request.end_query,
+            chains=chains,
+            temporal_constraints={"after": request.after, "before": request.before},
+            execution_time_ms=0.0,
+        )
+    except Exception as e:
+        logger.error(f"Temporal chain failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Temporal chain query failed: {str(e)}"
+        )
+
+
+@app.post(
+    "/sutra/semantic/causal",
+    response_model=CausalChainResponse,
+    tags=["Semantic Reasoning"],
+)
+async def causal_chain(
+    request: CausalChainRequest,
+    client=Depends(get_storage_client)
+):
+    """
+    Find causal reasoning chain between concepts.
+    
+    Identifies cause-and-effect relationships and reasoning chains.
+    """
+    try:
+        chains = client.find_causal_chain(
+            start_id=request.start_query,
+            end_id=request.end_query,
+            max_depth=request.max_depth,
+        )
+        
+        return CausalChainResponse(
+            start_query=request.start_query,
+            end_query=request.end_query,
+            chains=chains,
+            execution_time_ms=0.0,
+        )
+    except Exception as e:
+        logger.error(f"Causal chain failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Causal chain query failed: {str(e)}"
+        )
+
+
+@app.post(
+    "/sutra/semantic/contradictions",
+    response_model=ContradictionResponse,
+    tags=["Semantic Reasoning"],
+)
+async def find_contradictions(
+    request: ContradictionRequest,
+    client=Depends(get_storage_client)
+):
+    """
+    Detect contradictions in knowledge base.
+    
+    Identifies conflicting statements and logical inconsistencies.
+    """
+    try:
+        contradictions = client.find_contradictions(
+            concept_id=request.query,
+            max_depth=request.max_depth,
+        )
+        
+        # Format contradictions
+        formatted_contradictions = [
+            {
+                "concept_id1": c[0],
+                "concept_id2": c[1],
+                "confidence": c[2],
+            }
+            for c in contradictions
+        ]
+        
+        return ContradictionResponse(
+            query=request.query,
+            concept_id=request.query,  # Same for now
+            contradictions=formatted_contradictions,
+            count=len(formatted_contradictions),
+            execution_time_ms=0.0,
+        )
+    except Exception as e:
+        logger.error(f"Contradiction detection failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Contradiction detection failed: {str(e)}"
+        )
+
+
+@app.post(
+    "/sutra/semantic/query",
+    response_model=SemanticQueryResponse,
+    tags=["Semantic Reasoning"],
+)
+async def semantic_query(
+    request: SemanticQueryRequest,
+    client=Depends(get_storage_client)
+):
+    """
+    Query concepts by semantic filter.
+    
+    Search for concepts matching specific semantic criteria like type,
+    domain, temporal constraints, etc.
+    """
+    try:
+        filter_dict = request.filter.dict(exclude_none=True)
+        
+        results = client.query_by_semantic(
+            semantic_filter=filter_dict,
+            max_results=request.max_results,
+        )
+        
+        return SemanticQueryResponse(
+            filter=filter_dict,
+            results=results,
+            count=len(results),
+            execution_time_ms=0.0,
+        )
+    except Exception as e:
+        logger.error(f"Semantic query failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Semantic query failed: {str(e)}"
         )

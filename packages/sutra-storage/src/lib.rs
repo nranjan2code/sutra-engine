@@ -23,6 +23,9 @@ mod vectors;
 // mod python_concurrent;
 mod reasoning_store;
 
+// 🔥 NEW: Semantic understanding module
+pub mod semantic;
+
 // Unified learning pipeline modules
 pub mod embedding_client;
 pub mod semantic_extractor;

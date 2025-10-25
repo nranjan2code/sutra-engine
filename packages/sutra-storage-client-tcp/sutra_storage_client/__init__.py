@@ -481,6 +481,198 @@ class StorageClient:
         
         return response.get("HealthCheckOk", {})
     
+    # ======================== SEMANTIC QUERY METHODS ========================
+    
+    def find_path_semantic(
+        self,
+        start_id: str,
+        end_id: str,
+        max_depth: int = 5,
+        semantic_filter: Optional[Dict] = None,
+    ) -> List[Dict]:
+        """Find semantic path with filter.
+        
+        Args:
+            start_id: Starting concept ID
+            end_id: Ending concept ID
+            max_depth: Maximum path depth
+            semantic_filter: Semantic filter constraints
+        
+        Returns:
+            List of semantic paths with metadata
+        """
+        filter_data = semantic_filter or {}
+        
+        response = self._send_request("FindPathSemantic", {
+            "start_id": start_id,
+            "end_id": end_id,
+            "max_depth": max_depth,
+            "filter": filter_data,
+        })
+        
+        if "Error" in response:
+            raise RuntimeError(response["Error"]["message"])
+        
+        if "FindPathSemanticOk" in response:
+            result = response["FindPathSemanticOk"]
+            if isinstance(result, dict) and "paths" in result:
+                return result["paths"]
+            elif isinstance(result, list):
+                return result
+        
+        return []
+    
+    def find_temporal_chain(
+        self,
+        start_id: str,
+        end_id: str,
+        max_depth: int = 10,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+    ) -> List[Dict]:
+        """Find temporal reasoning chain.
+        
+        Args:
+            start_id: Starting concept ID
+            end_id: Ending concept ID
+            max_depth: Maximum chain depth
+            after: Filter events after this date (ISO 8601)
+            before: Filter events before this date (ISO 8601)
+        
+        Returns:
+            List of temporal chains
+        """
+        response = self._send_request("FindTemporalChain", {
+            "start_id": start_id,
+            "end_id": end_id,
+            "max_depth": max_depth,
+            "after": after,
+            "before": before,
+        })
+        
+        if "Error" in response:
+            raise RuntimeError(response["Error"]["message"])
+        
+        if "FindTemporalChainOk" in response:
+            result = response["FindTemporalChainOk"]
+            if isinstance(result, dict) and "chains" in result:
+                return result["chains"]
+            elif isinstance(result, list):
+                return result
+        
+        return []
+    
+    def find_causal_chain(
+        self,
+        start_id: str,
+        end_id: str,
+        max_depth: int = 5,
+    ) -> List[Dict]:
+        """Find causal reasoning chain.
+        
+        Args:
+            start_id: Starting concept ID
+            end_id: Ending concept ID
+            max_depth: Maximum chain depth
+        
+        Returns:
+            List of causal chains
+        """
+        response = self._send_request("FindCausalChain", {
+            "start_id": start_id,
+            "end_id": end_id,
+            "max_depth": max_depth,
+        })
+        
+        if "Error" in response:
+            raise RuntimeError(response["Error"]["message"])
+        
+        if "FindCausalChainOk" in response:
+            result = response["FindCausalChainOk"]
+            if isinstance(result, dict) and "chains" in result:
+                return result["chains"]
+            elif isinstance(result, list):
+                return result
+        
+        return []
+    
+    def find_contradictions(
+        self,
+        concept_id: str,
+        max_depth: int = 3,
+    ) -> List[Tuple[str, str, float]]:
+        """Detect contradictions in knowledge base.
+        
+        Args:
+            concept_id: Concept to check for contradictions
+            max_depth: Search depth for contradictions
+        
+        Returns:
+            List of (concept_id1, concept_id2, confidence) tuples
+        """
+        response = self._send_request("FindContradictions", {
+            "concept_id": concept_id,
+            "max_depth": max_depth,
+        })
+        
+        if "Error" in response:
+            raise RuntimeError(response["Error"]["message"])
+        
+        if "FindContradictionsOk" in response:
+            result = response["FindContradictionsOk"]
+            if isinstance(result, dict) and "contradictions" in result:
+                contradictions = result["contradictions"]
+            elif isinstance(result, list):
+                contradictions = result
+            else:
+                return []
+            
+            # Convert to tuples
+            output = []
+            for item in contradictions:
+                if isinstance(item, list) and len(item) >= 3:
+                    output.append((item[0], item[1], item[2]))
+                elif isinstance(item, dict):
+                    output.append((
+                        item.get("concept_id1", ""),
+                        item.get("concept_id2", ""),
+                        item.get("confidence", 0.0),
+                    ))
+            return output
+        
+        return []
+    
+    def query_by_semantic(
+        self,
+        semantic_filter: Dict,
+        max_results: int = 100,
+    ) -> List[Dict]:
+        """Query concepts by semantic filter.
+        
+        Args:
+            semantic_filter: Semantic filter constraints
+            max_results: Maximum number of results
+        
+        Returns:
+            List of matching concepts with metadata
+        """
+        response = self._send_request("QueryBySemantic", {
+            "filter": semantic_filter,
+            "max_results": max_results,
+        })
+        
+        if "Error" in response:
+            raise RuntimeError(response["Error"]["message"])
+        
+        if "QueryBySemanticOk" in response:
+            result = response["QueryBySemanticOk"]
+            if isinstance(result, dict) and "results" in result:
+                return result["results"]
+            elif isinstance(result, list):
+                return result
+        
+        return []
+    
     def close(self):
         """Close connection to server"""
         if self.socket:

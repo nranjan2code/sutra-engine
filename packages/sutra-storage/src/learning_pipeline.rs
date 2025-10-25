@@ -6,6 +6,7 @@ use tracing::{info, warn, debug};
 
 use crate::embedding_client::EmbeddingClient;
 use crate::semantic_extractor::{SemanticExtractor, SemanticAssociation};
+use crate::semantic::{SemanticAnalyzer, SemanticMetadata};
 use crate::storage_trait::LearningStorage;
 use crate::types::{ConceptId, AssociationType};
 
@@ -14,6 +15,7 @@ pub struct LearnOptions {
     pub generate_embedding: bool,
     pub embedding_model: Option<String>,
     pub extract_associations: bool,
+    pub analyze_semantics: bool, // 🔥 NEW: Enable semantic analysis
     pub min_association_confidence: f32,
     pub max_associations_per_concept: usize,
     pub strength: f32,
@@ -26,6 +28,7 @@ impl Default for LearnOptions {
             generate_embedding: true,
             embedding_model: None,
             extract_associations: true,
+            analyze_semantics: true, // 🔥 NEW: Enabled by default
             min_association_confidence: std::env::var("SUTRA_MIN_ASSOCIATION_CONFIDENCE").ok().and_then(|s| s.parse().ok()).unwrap_or(0.5),
             max_associations_per_concept: std::env::var("SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT").ok().and_then(|s| s.parse().ok()).unwrap_or(10),
             strength: 1.0,
@@ -37,6 +40,7 @@ impl Default for LearnOptions {
 pub struct LearningPipeline {
     embedding_client: EmbeddingClient,
     semantic_extractor: SemanticExtractor,
+    semantic_analyzer: SemanticAnalyzer, // 🔥 NEW: Semantic understanding
 }
 
 impl LearningPipeline {
@@ -46,7 +50,15 @@ impl LearningPipeline {
         // Initialize semantic extractor (async - pre-computes relation embeddings)
         let semantic_extractor = SemanticExtractor::new(embedding_client.clone()).await?;
         
-        Ok(Self { embedding_client, semantic_extractor })
+        // Initialize semantic analyzer (deterministic, no async)
+        let semantic_analyzer = SemanticAnalyzer::new();
+        
+        Ok(Self { embedding_client, semantic_extractor, semantic_analyzer })
+    }
+    
+    /// Analyze semantic metadata for content
+    pub fn analyze_semantic(&self, content: &str) -> SemanticMetadata {
+        self.semantic_analyzer.analyze(content)
     }
 
     /// Learn a single concept end-to-end
@@ -70,14 +82,36 @@ impl LearningPipeline {
         let concept_id = self.generate_concept_id(content);
         let id = ConceptId::from_string(&concept_id);
 
-        // Step 3: Store concept
-        let sequence = storage.learn_concept(
-            id,
-            content.as_bytes().to_vec(),
-            embedding_opt.clone(),
-            options.strength,
-            options.confidence,
-        )?;
+        // Step 3: Analyze semantics (🔥 NEW)
+        let semantic = if options.analyze_semantics {
+            Some(self.semantic_analyzer.analyze(content))
+        } else {
+            None
+        };
+
+        // Step 4: Store concept with semantic metadata
+        let sequence = if let Some(semantic_meta) = semantic {
+            info!("💡 Semantic: type={}, domain={:?}, confidence={:.2}",
+                 semantic_meta.semantic_type,
+                 semantic_meta.domain_context,
+                 semantic_meta.classification_confidence);
+            storage.learn_concept_with_semantic(
+                id,
+                content.as_bytes().to_vec(),
+                embedding_opt.clone(),
+                options.strength,
+                options.confidence,
+                semantic_meta,
+            )?
+        } else {
+            storage.learn_concept(
+                id,
+                content.as_bytes().to_vec(),
+                embedding_opt.clone(),
+                options.strength,
+                options.confidence,
+            )?
+        };
         debug!("Stored concept seq={}", sequence);
 
         // Step 4: Semantic associations (modern approach!)
@@ -135,14 +169,36 @@ impl LearningPipeline {
             let concept_id = self.generate_concept_id(content);
             let id = ConceptId::from_string(&concept_id);
 
-            // Store concept with pre-computed embedding
-            let sequence = storage.learn_concept(
-                id,
-                content.as_bytes().to_vec(),
-                embedding_opt.clone(),
-                options.strength,
-                options.confidence,
-            )?;
+            // Analyze semantics (🔥 NEW)
+            let semantic = if options.analyze_semantics {
+                Some(self.semantic_analyzer.analyze(content))
+            } else {
+                None
+            };
+
+            // Store concept with pre-computed embedding and semantic metadata
+            let sequence = if let Some(semantic_meta) = semantic {
+                if i < 3 { // Log first 3 for visibility
+                    info!("💡 Batch[{}] Semantic: type={}, domain={:?}",
+                         i, semantic_meta.semantic_type, semantic_meta.domain_context);
+                }
+                storage.learn_concept_with_semantic(
+                    id,
+                    content.as_bytes().to_vec(),
+                    embedding_opt.clone(),
+                    options.strength,
+                    options.confidence,
+                    semantic_meta,
+                )?
+            } else {
+                storage.learn_concept(
+                    id,
+                    content.as_bytes().to_vec(),
+                    embedding_opt.clone(),
+                    options.strength,
+                    options.confidence,
+                )?
+            };
             debug!("Stored concept seq={}", sequence);
 
             // Extract and store semantic associations

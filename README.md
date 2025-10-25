@@ -10,7 +10,7 @@ Explainable reasoning over your private domain knowledge—without frontier LLMs
 
 ---
 
-## 🎉 What's New (2025-10-24)
+## 🎉 What's New (2025-10-25)
 
 **Production-Ready: All P0 Features Complete**
 
@@ -21,6 +21,7 @@ Explainable reasoning over your private domain knowledge—without frontier LLMs
 - ✅ **94× Faster Startup** - USearch HNSW persistent indexes
 - ✅ **Adaptive Reconciliation** - Self-optimizing storage (80% CPU savings)
 - ✅ **Production Grade** - 107 tests passing, DoS protection, input validation
+- ✅ **Semantic Query API** - Advanced semantic filtering, temporal reasoning, causal/contradiction detection
 
 **[📖 Complete Documentation](docs/INDEX.md)** | **[🚀 Quick Start](#quick-start)** | **[📊 Benchmarks](#performance)**
 
@@ -117,6 +118,7 @@ Answer with complete FDA-auditable trail
 | **HA Embedding** | 3 replicas + HAProxy load balancer | ✅ |
 | **Sharded Storage** | 4-16 shards for 10M-2.5B concepts | ✅ |
 | **Zero Data Loss** | Write-Ahead Log + 2PC transactions | ✅ |
+| **Semantic Queries** | Filters, temporal/causal chains, contradictions | ✅ |
 
 ---
 
@@ -259,6 +261,35 @@ curl -X POST http://localhost:8001/sutra/stream/query \
 
 # If confidence is low, system returns: "I don't know - insufficient data"
 # If confidence is high, provides reasoning path with audit trail
+```
+
+**Step 4: Advanced Semantic Queries:**
+```bash
+# Query with semantic filters
+curl -X POST http://localhost:8000/api/semantic/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "pediatric sepsis treatment",
+    "filters": {
+      "semantic_type": "clinical_protocol",
+      "domain": "pediatrics",
+      "min_confidence": 0.8
+    }
+  }'
+
+# Find temporal chains (events over time)
+curl -X POST http://localhost:8000/api/semantic/temporal-chain \
+  -H "Content-Type: application/json" \
+  -d '{
+    "start_concept": "sepsis_diagnosis",
+    "end_concept": "patient_recovery",
+    "time_range": {"start": "2024-01-01", "end": "2024-12-31"}
+  }'
+
+# Detect contradictions in knowledge
+curl -X POST http://localhost:8000/api/semantic/contradictions \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "drug_interactions", "min_confidence": 0.75}'
 ```
 
 **[Complete Quick Start Guide →](docs/guides/QUICK_START.md)**

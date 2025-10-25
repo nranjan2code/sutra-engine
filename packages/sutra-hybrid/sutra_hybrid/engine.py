@@ -446,6 +446,184 @@ class SutraAI:
 
     # close method already defined above - removing duplicate
 
+    # ======================== SEMANTIC QUERY METHODS ========================
+
+    def find_semantic_path(
+        self,
+        start_query: str,
+        end_query: str,
+        semantic_filter: Optional[Dict] = None,
+        max_depth: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Find semantic path between concepts with explainable results.
+
+        Args:
+            start_query: Starting concept (natural language or ID)
+            end_query: Ending concept (natural language or ID)
+            semantic_filter: Optional semantic constraints
+            max_depth: Maximum path depth
+
+        Returns:
+            Dictionary with paths and metadata
+        """
+        start_time = time.time()
+
+        # For now, use queries as concept IDs directly
+        # TODO: Add concept resolution from natural language
+        start_id = self._content_id(start_query) if len(start_query) > 16 else start_query
+        end_id = self._content_id(end_query) if len(end_query) > 16 else end_query
+
+        # Call core engine
+        paths = self._core.find_semantic_path(start_id, end_id, semantic_filter, max_depth)
+
+        exec_ms = (time.time() - start_time) * 1000
+
+        return {
+            "start_query": start_query,
+            "end_query": end_query,
+            "paths": paths,
+            "execution_time_ms": exec_ms,
+            "filter_applied": semantic_filter is not None,
+        }
+
+    def find_temporal_chain(
+        self,
+        start_query: str,
+        end_query: str,
+        max_depth: int = 10,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Find temporal reasoning chain.
+
+        Args:
+            start_query: Starting concept
+            end_query: Ending concept
+            max_depth: Maximum chain depth
+            after: Filter events after this date (ISO 8601)
+            before: Filter events before this date (ISO 8601)
+
+        Returns:
+            Dictionary with temporal chains
+        """
+        start_time = time.time()
+
+        start_id = self._content_id(start_query) if len(start_query) > 16 else start_query
+        end_id = self._content_id(end_query) if len(end_query) > 16 else end_query
+
+        chains = self._core.find_temporal_chain(start_id, end_id, max_depth, after, before)
+
+        exec_ms = (time.time() - start_time) * 1000
+
+        return {
+            "start_query": start_query,
+            "end_query": end_query,
+            "chains": chains,
+            "temporal_constraints": {"after": after, "before": before},
+            "execution_time_ms": exec_ms,
+        }
+
+    def find_causal_chain(
+        self,
+        start_query: str,
+        end_query: str,
+        max_depth: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Find causal reasoning chain.
+
+        Args:
+            start_query: Starting concept
+            end_query: Ending concept
+            max_depth: Maximum chain depth
+
+        Returns:
+            Dictionary with causal chains
+        """
+        start_time = time.time()
+
+        start_id = self._content_id(start_query) if len(start_query) > 16 else start_query
+        end_id = self._content_id(end_query) if len(end_query) > 16 else end_query
+
+        chains = self._core.find_causal_chain(start_id, end_id, max_depth)
+
+        exec_ms = (time.time() - start_time) * 1000
+
+        return {
+            "start_query": start_query,
+            "end_query": end_query,
+            "chains": chains,
+            "execution_time_ms": exec_ms,
+        }
+
+    def find_contradictions(
+        self,
+        query: str,
+        max_depth: int = 3,
+    ) -> Dict[str, Any]:
+        """
+        Detect contradictions in knowledge base.
+
+        Args:
+            query: Concept to check (natural language or ID)
+            max_depth: Search depth for contradictions
+
+        Returns:
+            Dictionary with contradictions
+        """
+        start_time = time.time()
+
+        concept_id = self._content_id(query) if len(query) > 16 else query
+
+        contradictions = self._core.find_contradictions(concept_id, max_depth)
+
+        exec_ms = (time.time() - start_time) * 1000
+
+        return {
+            "query": query,
+            "concept_id": concept_id,
+            "contradictions": [
+                {
+                    "concept_id1": c[0],
+                    "concept_id2": c[1],
+                    "confidence": c[2],
+                }
+                for c in contradictions
+            ],
+            "count": len(contradictions),
+            "execution_time_ms": exec_ms,
+        }
+
+    def query_semantic(
+        self,
+        semantic_filter: Dict,
+        max_results: int = 100,
+    ) -> Dict[str, Any]:
+        """
+        Query concepts by semantic filter.
+
+        Args:
+            semantic_filter: Semantic filter constraints
+            max_results: Maximum number of results
+
+        Returns:
+            Dictionary with matching concepts
+        """
+        start_time = time.time()
+
+        results = self._core.query_semantic(semantic_filter, max_results)
+
+        exec_ms = (time.time() - start_time) * 1000
+
+        return {
+            "filter": semantic_filter,
+            "results": results,
+            "count": len(results),
+            "execution_time_ms": exec_ms,
+        }
+
     def _convert_paths(self, core_paths) -> List[ReasoningPathDetail]:
         """Convert core ReasoningPath objects to ReasoningPathDetail."""
         converted = []

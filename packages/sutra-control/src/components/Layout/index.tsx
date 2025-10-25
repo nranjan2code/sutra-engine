@@ -29,6 +29,7 @@ import { Components } from '../Components';
 import { Analytics } from '../Analytics';
 import { KnowledgeGraph } from '../KnowledgeGraph';
 import { Reasoning } from '../Reasoning';
+import SemanticExplorer from '../Semantic';
 import { Settings } from '../Settings';
 import Grid from '../Grid';
 import BulkIngester from '../BulkIngester';
@@ -54,6 +55,7 @@ export const Layout: React.FC = () => {
       '/analytics': 'Analytics',
       '/knowledge': 'Knowledge Graph',
       '/reasoning': 'Reasoning Engine',
+      '/semantic': 'Semantic Explorer',
       '/bulk-ingester': 'Bulk Data Ingestion',
       '/grid': 'Grid Management',
       '/settings': 'Settings',
@@ -190,6 +192,7 @@ export const Layout: React.FC = () => {
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/knowledge" element={<KnowledgeGraph />} />
                 <Route path="/reasoning" element={<Reasoning />} />
+                <Route path="/semantic" element={<SemanticExplorer />} />
                 <Route path="/bulk-ingester" element={<BulkIngester />} />
                 <Route path="/grid" element={<Grid />} />
                 <Route path="/settings" element={<Settings />} />

@@ -7,13 +7,14 @@
 //! - Token expiration and refresh
 
 use anyhow::{anyhow, Result};
+use hmac::{Hmac, Mac};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use parking_lot::RwLock;
-use sha2::{Sha256, Digest};
-use hmac::{Hmac, Mac};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -193,14 +194,14 @@ impl AuthManager {
     fn generate_hmac_token(&self, claims: &Claims) -> Result<String> {
         // Serialize claims to JSON
         let payload = serde_json::to_string(claims)?;
-        let payload_b64 = base64::encode_config(&payload, base64::URL_SAFE_NO_PAD);
+        let payload_b64 = URL_SAFE_NO_PAD.encode(&payload);
         
         // Generate HMAC signature
         let mut mac = HmacSha256::new_from_slice(&self.secret)
             .map_err(|e| anyhow!("HMAC initialization failed: {}", e))?;
         mac.update(payload_b64.as_bytes());
         let signature = mac.finalize().into_bytes();
-        let signature_b64 = base64::encode_config(&signature, base64::URL_SAFE_NO_PAD);
+        let signature_b64 = URL_SAFE_NO_PAD.encode(&signature);
         
         // Token format: payload.signature
         Ok(format!("{}.{}", payload_b64, signature_b64))
@@ -222,12 +223,12 @@ impl AuthManager {
             .map_err(|e| anyhow!("HMAC initialization failed: {}", e))?;
         mac.update(payload_b64.as_bytes());
         
-        let expected_sig = base64::decode_config(signature_b64, base64::URL_SAFE_NO_PAD)?;
+        let expected_sig = URL_SAFE_NO_PAD.decode(signature_b64)?;
         mac.verify_slice(&expected_sig)
             .map_err(|_| anyhow!("Invalid token signature"))?;
         
         // Decode and validate claims
-        let payload_bytes = base64::decode_config(payload_b64, base64::URL_SAFE_NO_PAD)?;
+        let payload_bytes = URL_SAFE_NO_PAD.decode(payload_b64)?;
         let claims: Claims = serde_json::from_slice(&payload_bytes)?;
         
         // Check expiration
@@ -250,16 +251,10 @@ impl AuthManager {
             "alg": "HS256",
             "typ": "JWT"
         });
-        let header_b64 = base64::encode_config(
-            serde_json::to_string(&header)?,
-            base64::URL_SAFE_NO_PAD
-        );
+        let header_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_string(&header)?);
         
         // JWT Payload
-        let payload_b64 = base64::encode_config(
-            serde_json::to_string(claims)?,
-            base64::URL_SAFE_NO_PAD
-        );
+        let payload_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_string(claims)?);
         
         // JWT Signature
         let signing_input = format!("{}.{}", header_b64, payload_b64);
@@ -267,7 +262,7 @@ impl AuthManager {
             .map_err(|e| anyhow!("HMAC initialization failed: {}", e))?;
         mac.update(signing_input.as_bytes());
         let signature = mac.finalize().into_bytes();
-        let signature_b64 = base64::encode_config(&signature, base64::URL_SAFE_NO_PAD);
+        let signature_b64 = URL_SAFE_NO_PAD.encode(&signature);
         
         Ok(format!("{}.{}.{}", header_b64, payload_b64, signature_b64))
     }
@@ -289,12 +284,12 @@ impl AuthManager {
             .map_err(|e| anyhow!("HMAC initialization failed: {}", e))?;
         mac.update(signing_input.as_bytes());
         
-        let expected_sig = base64::decode_config(signature_b64, base64::URL_SAFE_NO_PAD)?;
+        let expected_sig = URL_SAFE_NO_PAD.decode(signature_b64)?;
         mac.verify_slice(&expected_sig)
             .map_err(|_| anyhow!("Invalid JWT signature"))?;
         
         // Decode claims
-        let payload_bytes = base64::decode_config(payload_b64, base64::URL_SAFE_NO_PAD)?;
+        let payload_bytes = URL_SAFE_NO_PAD.decode(payload_b64)?;
         let claims: Claims = serde_json::from_slice(&payload_bytes)?;
         
         // Validate

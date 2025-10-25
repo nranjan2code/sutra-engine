@@ -297,6 +297,94 @@ async def natural_language_grid_query(request: dict):
         raise HTTPException(status_code=500, detail="Query failed")
 
 
+# ===== Semantic Reasoning Gateway Endpoints =====
+
+@app.post("/api/semantic/path")
+async def semantic_path_gateway(request: dict):
+    """Gateway to semantic pathfinding endpoint"""
+    try:
+        # Forward to sutra-api semantic endpoint
+        import httpx
+        api_url = os.getenv("SUTRA_API_URL", "http://sutra-api:8000")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{api_url}/sutra/semantic/path",
+                json=request,
+            )
+            return response.json()
+    except Exception as e:
+        logger.error(f"Semantic path gateway failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/semantic/temporal")
+async def temporal_chain_gateway(request: dict):
+    """Gateway to temporal chain endpoint"""
+    try:
+        import httpx
+        api_url = os.getenv("SUTRA_API_URL", "http://sutra-api:8000")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{api_url}/sutra/semantic/temporal",
+                json=request,
+            )
+            return response.json()
+    except Exception as e:
+        logger.error(f"Temporal chain gateway failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/semantic/causal")
+async def causal_chain_gateway(request: dict):
+    """Gateway to causal chain endpoint"""
+    try:
+        import httpx
+        api_url = os.getenv("SUTRA_API_URL", "http://sutra-api:8000")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{api_url}/sutra/semantic/causal",
+                json=request,
+            )
+            return response.json()
+    except Exception as e:
+        logger.error(f"Causal chain gateway failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/semantic/contradictions")
+async def contradictions_gateway(request: dict):
+    """Gateway to contradiction detection endpoint"""
+    try:
+        import httpx
+        api_url = os.getenv("SUTRA_API_URL", "http://sutra-api:8000")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{api_url}/sutra/semantic/contradictions",
+                json=request,
+            )
+            return response.json()
+    except Exception as e:
+        logger.error(f"Contradiction detection gateway failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/semantic/query")
+async def semantic_query_gateway(request: dict):
+    """Gateway to semantic query endpoint"""
+    try:
+        import httpx
+        api_url = os.getenv("SUTRA_API_URL", "http://sutra-api:8000")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{api_url}/sutra/semantic/query",
+                json=request,
+            )
+            return response.json()
+    except Exception as e:
+        logger.error(f"Semantic query gateway failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket for real-time updates - no internal details exposed"""

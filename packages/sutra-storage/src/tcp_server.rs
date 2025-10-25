@@ -6,6 +6,7 @@
 use crate::concurrent_memory::ConcurrentMemory;
 use crate::sharded_storage::ShardedStorage;
 use crate::learning_pipeline::{LearningPipeline, LearnOptions};
+use crate::semantic::{SemanticType, DomainContext, CausalType};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -26,6 +27,32 @@ const MAX_SEARCH_K: u32 = 1000; // Max k for vector search
 
 // Re-define protocol messages here for now (will use sutra-protocol crate)
 
+// 🔥 NEW: Semantic filter for TCP protocol
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticFilterMsg {
+    pub semantic_type: Option<String>,  // "rule", "event", "entity", etc.
+    pub domain_context: Option<String>, // "medical", "legal", "financial", etc.
+    pub temporal_after: Option<i64>,    // Unix timestamp
+    pub temporal_before: Option<i64>,   // Unix timestamp
+    pub has_causal_relation: bool,
+    pub min_confidence: f32,
+    pub required_terms: Vec<String>,
+}
+
+impl Default for SemanticFilterMsg {
+    fn default() -> Self {
+        Self {
+            semantic_type: None,
+            domain_context: None,
+            temporal_after: None,
+            temporal_before: None,
+            has_causal_relation: false,
+            min_confidence: 0.0,
+            required_terms: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LearnOptionsMsg {
     pub generate_embedding: bool,
@@ -43,6 +70,7 @@ impl From<LearnOptionsMsg> for LearnOptions {
             generate_embedding: m.generate_embedding,
             embedding_model: m.embedding_model,
             extract_associations: m.extract_associations,
+            analyze_semantics: true, // Always enabled in V2
             min_association_confidence: m.min_association_confidence,
             max_associations_per_concept: m.max_associations_per_concept,
             strength: m.strength,
@@ -58,6 +86,7 @@ impl Default for LearnOptionsMsg {
             generate_embedding: d.generate_embedding,
             embedding_model: d.embedding_model,
             extract_associations: d.extract_associations,
+            // analyze_semantics is always true, not exposed in message (internal only)
             min_association_confidence: d.min_association_confidence,
             max_associations_per_concept: d.max_associations_per_concept,
             strength: d.strength,
@@ -107,9 +136,52 @@ pub enum StorageRequest {
         k: u32,
         ef_search: u32,
     },
+    // 🔥 NEW: Semantic query operations
+    FindPathSemantic {
+        start_id: String,
+        end_id: String,
+        filter: SemanticFilterMsg,
+        max_depth: u32,
+        max_paths: u32,
+    },
+    FindTemporalChain {
+        domain: Option<String>,  // "medical", "legal", etc.
+        start_time: i64,
+        end_time: i64,
+    },
+    FindCausalChain {
+        start_id: String,
+        causal_type: String,  // "direct", "indirect", "enabling", etc.
+        max_depth: u32,
+    },
+    FindContradictions {
+        domain: String,
+    },
+    QueryBySemantic {
+        filter: SemanticFilterMsg,
+        limit: Option<usize>,
+    },
     GetStats,
     Flush,
     HealthCheck,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticPathMsg {
+    pub concepts: Vec<String>,
+    pub confidence: f32,
+    pub type_distribution: std::collections::HashMap<String, usize>,
+    pub domains: Vec<String>,
+    pub is_temporally_ordered: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConceptWithSemanticMsg {
+    pub concept_id: String,
+    pub content: String,
+    pub semantic_type: String,
+    pub domain: String,
+    pub confidence: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +200,22 @@ pub enum StorageResponse {
     GetNeighborsOk { neighbor_ids: Vec<String> },
     FindPathOk { found: bool, path: Vec<String> },
     VectorSearchOk { results: Vec<(String, f32)> },
+    // 🔥 NEW: Semantic query responses
+    FindPathSemanticOk {
+        paths: Vec<SemanticPathMsg>,
+    },
+    FindTemporalChainOk {
+        paths: Vec<SemanticPathMsg>,
+    },
+    FindCausalChainOk {
+        paths: Vec<SemanticPathMsg>,
+    },
+    FindContradictionsOk {
+        contradictions: Vec<(String, String, String)>, // (id1, id2, reason)
+    },
+    QueryBySemanticOk {
+        concepts: Vec<ConceptWithSemanticMsg>,
+    },
     StatsOk {
         concepts: u64,
         edges: u64,
@@ -478,7 +566,284 @@ impl StorageServer {
                     uptime_seconds: uptime,
                 }
             }
+            
+            // 🔥 NEW: Semantic query handlers
+            StorageRequest::FindPathSemantic { start_id, end_id, filter, max_depth, max_paths } => {
+                self.handle_find_path_semantic(start_id, end_id, filter, max_depth, max_paths)
+            }
+            
+            StorageRequest::FindTemporalChain { domain, start_time, end_time } => {
+                self.handle_find_temporal_chain(domain, start_time, end_time)
+            }
+            
+            StorageRequest::FindCausalChain { start_id, causal_type, max_depth } => {
+                self.handle_find_causal_chain(start_id, causal_type, max_depth)
+            }
+            
+            StorageRequest::FindContradictions { domain } => {
+                self.handle_find_contradictions(domain)
+            }
+            
+            StorageRequest::QueryBySemantic { filter, limit } => {
+                self.handle_query_by_semantic(filter, limit)
+            }
         }
+    }
+    
+    // 🔥 NEW: Semantic query implementation methods
+    fn handle_find_path_semantic(
+        &self,
+        start_id: String,
+        end_id: String,
+        filter_msg: SemanticFilterMsg,
+        max_depth: u32,
+        max_paths: u32,
+    ) -> StorageResponse {
+        use crate::semantic::{SemanticPathFinder, SemanticFilter, TemporalConstraint, CausalFilter};
+        
+        let start = ConceptId::from_string(&start_id);
+        let end = ConceptId::from_string(&end_id);
+        
+        // Convert message filter to internal filter
+        let mut filter = SemanticFilter::new();
+        
+        if let Some(ref st) = filter_msg.semantic_type {
+            if let Some(semantic_type) = parse_semantic_type(st) {
+                filter = filter.with_type(semantic_type);
+            }
+        }
+        
+        if let Some(ref dc) = filter_msg.domain_context {
+            if let Some(domain) = parse_domain_context(dc) {
+                filter = filter.with_domain(domain);
+            }
+        }
+        
+        if let Some(after) = filter_msg.temporal_after {
+            filter = filter.with_temporal(TemporalConstraint::After(after));
+        }
+        
+        if let Some(before) = filter_msg.temporal_before {
+            filter = filter.with_temporal(TemporalConstraint::Before(before));
+        }
+        
+        if filter_msg.has_causal_relation {
+            filter = filter.with_causal(CausalFilter::HasCausalRelation);
+        }
+        
+        filter = filter.with_min_confidence(filter_msg.min_confidence);
+        
+        for term in filter_msg.required_terms {
+            filter = filter.with_term(term);
+        }
+        
+        // Create pathfinder
+        let pathfinder = SemanticPathFinder::new(max_depth as usize, max_paths as usize);
+        let snapshot = self.storage.get_snapshot();
+        
+        // Find paths
+        let paths = pathfinder.find_paths_filtered(snapshot, start, end, &filter);
+        
+        // Convert to message format
+        let path_msgs: Vec<SemanticPathMsg> = paths.into_iter().map(|p| {
+            SemanticPathMsg {
+                concepts: p.concepts.iter().map(|id| id.to_hex()).collect(),
+                confidence: p.confidence,
+                type_distribution: p.type_distribution.into_iter()
+                    .map(|(t, c)| (t.as_str().to_string(), c))
+                    .collect(),
+                domains: p.domains.into_iter().map(|d| d.as_str().to_string()).collect(),
+                is_temporally_ordered: p.is_temporally_ordered,
+            }
+        }).collect();
+        
+        StorageResponse::FindPathSemanticOk { paths: path_msgs }
+    }
+    
+    fn handle_find_temporal_chain(
+        &self,
+        domain: Option<String>,
+        start_time: i64,
+        end_time: i64,
+    ) -> StorageResponse {
+        use crate::semantic::SemanticPathFinder;
+        
+        let domain_ctx = domain.and_then(|d| parse_domain_context(&d));
+        let pathfinder = SemanticPathFinder::default();
+        let snapshot = self.storage.get_snapshot();
+        
+        let paths = pathfinder.find_temporal_chain(snapshot, domain_ctx, start_time, end_time);
+        
+        let path_msgs: Vec<SemanticPathMsg> = paths.into_iter().map(|p| {
+            SemanticPathMsg {
+                concepts: p.concepts.iter().map(|id| id.to_hex()).collect(),
+                confidence: p.confidence,
+                type_distribution: p.type_distribution.into_iter()
+                    .map(|(t, c)| (t.as_str().to_string(), c))
+                    .collect(),
+                domains: p.domains.into_iter().map(|d| d.as_str().to_string()).collect(),
+                is_temporally_ordered: p.is_temporally_ordered,
+            }
+        }).collect();
+        
+        StorageResponse::FindTemporalChainOk { paths: path_msgs }
+    }
+    
+    fn handle_find_causal_chain(
+        &self,
+        start_id: String,
+        causal_type: String,
+        max_depth: u32,
+    ) -> StorageResponse {
+        use crate::semantic::SemanticPathFinder;
+        
+        let start = ConceptId::from_string(&start_id);
+        let causal = parse_causal_type(&causal_type).unwrap_or(CausalType::Direct);
+        
+        let pathfinder = SemanticPathFinder::new(max_depth as usize, 100);
+        let snapshot = self.storage.get_snapshot();
+        
+        let paths = pathfinder.find_causal_chain(snapshot, start, causal);
+        
+        let path_msgs: Vec<SemanticPathMsg> = paths.into_iter().map(|p| {
+            SemanticPathMsg {
+                concepts: p.concepts.iter().map(|id| id.to_hex()).collect(),
+                confidence: p.confidence,
+                type_distribution: p.type_distribution.into_iter()
+                    .map(|(t, c)| (t.as_str().to_string(), c))
+                    .collect(),
+                domains: p.domains.into_iter().map(|d| d.as_str().to_string()).collect(),
+                is_temporally_ordered: p.is_temporally_ordered,
+            }
+        }).collect();
+        
+        StorageResponse::FindCausalChainOk { paths: path_msgs }
+    }
+    
+    fn handle_find_contradictions(&self, domain: String) -> StorageResponse {
+        use crate::semantic::SemanticPathFinder;
+        
+        let domain_ctx = parse_domain_context(&domain).unwrap_or(DomainContext::General);
+        let pathfinder = SemanticPathFinder::default();
+        let snapshot = self.storage.get_snapshot();
+        
+        let contradictions = pathfinder.find_contradictions(snapshot, domain_ctx);
+        
+        let contradiction_msgs: Vec<(String, String, String)> = contradictions.into_iter()
+            .map(|(id1, id2, reason)| (id1.to_hex(), id2.to_hex(), reason))
+            .collect();
+        
+        StorageResponse::FindContradictionsOk { contradictions: contradiction_msgs }
+    }
+    
+    fn handle_query_by_semantic(
+        &self,
+        filter_msg: SemanticFilterMsg,
+        limit: Option<usize>,
+    ) -> StorageResponse {
+        use crate::semantic::{SemanticFilter, TemporalConstraint, CausalFilter};
+        
+        // Convert message filter to internal filter
+        let mut filter = SemanticFilter::new();
+        
+        if let Some(ref st) = filter_msg.semantic_type {
+            if let Some(semantic_type) = parse_semantic_type(st) {
+                filter = filter.with_type(semantic_type);
+            }
+        }
+        
+        if let Some(ref dc) = filter_msg.domain_context {
+            if let Some(domain) = parse_domain_context(dc) {
+                filter = filter.with_domain(domain);
+            }
+        }
+        
+        if let Some(after) = filter_msg.temporal_after {
+            filter = filter.with_temporal(TemporalConstraint::After(after));
+        }
+        
+        if let Some(before) = filter_msg.temporal_before {
+            filter = filter.with_temporal(TemporalConstraint::Before(before));
+        }
+        
+        if filter_msg.has_causal_relation {
+            filter = filter.with_causal(CausalFilter::HasCausalRelation);
+        }
+        
+        filter = filter.with_min_confidence(filter_msg.min_confidence);
+        
+        for term in filter_msg.required_terms {
+            filter = filter.with_term(term);
+        }
+        
+        // Query concepts
+        let snapshot = self.storage.get_snapshot();
+        let mut concepts = Vec::new();
+        
+        for concept in snapshot.all_concepts() {
+            if let Some(ref semantic) = concept.semantic {
+                let content = String::from_utf8_lossy(&concept.content);
+                if filter.matches(semantic, &content, &concept.id) {
+                    concepts.push(ConceptWithSemanticMsg {
+                        concept_id: concept.id.to_hex(),
+                        content: content.to_string(),
+                        semantic_type: semantic.semantic_type.as_str().to_string(),
+                        domain: semantic.domain_context.as_str().to_string(),
+                        confidence: semantic.classification_confidence,
+                    });
+                    
+                    if let Some(lim) = limit {
+                        if concepts.len() >= lim {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        StorageResponse::QueryBySemanticOk { concepts }
+    }
+}
+
+// Helper functions for parsing semantic types from strings
+use crate::types::ConceptId;
+
+fn parse_semantic_type(s: &str) -> Option<SemanticType> {
+    match s.to_lowercase().as_str() {
+        "entity" => Some(SemanticType::Entity),
+        "event" => Some(SemanticType::Event),
+        "rule" => Some(SemanticType::Rule),
+        "temporal" => Some(SemanticType::Temporal),
+        "negation" => Some(SemanticType::Negation),
+        "condition" => Some(SemanticType::Condition),
+        "causal" => Some(SemanticType::Causal),
+        "quantitative" => Some(SemanticType::Quantitative),
+        "definitional" => Some(SemanticType::Definitional),
+        _ => None,
+    }
+}
+
+fn parse_domain_context(s: &str) -> Option<DomainContext> {
+    match s.to_lowercase().as_str() {
+        "medical" => Some(DomainContext::Medical),
+        "legal" => Some(DomainContext::Legal),
+        "financial" => Some(DomainContext::Financial),
+        "technical" => Some(DomainContext::Technical),
+        "scientific" => Some(DomainContext::Scientific),
+        "business" => Some(DomainContext::Business),
+        "general" => Some(DomainContext::General),
+        _ => None,
+    }
+}
+
+fn parse_causal_type(s: &str) -> Option<CausalType> {
+    match s.to_lowercase().as_str() {
+        "direct" => Some(CausalType::Direct),
+        "indirect" => Some(CausalType::Indirect),
+        "enabling" => Some(CausalType::Enabling),
+        "preventing" => Some(CausalType::Preventing),
+        "correlation" => Some(CausalType::Correlation),
+        _ => None,
     }
 }
 
@@ -745,6 +1110,37 @@ impl ShardedStorageServer {
                     healthy: true,
                     status: format!("sharded ({} shards, {} concepts)", stats.num_shards, stats.total_concepts),
                     uptime_seconds: uptime,
+                }
+            }
+            
+            // Semantic query handlers (not yet implemented for sharded storage)
+            StorageRequest::FindPathSemantic { .. } => {
+                StorageResponse::Error {
+                    message: "Semantic pathfinding not yet implemented for sharded storage. Use single-shard mode.".to_string(),
+                }
+            }
+            
+            StorageRequest::FindTemporalChain { .. } => {
+                StorageResponse::Error {
+                    message: "Temporal chain queries not yet implemented for sharded storage. Use single-shard mode.".to_string(),
+                }
+            }
+            
+            StorageRequest::FindCausalChain { .. } => {
+                StorageResponse::Error {
+                    message: "Causal chain queries not yet implemented for sharded storage. Use single-shard mode.".to_string(),
+                }
+            }
+            
+            StorageRequest::FindContradictions { .. } => {
+                StorageResponse::Error {
+                    message: "Contradiction detection not yet implemented for sharded storage. Use single-shard mode.".to_string(),
+                }
+            }
+            
+            StorageRequest::QueryBySemantic { .. } => {
+                StorageResponse::Error {
+                    message: "Semantic queries not yet implemented for sharded storage. Use single-shard mode.".to_string(),
                 }
             }
         }

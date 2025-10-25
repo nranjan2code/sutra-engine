@@ -288,6 +288,11 @@ impl SecureStorageServer {
             StorageRequest::QueryConcept { .. } |
             StorageRequest::GetNeighbors { .. } |
             StorageRequest::FindPath { .. } |
+            StorageRequest::FindPathSemantic { .. } |
+            StorageRequest::FindTemporalChain { .. } |
+            StorageRequest::FindCausalChain { .. } |
+            StorageRequest::FindContradictions { .. } |
+            StorageRequest::QueryBySemantic { .. } |
             StorageRequest::VectorSearch { .. } |
             StorageRequest::GetStats |
             StorageRequest::HealthCheck => "read",

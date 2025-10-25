@@ -157,3 +157,105 @@ class ErrorResponse(BaseModel):
     error: str = Field(..., description="Error type")
     message: str = Field(..., description="Error message")
     detail: Optional[str] = Field(None, description="Detailed error information")
+
+
+# ======================== SEMANTIC QUERY MODELS ========================
+
+class SemanticFilterRequest(BaseModel):
+    """Semantic filter for concept queries."""
+    
+    semantic_types: Optional[List[str]] = Field(None, description="Semantic types to filter by")
+    domains: Optional[List[str]] = Field(None, description="Domain keywords to filter by")
+    temporal: Optional[Dict[str, str]] = Field(None, description="Temporal constraints")
+    causal_only: bool = Field(False, description="Only include causal relationships")
+    min_confidence: float = Field(0.0, ge=0.0, le=1.0, description="Minimum confidence threshold")
+    required_terms: Optional[List[str]] = Field(None, description="Required terms in content")
+
+
+class SemanticPathRequest(BaseModel):
+    """Request for semantic pathfinding."""
+    
+    start_query: str = Field(..., description="Starting concept (query or ID)")
+    end_query: str = Field(..., description="Ending concept (query or ID)")
+    max_depth: int = Field(5, ge=1, le=10, description="Maximum path depth")
+    filter: Optional[SemanticFilterRequest] = Field(None, description="Optional semantic filter")
+
+
+class TemporalChainRequest(BaseModel):
+    """Request for temporal chain discovery."""
+    
+    start_query: str = Field(..., description="Starting concept")
+    end_query: str = Field(..., description="Ending concept")
+    max_depth: int = Field(10, ge=1, le=20, description="Maximum chain depth")
+    after: Optional[str] = Field(None, description="Filter events after date (ISO 8601)")
+    before: Optional[str] = Field(None, description="Filter events before date (ISO 8601)")
+
+
+class CausalChainRequest(BaseModel):
+    """Request for causal chain discovery."""
+    
+    start_query: str = Field(..., description="Starting concept")
+    end_query: str = Field(..., description="Ending concept")
+    max_depth: int = Field(5, ge=1, le=10, description="Maximum chain depth")
+
+
+class ContradictionRequest(BaseModel):
+    """Request for contradiction detection."""
+    
+    query: str = Field(..., description="Concept to check for contradictions")
+    max_depth: int = Field(3, ge=1, le=5, description="Search depth for contradictions")
+
+
+class SemanticQueryRequest(BaseModel):
+    """Request for semantic domain query."""
+    
+    filter: SemanticFilterRequest = Field(..., description="Semantic filter constraints")
+    max_results: int = Field(100, ge=1, le=1000, description="Maximum number of results")
+
+
+class SemanticPathResponse(BaseModel):
+    """Response for semantic pathfinding."""
+    
+    start_query: str = Field(..., description="Starting concept")
+    end_query: str = Field(..., description="Ending concept")
+    paths: List[Dict] = Field(..., description="Semantic paths found")
+    execution_time_ms: float = Field(..., description="Query execution time")
+    filter_applied: bool = Field(..., description="Whether filter was applied")
+
+
+class TemporalChainResponse(BaseModel):
+    """Response for temporal chain discovery."""
+    
+    start_query: str = Field(..., description="Starting concept")
+    end_query: str = Field(..., description="Ending concept")
+    chains: List[Dict] = Field(..., description="Temporal chains found")
+    temporal_constraints: Dict[str, Optional[str]] = Field(..., description="Applied temporal constraints")
+    execution_time_ms: float = Field(..., description="Query execution time")
+
+
+class CausalChainResponse(BaseModel):
+    """Response for causal chain discovery."""
+    
+    start_query: str = Field(..., description="Starting concept")
+    end_query: str = Field(..., description="Ending concept")
+    chains: List[Dict] = Field(..., description="Causal chains found")
+    execution_time_ms: float = Field(..., description="Query execution time")
+
+
+class ContradictionResponse(BaseModel):
+    """Response for contradiction detection."""
+    
+    query: str = Field(..., description="Query concept")
+    concept_id: str = Field(..., description="Resolved concept ID")
+    contradictions: List[Dict] = Field(..., description="Found contradictions")
+    count: int = Field(..., description="Number of contradictions found")
+    execution_time_ms: float = Field(..., description="Query execution time")
+
+
+class SemanticQueryResponse(BaseModel):
+    """Response for semantic query."""
+    
+    filter: Dict = Field(..., description="Applied filter")
+    results: List[Dict] = Field(..., description="Matching concepts")
+    count: int = Field(..., description="Number of results")
+    execution_time_ms: float = Field(..., description="Query execution time")

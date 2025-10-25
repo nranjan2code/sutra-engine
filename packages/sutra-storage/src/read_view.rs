@@ -7,10 +7,11 @@
 /// - Zero-copy traversal via indexing
 
 use crate::types::{AssociationRecord, ConceptId};
+use crate::semantic::SemanticMetadata;
 use arc_swap::ArcSwap;
 use std::sync::Arc;
 
-/// In-memory concept with co-located edges
+/// In-memory concept with co-located edges and semantic metadata
 #[derive(Debug, Clone)]
 pub struct ConceptNode {
     pub id: ConceptId,
@@ -21,6 +22,9 @@ pub struct ConceptNode {
     pub created: u64,
     pub last_accessed: u64,
     pub access_count: u32,
+    
+    /// 🔥 NEW: Semantic metadata for domain understanding
+    pub semantic: Option<SemanticMetadata>,
     
     /// Co-located edges for cache-friendly traversal
     pub neighbors: Vec<ConceptId>,
@@ -45,6 +49,32 @@ impl ConceptNode {
             created: timestamp,
             last_accessed: timestamp,
             access_count: 0,
+            semantic: None, // Will be set during learning
+            neighbors: Vec::new(),
+            associations: Vec::new(),
+        }
+    }
+    
+    /// Create with semantic metadata
+    pub fn with_semantic(
+        id: ConceptId,
+        content: Vec<u8>,
+        vector: Option<Vec<f32>>,
+        strength: f32,
+        confidence: f32,
+        timestamp: u64,
+        semantic: SemanticMetadata,
+    ) -> Self {
+        Self {
+            id,
+            content: Arc::from(content),
+            vector: vector.map(Arc::from),
+            strength,
+            confidence,
+            created: timestamp,
+            last_accessed: timestamp,
+            access_count: 0,
+            semantic: Some(semantic),
             neighbors: Vec::new(),
             associations: Vec::new(),
         }

@@ -915,6 +915,124 @@ class ReasoningEngine:
     # These relied on non-existent self.concepts/associations/concept_neighbors dicts
     # Storage handles all data - use get_system_stats() for monitoring
 
+    # ======================== SEMANTIC QUERY METHODS ========================
+
+    def find_semantic_path(
+        self,
+        start_id: str,
+        end_id: str,
+        semantic_filter: Optional[Dict] = None,
+        max_depth: int = 5,
+    ) -> List[Dict]:
+        """
+        Find semantic path between concepts with filter.
+
+        Args:
+            start_id: Starting concept ID
+            end_id: Ending concept ID
+            semantic_filter: Optional semantic constraints
+            max_depth: Maximum path depth
+
+        Returns:
+            List of semantic paths
+        """
+        if not self.storage:
+            raise StorageError("Storage not initialized")
+
+        return self.storage.find_path_semantic(
+            start_id, end_id, max_depth, semantic_filter
+        )
+
+    def find_temporal_chain(
+        self,
+        start_id: str,
+        end_id: str,
+        max_depth: int = 10,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+    ) -> List[Dict]:
+        """
+        Find temporal reasoning chain.
+
+        Args:
+            start_id: Starting concept ID
+            end_id: Ending concept ID
+            max_depth: Maximum chain depth
+            after: Filter events after this date (ISO 8601)
+            before: Filter events before this date (ISO 8601)
+
+        Returns:
+            List of temporal chains
+        """
+        if not self.storage:
+            raise StorageError("Storage not initialized")
+
+        return self.storage.find_temporal_chain(
+            start_id, end_id, max_depth, after, before
+        )
+
+    def find_causal_chain(
+        self,
+        start_id: str,
+        end_id: str,
+        max_depth: int = 5,
+    ) -> List[Dict]:
+        """
+        Find causal reasoning chain.
+
+        Args:
+            start_id: Starting concept ID
+            end_id: Ending concept ID
+            max_depth: Maximum chain depth
+
+        Returns:
+            List of causal chains
+        """
+        if not self.storage:
+            raise StorageError("Storage not initialized")
+
+        return self.storage.find_causal_chain(start_id, end_id, max_depth)
+
+    def find_contradictions(
+        self,
+        concept_id: str,
+        max_depth: int = 3,
+    ) -> List[Tuple[str, str, float]]:
+        """
+        Detect contradictions in knowledge base.
+
+        Args:
+            concept_id: Concept to check for contradictions
+            max_depth: Search depth for contradictions
+
+        Returns:
+            List of (concept_id1, concept_id2, confidence) tuples
+        """
+        if not self.storage:
+            raise StorageError("Storage not initialized")
+
+        return self.storage.find_contradictions(concept_id, max_depth)
+
+    def query_semantic(
+        self,
+        semantic_filter: Dict,
+        max_results: int = 100,
+    ) -> List[Dict]:
+        """
+        Query concepts by semantic filter.
+
+        Args:
+            semantic_filter: Semantic filter constraints
+            max_results: Maximum number of results
+
+        Returns:
+            List of matching concepts with metadata
+        """
+        if not self.storage:
+            raise StorageError("Storage not initialized")
+
+        return self.storage.query_by_semantic(semantic_filter, max_results)
+
     def save(self) -> None:
         """
         Save knowledge base to storage.

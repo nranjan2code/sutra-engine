@@ -366,6 +366,7 @@ impl ConcurrentMemory {
                 access_count,
                 last_accessed: current_timestamp_us(),
                 created,
+                semantic: None, // Semantic metadata (for semantic-aware queries)
                 neighbors: Vec::new(),
                 associations: Vec::new(),
             };

@@ -26,6 +26,7 @@ import {
   Cloud as CloudIcon,
   GridView as GridIcon,
   CloudUpload as BulkIngesterIcon,
+  Hub as SemanticIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 
@@ -75,6 +76,13 @@ const navigationItems: NavigationItem[] = [
     icon: <ReasoningIcon />,
     path: '/reasoning',
     description: 'AI reasoning paths and queries',
+  },
+  {
+    id: 'semantic',
+    label: 'Semantic Explorer',
+    icon: <SemanticIcon />,
+    path: '/semantic',
+    description: 'Advanced semantic reasoning queries',
   },
   {
     id: 'bulk-ingester',

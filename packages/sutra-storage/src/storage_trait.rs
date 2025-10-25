@@ -5,10 +5,11 @@
 
 use anyhow::Result;
 use crate::types::{ConceptId, AssociationType};
+use crate::semantic::SemanticMetadata;
 
 /// Common storage operations needed by learning pipeline
 pub trait LearningStorage {
-    /// Store a concept with optional embedding
+    /// Store a concept with optional embedding and semantic metadata
     fn learn_concept(
         &self,
         id: ConceptId,
@@ -17,6 +18,21 @@ pub trait LearningStorage {
         strength: f32,
         confidence: f32,
     ) -> Result<u64>;
+    
+    /// Store a concept with semantic metadata (🔥 NEW)
+    fn learn_concept_with_semantic(
+        &self,
+        id: ConceptId,
+        content: Vec<u8>,
+        vector: Option<Vec<f32>>,
+        strength: f32,
+        confidence: f32,
+        _semantic: SemanticMetadata,
+    ) -> Result<u64> {
+        // Default implementation: ignore semantic for backward compat
+        // Implementations should override this
+        self.learn_concept(id, content, vector, strength, confidence)
+    }
     
     /// Create an association between concepts
     fn learn_association(
