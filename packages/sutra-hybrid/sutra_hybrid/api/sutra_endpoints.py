@@ -131,27 +131,57 @@ async def query(
                     "explanation": getattr(path, "explanation", ""),
                 })
         
-        # Optional NLG post-processing (grounded, no-LLM)
+        # Optional NLG post-processing (template or hybrid LLM)
         final_answer_text = result.answer
+        nlg_metadata = {}
         try:
             import os
-            if os.getenv("SUTRA_NLG_ENABLED", "true").lower() == "true":
+            nlg_enabled = os.getenv("SUTRA_NLG_ENABLED", "true").lower() == "true"
+            
+            if nlg_enabled:
                 from sutra_nlg import NLGConfig, NLGRealizer
+                
+                # Get NLG configuration
                 tone = request.tone or os.getenv("SUTRA_NLG_TONE", "friendly")
                 moves = request.moves or ["define", "evidence"]
-                realizer = NLGRealizer(NLGConfig(tone=tone, moves=moves))
+                nlg_mode = os.getenv("SUTRA_NLG_MODE", "template")  # "template" or "hybrid"
+                nlg_service_url = os.getenv("SUTRA_NLG_SERVICE_URL", "http://nlg-ha:8889")
+                
+                # Create NLG config
+                config = NLGConfig(
+                    tone=tone,
+                    moves=moves,
+                    mode=nlg_mode,
+                    service_url=nlg_service_url if nlg_mode == "hybrid" else None
+                )
+                
+                realizer = NLGRealizer(config)
                 final_answer_text, grounded_sentences, nlg_meta = realizer.realize(
                     query=request.query,
                     answer=result.answer,
                     reasoning_paths=raw_paths_for_nlg,
                 )
+                
+                nlg_metadata = {
+                    "mode": nlg_meta.get("mode", "template"),
+                    "template_id": nlg_meta.get("template_id"),
+                    "model": nlg_meta.get("model"),
+                    "tokens_generated": nlg_meta.get("tokens_generated"),
+                    "processing_time_ms": nlg_meta.get("processing_time_ms"),
+                    "grounding_validated": nlg_meta.get("grounding_validated", True)
+                }
+                
                 logger.info(
-                    "NLG applied: template=%s tone=%s moves=%s evidence_count=%d",
-                    nlg_meta.get("template_id"), tone, ",".join(moves), len(nlg_meta.get("evidence_used") or []),
+                    "NLG applied: mode=%s tone=%s template=%s evidence_count=%d",
+                    nlg_meta.get("mode", "template"),
+                    tone,
+                    nlg_meta.get("template_id", "N/A"),
+                    len(nlg_meta.get("evidence_used") or []),
                 )
         except Exception as e:
             logger.warning("NLG failed, falling back to raw answer: %s", e)
             final_answer_text = result.answer
+            nlg_metadata = {"mode": "fallback", "error": str(e)}
 
         # Convert semantic support if available
         semantic_support = None

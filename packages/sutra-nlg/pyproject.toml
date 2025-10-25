@@ -12,6 +12,7 @@ requires-python = ">=3.9"
 license = {text = "MIT"}
 dependencies = [
     "pydantic>=2.0.0",
+    "requests>=2.31.0",
 ]
 
 [project.urls]

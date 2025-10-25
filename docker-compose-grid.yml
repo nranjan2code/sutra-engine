@@ -326,7 +326,117 @@ services:
       start_period: 5s
   
 
-  # Sutra Hybrid (Semantic Embeddings API)
+  # ============================================================================
+  # NLG SERVICE HA (3 Replicas + HAProxy) - Optional via SUTRA_NLG_ENABLED
+  # ============================================================================
+  
+  # NLG Service Replica 1
+  nlg-1:
+    build:
+      context: ./packages/sutra-nlg-service
+      dockerfile: Dockerfile
+    image: sutra-nlg-service:latest
+    container_name: nlg-1
+    environment:
+      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-2-2b-it}
+      - INSTANCE_ID=nlg-1
+      - PORT=8889
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8889/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 5G
+        reservations:
+          memory: 3G
+    profiles:
+      - nlg-hybrid  # Optional: Enable with SUTRA_NLG_ENABLED=true
+  
+  # NLG Service Replica 2
+  nlg-2:
+    image: sutra-nlg-service:latest
+    container_name: nlg-2
+    environment:
+      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-2-2b-it}
+      - INSTANCE_ID=nlg-2
+      - PORT=8889
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8889/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 5G
+        reservations:
+          memory: 3G
+    profiles:
+      - nlg-hybrid
+  
+  # NLG Service Replica 3
+  nlg-3:
+    image: sutra-nlg-service:latest
+    container_name: nlg-3
+    environment:
+      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-2-2b-it}
+      - INSTANCE_ID=nlg-3
+      - PORT=8889
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8889/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 5G
+        reservations:
+          memory: 3G
+    profiles:
+      - nlg-hybrid
+  
+  # HAProxy Load Balancer for NLG Services
+  nlg-ha:
+    image: haproxy:2.8-alpine
+    container_name: nlg-ha
+    ports:
+      - "8889:8889"  # NLG service endpoint
+      - "8405:8405"  # HAProxy stats (different from embedding)
+    volumes:
+      - ./docker/haproxy-nlg.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - nlg-1
+      - nlg-2
+      - nlg-3
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    profiles:
+      - nlg-hybrid
+
+  # Sutra Hybrid (Semantic Embeddings API + Optional NLG)
   sutra-hybrid:
     build:
       context: .
@@ -344,6 +454,10 @@ services:
       - SUTRA_EMBEDDING_SERVICE_URL=http://embedding-ha:8888
       - SUTRA_EMBEDDING_MODEL=nomic-embed-text
       - SUTRA_VECTOR_DIMENSION=768
+      # NLG Configuration (optional - enabled via SUTRA_NLG_ENABLED)
+      - SUTRA_NLG_ENABLED=${SUTRA_NLG_ENABLED:-false}
+      - SUTRA_NLG_MODE=${SUTRA_NLG_MODE:-template}
+      - SUTRA_NLG_SERVICE_URL=http://nlg-ha:8889
     depends_on:
       - storage-server
       - embedding-ha
