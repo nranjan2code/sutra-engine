@@ -330,6 +330,10 @@ target/
 *.pb
 *.tflite
 
+# Model directories - downloaded at runtime
+models/
+**/models/
+
 # Data files
 *.csv
 *.jsonl
