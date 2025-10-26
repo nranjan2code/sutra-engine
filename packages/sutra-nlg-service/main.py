@@ -64,7 +64,7 @@ class MetricsResponse(BaseModel):
 # Global model state
 model = None
 tokenizer = None
-model_name = os.getenv("NLG_MODEL", "google/gemma-2-2b-it")
+model_name = os.getenv("NLG_MODEL", "google/gemma-3-270m-it")
 instance_id = os.getenv("INSTANCE_ID", "nlg-unknown")
 
 # Metrics
@@ -88,12 +88,33 @@ async def load_model():
     logger.info(f"[{instance_id}] Loading model: {model_name}")
     start_time = time.time()
     
+    # Get HuggingFace token for gated models
+    hf_token = os.getenv("HF_TOKEN")
+    if hf_token:
+        logger.info(f"[{instance_id}] HuggingFace token found, will use for authentication")
+    else:
+        logger.warning(f"[{instance_id}] No HuggingFace token found - gated models will fail")
+    
+    # Check for cached local model first
+    local_model_path = f"/app/models/{model_name.split('/')[-1]}"
+    use_local = os.path.isdir(local_model_path) and os.path.isfile(
+        os.path.join(local_model_path, "config.json")
+    )
+    
+    if use_local:
+        logger.info(f"[{instance_id}] Using cached local model: {local_model_path}")
+        model_path = local_model_path
+    else:
+        logger.info(f"[{instance_id}] Local model not found, will download from HuggingFace")
+        model_path = model_name
+    
     try:
         # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
+            model_path,
             trust_remote_code=True,
-            cache_dir='/tmp/.cache/huggingface'
+            token=hf_token,  # Pass HF token for gated models
+            cache_dir='/tmp/.cache/huggingface' if not use_local else None
         )
         
         # Ensure pad token is set
@@ -102,9 +123,10 @@ async def load_model():
         
         # Load model (CPU-optimized)
         model = AutoModelForCausalLM.from_pretrained(
-            model_name,
+            model_path,
             trust_remote_code=True,
-            cache_dir='/tmp/.cache/huggingface',
+            token=hf_token,  # Pass HF token for gated models
+            cache_dir='/tmp/.cache/huggingface' if not use_local else None,
             torch_dtype=torch.float32,
             device_map="cpu",
             low_cpu_mem_usage=True
@@ -115,6 +137,7 @@ async def load_model():
         
         load_time = time.time() - start_time
         logger.info(f"[{instance_id}] Model loaded successfully in {load_time:.2f}s")
+        logger.info(f"[{instance_id}] Model source: {'cached local' if use_local else 'downloaded'}")
         logger.info(f"[{instance_id}] Device: {next(model.parameters()).device}")
         logger.info(f"[{instance_id}] Tokenizer vocab size: {len(tokenizer)}")
         

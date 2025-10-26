@@ -31,6 +31,9 @@ services:
       - SUTRA_EMBEDDING_TIMEOUT_SEC=30
       - SUTRA_MIN_ASSOCIATION_CONFIDENCE=0.5
       - SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT=10
+    depends_on:
+      embedding-single:
+        condition: service_healthy
     networks:
       - sutra-network
     restart: unless-stopped
@@ -250,10 +253,10 @@ services:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health').read()"]
       interval: 10s
-      timeout: 3s
-      retries: 3
+      timeout: 5s
+      retries: 5
       start_period: 30s
     deploy:
       resources:
@@ -287,10 +290,10 @@ services:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 2
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 30s
     deploy:
       resources:
@@ -319,10 +322,10 @@ services:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 2
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 30s
     deploy:
       resources:
@@ -351,10 +354,10 @@ services:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 2
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 30s
     deploy:
       resources:
@@ -395,13 +398,15 @@ services:
   # NLG SERVICES
   # ============================================================================
   
-  # Single NLG Service (Simple & Community Editions)
+  # NLG Service (Simple/Community Edition)
   nlg-single:
     build:
       context: ./packages/sutra-nlg-service
       dockerfile: Dockerfile
     image: sutra-nlg-service:${SUTRA_VERSION:-latest}
     container_name: nlg-single
+    env_file:
+      - .env
     ports:
       - "8889:8889"  # Direct access
     environment:
@@ -409,14 +414,16 @@ services:
       - INSTANCE_ID=nlg-single
       - PORT=8889
       - HF_TOKEN=${HF_TOKEN}
+    volumes:
+      - ./packages/sutra-nlg-service/models:/app/models:ro
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8889/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8889/health').read()"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 120s
     deploy:
       resources:
@@ -439,18 +446,23 @@ services:
       dockerfile: Dockerfile
     image: sutra-nlg-service:${SUTRA_VERSION:-latest}
     container_name: nlg-1
+    env_file:
+      - .env
     environment:
-      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-2-2b-it}
+      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-3-270m-it}
       - INSTANCE_ID=nlg-1
       - PORT=8889
+      - HF_TOKEN=${HF_TOKEN}
+    volumes:
+      - ./packages/sutra-nlg-service/models:/app/models:ro
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8889/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8889/health').read()"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 120s
     deploy:
       resources:
@@ -465,18 +477,23 @@ services:
   nlg-2:
     image: sutra-nlg-service:latest
     container_name: nlg-2
+    env_file:
+      - .env
     environment:
-      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-2-2b-it}
+      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-3-270m-it}
       - INSTANCE_ID=nlg-2
       - PORT=8889
+      - HF_TOKEN=${HF_TOKEN}
+    volumes:
+      - ./packages/sutra-nlg-service/models:/app/models:ro
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8889/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8889/health').read()"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 120s
     deploy:
       resources:
@@ -491,18 +508,23 @@ services:
   nlg-3:
     image: sutra-nlg-service:latest
     container_name: nlg-3
+    env_file:
+      - .env
     environment:
-      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-2-2b-it}
+      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-3-270m-it}
       - INSTANCE_ID=nlg-3
       - PORT=8889
+      - HF_TOKEN=${HF_TOKEN}
+    volumes:
+      - ./packages/sutra-nlg-service/models:/app/models:ro
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8889/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8889/health').read()"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 120s
     deploy:
       resources:

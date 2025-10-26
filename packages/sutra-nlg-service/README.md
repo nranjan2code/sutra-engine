@@ -8,7 +8,7 @@ Version: 1.0.0 | Language: Python | License: MIT
 
 ## Overview
 
-Production-grade NLG service using small, swappable LLMs (gemma-2-2b-it) for grounded text generation.
+Production-grade NLG service using small, swappable LLMs (gemma-3-270m-it) for grounded text generation.
 
 ### Key Features
 
@@ -22,6 +22,24 @@ Production-grade NLG service using small, swappable LLMs (gemma-2-2b-it) for gro
 ---
 
 ## Quick Start
+
+### Download Models (One-Time Setup)
+
+**NEW:** Download and cache Gemma models locally to avoid downloading during container startup:
+
+```bash
+# Install dependencies (if not already installed)
+pip install transformers torch
+
+# Download all supported models (recommended)
+python download_model.py --all
+
+# Or download individual models
+python download_model.py --model google/gemma-3-270m-it
+python download_model.py --model google/gemma-2-2b-it
+```
+
+**Note:** Gemma models require HuggingFace authentication. Ensure `HF_TOKEN` is set in `.env.local` at project root.
 
 ### Local Development
 
@@ -53,7 +71,7 @@ docker build -t sutra-nlg-service:latest .
 
 # Run container
 docker run -p 8889:8889 \
-  -e NLG_MODEL=google/gemma-2-2b-it \
+  -e NLG_MODEL=google/gemma-3-270m-it \
   -e INSTANCE_ID=nlg-1 \
   sutra-nlg-service:latest
 ```
@@ -65,12 +83,15 @@ docker run -p 8889:8889 \
 Change model via `NLG_MODEL` environment variable:
 
 ```bash
-# Default (recommended)
-NLG_MODEL=google/gemma-2-2b-it        # 2B params, best quality
+# Default (recommended for speed)
+NLG_MODEL=google/gemma-3-270m-it      # 270M params, fast & efficient
 
-# Alternatives
+# Alternative (better quality, slower)
+NLG_MODEL=google/gemma-2-2b-it        # 2B params, higher quality
+
+# Other alternatives
 NLG_MODEL=microsoft/phi-2              # 2.7B params
-NLG_MODEL=TinyLlama/TinyLlama-1.1B-Chat-v1.0  # 1.1B params (faster)
+NLG_MODEL=TinyLlama/TinyLlama-1.1B-Chat-v1.0  # 1.1B params
 NLG_MODEL=stabilityai/stablelm-2-1_6b  # 1.6B params
 ```
 
@@ -98,8 +119,8 @@ Generate natural language from constrained prompt.
 ```json
 {
   "text": "Generated answer using only the facts",
-  "model": "google/gemma-2-2b-it",
-  "processing_time_ms": 120.5,
+  "model": "google/gemma-3-270m-it",
+  "processing_time_ms": 80.5,
   "tokens_generated": 45
 }
 ```
@@ -113,7 +134,7 @@ Health check endpoint.
 {
   "status": "healthy",
   "model_loaded": true,
-  "model_name": "google/gemma-2-2b-it",
+  "model_name": "google/gemma-3-270m-it",
   "device": "cpu",
   "instance_id": "nlg-1"
 }
@@ -128,8 +149,8 @@ Service metrics.
 {
   "total_requests": 1523,
   "total_tokens_generated": 45678,
-  "avg_generation_time_ms": 125.3,
-  "model_name": "google/gemma-2-2b-it",
+  "avg_generation_time_ms": 85.3,
+  "model_name": "google/gemma-3-270m-it",
   "uptime_seconds": 3600.5
 }
 ```
@@ -166,13 +187,25 @@ If validation fails, **fall back to template-based NLG**.
 
 ## Performance
 
+### Model Caching
+
+| Scenario | Startup Time | Download Size | Notes |
+|----------|--------------|---------------|-------|
+| **Cached (recommended)** | 15-30s | 0 MB | ✅ Models pre-downloaded |
+| **Download on startup** | 2-5 min | 5 GB | ⚠️ Slow first start |
+
+**Benefit:** Using cached models (via `download_model.py`) reduces startup time by **90%** and eliminates network dependency.
+
+## Performance
+
 | Model | Startup | Generation (50 tokens) | Memory |
 |-------|---------|------------------------|--------|
+| gemma-3-270m-it | ~20s | ~80ms | 1GB |
 | gemma-2-2b-it | ~30s | ~120ms | 4GB |
 | phi-2 | ~40s | ~150ms | 5GB |
 | TinyLlama-1.1B | ~20s | ~80ms | 3GB |
 
-**Recommended:** gemma-2-2b-it for production (best quality/speed balance)
+**Recommended:** gemma-3-270m-it for production (best speed/efficiency balance)
 
 ---
 
@@ -199,7 +232,7 @@ User Request → HAProxy (8889) → Least-connection routing
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | 8889 | Service port |
-| `NLG_MODEL` | google/gemma-2-2b-it | Hugging Face model ID |
+| `NLG_MODEL` | google/gemma-3-270m-it | Hugging Face model ID |
 | `INSTANCE_ID` | nlg-default | Instance identifier (for logging) |
 
 ---

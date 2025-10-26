@@ -43,7 +43,7 @@ RUN mkdir -p /tmp/.cache/huggingface && \
 WORKDIR /app
 COPY main.py .
 
-# Create models directory
+# Create models directory for volume mount
 RUN mkdir -p /app/models && chown -R nlg:nlg /app
 
 # Switch to non-root user
@@ -51,7 +51,7 @@ USER nlg
 
 # Environment defaults (swappable via docker-compose)
 ENV PORT=8889
-ENV NLG_MODEL=google/gemma-2-2b-it
+ENV NLG_MODEL=google/gemma-3-270m-it
 ENV INSTANCE_ID=nlg-default
 
 # Health check (longer start period for model loading)
