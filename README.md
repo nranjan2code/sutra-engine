@@ -190,7 +190,7 @@ Benefits:
 
 ### ⚠️ IMPORTANT: Choose Your Deployment Mode
 
-**Sutra has TWO deployment modes:** **[Complete Guide →](DEPLOYMENT_MODES.md)**
+**Sutra has TWO deployment modes:** **[Complete Guide →](docs/deployment/DEPLOYMENT_MODES.md)**
 
 #### 🔧 Development Mode (Default)
 **For:** Local development, testing, learning  
@@ -219,7 +219,7 @@ SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
 # See: docs/security/QUICK_START_SECURITY.md for complete setup
 ```
 
-**📖 Read [DEPLOYMENT_MODES.md](DEPLOYMENT_MODES.md) for detailed comparison and compliance information.**
+**📖 Read [DEPLOYMENT_MODES.md](docs/deployment/DEPLOYMENT_MODES.md) for detailed comparison and compliance information.**
 
 ### 1. Deploy (Development Mode)
 
@@ -470,7 +470,7 @@ http://localhost:9000  # Navigate to Dependencies tab
 - **[Production Deployment](docs/guides/PRODUCTION_DEPLOYMENT.md)** - Complete production setup
 - **[API Reference](docs/api/API_REFERENCE.md)** - All endpoints documented
 - **[Architecture Overview](WARP.md)** - System design and patterns
-- **[Troubleshooting](TROUBLESHOOTING.md)** - Common issues and fixes
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and fixes
 - **[🔒 Dependency Management](docs/dependency-management/QUICK_START.md)** - Security & compliance
 
 ### Component Documentation
@@ -505,8 +505,14 @@ sutra-models/
 ├── docs/                      # Complete documentation
 ├── scripts/                   # Testing & validation scripts
 ├── sutra-deploy.sh           # Single deployment command center
-├── QUICKSTART.md             # 2-command quick start
-├── DEPLOYMENT.md             # Complete deployment guide
+├── docs/                     # Complete documentation
+│   ├── QUICKSTART.md        # 2-command quick start
+│   ├── ARCHITECTURE.md      # System architecture
+│   ├── CONTRIBUTING.md      # Contribution guidelines
+│   ├── TROUBLESHOOTING.md   # Common issues and fixes
+│   ├── deployment/          # Deployment guides
+│   ├── project/             # Project documentation
+│   └── status/              # Documentation status files
 └── README.md                 # This file
 ```
 
@@ -629,7 +635,7 @@ We welcome contributions aligned with explainable, accountable AI.
 
 **Before contributing:**
 1. Read [WARP.md](WARP.md) for architecture overview
-2. Check [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
+2. Check [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines
 3. Run tests to verify changes
 4. Follow code style (black + isort)
 

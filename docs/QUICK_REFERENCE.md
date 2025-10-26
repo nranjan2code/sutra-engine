@@ -429,7 +429,7 @@ obs.query("Show me path finding operations > 500ms")
 - **[Production Guide](PRODUCTION_GUIDE.md)** - Complete production documentation
 - **[Streaming Guide](STREAMING.md)** - Detailed streaming API and examples
 - **[Production Enhancements](PRODUCTION_ENHANCEMENTS.md)** - Self-observability, quality gates, NL queries
-- **[Deployment Guide](../DEPLOYMENT.md)** - Docker, Kubernetes, and manual deployment
+- **[Deployment Guide](./deployment/DEPLOYMENT.md)** - Docker, Kubernetes, and manual deployment
 - **[Architecture](../WARP.md)** - Complete system architecture and development guide
 
 ---

@@ -313,8 +313,8 @@ curl -s http://localhost:8000/stats | jq '.total_associations'
 
 1. ✅ **WARP.md** - Add bulk ingester limitations
 2. ✅ **docs/EMBEDDING_TROUBLESHOOTING.md** - Add bulk ingester section
-3. ✅ **TROUBLESHOOTING.md** - Add bulk ingestion issue
-4. ⏳ **DEPLOYMENT.md** - Warning about bulk ingester state
+3. ✅ **docs/TROUBLESHOOTING.md** - Add bulk ingestion issue
+4. ⏳ **docs/deployment/DEPLOYMENT.md** - Warning about bulk ingester state
 5. ⏳ **README.md** - Update bulk ingester description
 
 ---

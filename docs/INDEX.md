@@ -49,14 +49,14 @@
 - [Deployment](operations/DEPLOYMENT.md) - Production deployment
 - [Monitoring](operations/MONITORING.md) - Observability
 - [Production Requirements](operations/PRODUCTION_REQUIREMENTS.md) - Critical config
-- [Troubleshooting](../TROUBLESHOOTING.md) - Common issues
+- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues
 
 ---
 
 ## Development
 
 - [Development Guide](guides/DEVELOPMENT.md) - Setup
-- [Contributing](../CONTRIBUTING.md) - How to contribute
+- [Contributing](./CONTRIBUTING.md) - How to contribute
 - [Testing](development/testing.md) - Test procedures
 
 ---

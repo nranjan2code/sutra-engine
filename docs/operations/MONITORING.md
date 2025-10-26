@@ -155,7 +155,7 @@ ps aux | grep storage-server
 
 - [Production Requirements](PRODUCTION_REQUIREMENTS.md)
 - [Scaling Guide](SCALING_GUIDE.md)
-- [Troubleshooting](../../TROUBLESHOOTING.md)
+- [Troubleshooting](../TROUBLESHOOTING.md)
 
 ---
 

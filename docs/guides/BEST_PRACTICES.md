@@ -148,7 +148,7 @@ pytest tests/
 
 ## References
 
-- [Contributing Guide](../../CONTRIBUTING.md)
+- [Contributing Guide](../CONTRIBUTING.md)
 - [Architecture Overview](../architecture/SCALABILITY.md)
 - [WARP.md](../../WARP.md)
 

@@ -102,7 +102,7 @@ Already configured with 3 replicas + HAProxy load balancer.
 
 ## Troubleshooting
 
-See [Troubleshooting Guide](../../TROUBLESHOOTING.md) for common issues.
+See [Troubleshooting Guide](../TROUBLESHOOTING.md) for common issues.
 
 ---
 

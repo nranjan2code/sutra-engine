@@ -249,7 +249,7 @@ docs/security/
 
 ### Other Documentation
 - [docs/INDEX.md](../INDEX.md) - Complete documentation index
-- [docs/DEPLOYMENT.md](../DEPLOYMENT.md) - General deployment guide
+- [docs/deployment/DEPLOYMENT.md](../deployment/DEPLOYMENT.md) - General deployment guide
 
 ---
 

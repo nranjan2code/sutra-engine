@@ -294,7 +294,7 @@ Since there are no existing users:
 ## Contact
 
 For questions about these fixes, see:
-- ARCHITECTURE.md (design philosophy)
+- ../../docs/ARCHITECTURE.md (design philosophy)
 - CONCURRENT_MEMORY.md (burst-tolerant design)
 - PROGRESS.md (implementation timeline)
 

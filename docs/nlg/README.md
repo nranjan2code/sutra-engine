@@ -307,7 +307,7 @@ SUTRA_NLG_MODE=hybrid curl -X POST http://localhost:8001/sutra/query \
 ### Sutra AI Core
 - `../../WARP.md` - Complete system architecture
 - `../../README.md` - Project overview
-- `../../QUICKSTART.md` - Getting started
+- `../QUICKSTART.md` - Getting started
 
 ### Storage & Graph
 - `../storage/` - Storage engine documentation
