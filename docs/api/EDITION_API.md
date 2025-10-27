@@ -49,7 +49,28 @@ The Sutra API service (`sutra-api`) provides edition-aware rate limiting and quo
 
 ## API Endpoints
 
-### GET /edition
+## API Endpoints
+
+### ML Foundation Services
+
+The Sutra platform now includes standardized ML services built on the unified ML Foundation:
+
+| Service | Port | Purpose | API Documentation |
+|---------|------|---------|-------------------|
+| **Embedding Service** | 8889 | Semantic embeddings with nomic-embed-text-v1.5 | [API Reference](./EMBEDDING_SERVICE_API.md) |
+| **NLG Service** | 8890 | Grounded text generation with multi-mode support | [API Reference](./NLG_SERVICE_API.md) |
+
+**Standard ML Foundation Endpoints** (all services):
+- `GET /health` - Basic health check
+- `GET /health/detailed` - Comprehensive health with dependencies
+- `GET /metrics` - Prometheus metrics
+- `GET /info` - Service info with edition limits
+
+**Complete ML Foundation documentation:** [ML Foundation API](./ML_FOUNDATION_API.md)
+
+### Core Sutra API Endpoints
+
+#### `GET /edition`
 
 Returns current edition information, limits, and features.
 

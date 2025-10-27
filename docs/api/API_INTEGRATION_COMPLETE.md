@@ -50,6 +50,23 @@ settings.rate_limit_reason = limits.reason_per_min
 
 **New Endpoint:** `GET /edition`
 
+### 4. ML Foundation Services Integration ✅
+
+**New Services Added:**
+- `sutra-embedding-service` (Port 8889) - Semantic embeddings with edition-aware scaling
+- `sutra-nlg-service` (Port 8890) - Grounded text generation with multi-mode support
+- All services built on unified ML Foundation (`sutra-ml-base`)
+
+**Standardized Endpoints:**
+- `/health` and `/health/detailed` - Health checks with dependency monitoring
+- `/metrics` - Prometheus metrics for observability
+- `/info` - Service information with edition limits
+
+**See Also:**
+- [ML Foundation API Reference](./ML_FOUNDATION_API.md)
+- [Embedding Service API](./EMBEDDING_SERVICE_API.md)  
+- [NLG Service API](./NLG_SERVICE_API.md)
+
 **Response Model:**
 ```json
 {

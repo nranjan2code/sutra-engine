@@ -39,9 +39,9 @@ Sutra AI is a production-grade, domain-specific explainable AI platform designed
 │                          CLIENT & API LAYER                                  │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
-│  │ sutra-client │  │  sutra-api   │  │ sutra-hybrid │  │sutra-control │   │
-│  │  (React UI)  │  │   (FastAPI)  │  │ (Embeddings) │  │ (Monitoring) │   │
-│  │   :8080      │  │    :8000     │  │    :8001     │  │    :9000     │   │
+│  │ sutra-client │  │  sutra-api   │  │ML Foundation │  │sutra-control │   │
+│  │  (React UI)  │  │   (FastAPI)  │  │   Services   │  │ (Monitoring) │   │
+│  │   :8080      │  │    :8000     │  │ :8889, :8890 │  │    :9000     │   │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘   │
 └─────────┼──────────────────┼──────────────────┼──────────────────┼──────────┘
           │                  │                  │                  │
@@ -88,11 +88,11 @@ Sutra AI is a production-grade, domain-specific explainable AI platform designed
           │                                               │
           │                                               │
 ┌─────────▼───────────────────────┐     ┌───────────────▼──────────────────┐
-│  Embedding Service (HA)         │     │  Reasoning Engine (Python)       │
-│  • nomic-embed-text-v1.5        │     │  • PathFinder (BFS/Best-First)   │
-│  • 768-dimensional vectors      │     │  • MPPA (Multi-Path Aggregation) │
-│  • HAProxy → 3 replicas         │     │  • QueryProcessor (NLU)          │
-│  • Port: 8888                   │     │  • Quality Gates (confidence)    │
+│  ML Foundation Services (HA)    │     │  Reasoning Engine (Python)       │
+│  • Embedding: nomic-embed-v1.5  │     │  • PathFinder (BFS/Best-First)   │
+│  • NLG: Grounded generation     │     │  • MPPA (Multi-Path Aggregation) │
+│  • Edition-aware scaling        │     │  • QueryProcessor (NLU)          │
+│  • Ports: 8889 (embed), 8890    │     │  • Quality Gates (confidence)    │
 └─────────────────────────────────┘     └──────────────────────────────────┘
 ```
 
@@ -134,6 +134,13 @@ Sutra AI employs a **layered microservices architecture** with clear separation 
 │  Layer 3: Reasoning & Orchestration (Python)                │
 │  • Multi-Path Plan Aggregation • Query NLU                  │
 │  • Quality gates • Streaming responses                      │
+└─────────────────────────────────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 3.5: ML Foundation Services (sutra-ml-base)          │
+│  • Embedding Service (8889) • NLG Service (8890)           │
+│  • Edition-aware scaling • Standardized APIs                │
+│  • Health/Metrics/Caching • GPU acceleration               │
 └─────────────────────────────────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -905,6 +912,88 @@ pub enum StorageResponse {
     Error { message: String },
 }
 ```
+
+---
+
+## 5.5. ML Foundation Layer (sutra-ml-base)
+
+### 5.5.1 Architecture Overview
+
+The ML Foundation provides a unified base class for all machine learning services in the Sutra ecosystem, ensuring consistency, reliability, and edition-aware scaling.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ML Foundation Layer                      │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌────────┐ │
+│  │BaseMlService│ │EditionMgr   │ │ModelLoader  │ │Cache   │ │
+│  │             │ │             │ │             │ │Manager │ │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └────────┘ │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │ │
+│  │MetricsColl  │ │SecurityMgr  │ │ConfigMgr    │           │ │
+│  │             │ │             │ │             │           │ │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │ │
+├─────────────────────────────────────────────────────────────┤
+│              Standardized Service Features                  │
+│  • Health checks • Metrics collection • Caching            │
+│  • Edition detection • Rate limiting • Security           │
+└─────────────────────────────────────────────────────────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+    │ Embedding    │ │    NLG       │ │   Future     │
+    │  Service     │ │  Service     │ │ ML Services  │
+    │   :8889      │ │   :8890      │ │     :889X    │
+    └──────────────┘ └──────────────┘ └──────────────┘
+```
+
+### 5.5.2 Core Components
+
+**BaseMlService**: FastAPI-based service scaffolding
+- Automatic endpoint registration (`/health`, `/metrics`, `/info`)
+- Lifecycle management (startup, shutdown, graceful degradation)
+- Error handling with standardized response formats
+- Request/response validation with Pydantic models
+
+**EditionManager**: Resource allocation by edition
+- Automatic edition detection from environment/license
+- Dynamic resource limits (batch size, memory, concurrency)
+- Feature flags and capability management
+- License validation with HMAC-SHA256 signatures
+
+**ModelLoader**: Universal model management
+- Support for Hugging Face, PyTorch, TensorFlow, ONNX models
+- Lazy loading with automatic caching
+- GPU/CPU device management
+- Version tracking and model registry integration
+
+**CacheManager**: Intelligent caching layer
+- LRU + TTL eviction policies
+- Similarity-based cache warming
+- Edition-aware cache sizes (100MB → 2GB)
+- Cache hit/miss metrics and monitoring
+
+### 5.5.3 Edition-Aware Scaling
+
+| Feature | Simple | Community | Enterprise |
+|---------|--------|-----------|------------|
+| **Model Size** | Small (100M params) | Medium (350M params) | Large (700M+ params) |
+| **Batch Processing** | 10 items | 50 items | 100 items |
+| **Concurrent Requests** | 2 | 10 | 50 |
+| **Cache Memory** | 100MB | 500MB | 2GB |
+| **GPU Support** | ❌ | ✅ | ✅ Multi-GPU |
+| **Custom Models** | ❌ | ❌ | ✅ |
+| **Rate Limiting** | 100/min | 1K/min | 5K/min |
+
+### 5.5.4 Service Discovery & Health
+
+All ML Foundation services register with the system and provide:
+
+- **Health endpoints**: `/health` (basic), `/health/detailed` (comprehensive)
+- **Metrics exposure**: Prometheus-compatible `/metrics` endpoint  
+- **Service information**: `/info` with edition limits and capabilities
+- **Dependency monitoring**: Automatic health checks for storage server connectivity
 
 ---
 

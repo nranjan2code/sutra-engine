@@ -1,60 +1,67 @@
-# Use Ubuntu-based Python for PyTorch compatibility
-FROM python:3.11-slim as builder
+# Sutra Embedding Service - Next Generation
+# Uses sutra-ml-base foundation for consistency and performance
 
-# Install system dependencies for PyTorch
+# Build stage - Install ML foundation and dependencies  
+FROM python:3.11-slim AS builder
+
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Create virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy and install requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt
+# Set up workspace structure
+WORKDIR /workspace
+
+# Copy ML foundation first (this is the key change!)
+COPY packages/sutra-ml-base/ ./sutra-ml-base/
+COPY packages/sutra-embedding-service/requirements.txt ./embedding-service/
+
+# Install foundation and service dependencies
+RUN cd sutra-ml-base && pip install --force-reinstall --no-deps . && \
+    cd ../embedding-service && pip install -r requirements.txt
 
 # Production stage
 FROM python:3.11-slim
 
-# Copy virtual environment
+# Copy virtual environment with dependencies
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Create non-root user with home directory (Ubuntu syntax)
+# Create service user
 RUN groupadd -g 1000 embedding && \
     useradd -u 1000 -g embedding -m -d /home/embedding embedding
 
-# Set up cache directory
-RUN mkdir -p /home/embedding/.cache/huggingface && \
-    chown -R embedding:embedding /home/embedding
+# Set up directories
+RUN mkdir -p /home/embedding/.cache/huggingface /app && \
+    chown -R embedding:embedding /home/embedding /app
 
-# Copy application and model
+# Copy ML Foundation source code directly 
 WORKDIR /app
-COPY main.py .
-# Copy models directory if it exists, otherwise create empty one
-RUN mkdir -p /app/models
-RUN chown -R embedding:embedding /app
+COPY packages/sutra-ml-base/sutra_ml_base ./sutra_ml_base
 
-# Switch to non-root user
+# Copy application code
+COPY packages/sutra-embedding-service/main.py .
+
+# Switch to service user
 USER embedding
 
-# Environment defaults
+# Environment configuration for new architecture
+ENV SUTRA_SERVICE_TYPE=embedding
+ENV SUTRA_EDITION=${SUTRA_EDITION:-simple}
 ENV PORT=8888
-ENV WORKERS=1
-ENV EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
-ENV EMBEDDING_BATCH_SIZE=64
-ENV EMBEDDING_MAX_WAIT_MS=50
+ENV LOG_LEVEL=INFO
 
-# Health check
+# Health check using new foundation endpoints
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8888/health').raise_for_status()"
 
-# Expose port
+# Expose port  
 EXPOSE 8888
 
-# Run application
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8888", "--workers", "1"]
+# Run using new ML foundation
+CMD ["python", "main.py"]

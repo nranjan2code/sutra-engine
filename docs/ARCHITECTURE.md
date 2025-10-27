@@ -4,7 +4,53 @@
 
 Explainable reasoning infrastructure that learns from YOUR proprietary data without frontier LLMs.
 
-Version: 2.0.0 | Status: Production-ready | Last Updated: 2025-10-25
+Version: 2.0.0 | Status: Production-ready | Last Updated: 2025-01-10
+
+## 🔄 ML Foundation Architecture (NEW - v2.0.0)
+
+### Unified ML Service Foundation
+
+Sutra AI now includes a **world-class ML Foundation** (`sutra-ml-base`) that provides:
+
+- **Edition-Aware Scaling**: Automatic resource allocation across Simple/Community/Enterprise editions
+- **Unified Service Pattern**: Consistent APIs, health checks, and monitoring across all ML services
+- **Zero Code Duplication**: Shared base classes eliminate 90% of ML service boilerplate
+- **Advanced Caching**: High-performance LRU caching with TTL and persistence
+- **Model Management**: Universal model loading with validation and optimization
+
+### ML Services Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Sutra ML Foundation (v2.0.0)                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐ │
+│  │ Embedding       │    │ NLG Service     │    │ Future ML       │ │
+│  │ Service         │    │                 │    │ Services        │ │
+│  │ (Port 8888)     │    │ (Port 8889)     │    │                 │ │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘ │
+│           │                       │                       │         │
+│           └───────────────────────┼───────────────────────┘         │
+│                                   │                                 │
+│  ┌─────────────────────────────────────────────────────────────────┐ │
+│  │               sutra-ml-base Foundation                         │ │
+│  │                                                                │ │
+│  │  • BaseMlService (FastAPI + Health + Metrics)                 │ │
+│  │  • EditionManager (Simple/Community/Enterprise)               │ │
+│  │  • ModelLoader (Universal loading + validation)               │ │
+│  │  • CacheManager (LRU + TTL + edition limits)                  │ │
+│  │  • MetricsCollector (Request tracking + performance)          │ │
+│  │  • SecurityManager (Auth + rate limiting)                     │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- **Consistency**: All ML services use identical patterns and APIs
+- **Scalability**: Add new ML services in minutes, not days
+- **Reliability**: Shared foundation with battle-tested components
+- **Performance**: Edition-aware resource management and caching
 
 ## 🚨 CRITICAL PRODUCTION REQUIREMENTS
 

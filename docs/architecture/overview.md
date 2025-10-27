@@ -78,11 +78,12 @@ Add new knowledge without downtime. The system learns incrementally through its 
 
 ### Service Layer
 - **sutra-api** (Port 8000): Primary REST API
-- **sutra-hybrid** (Port 8001): Semantic embeddings + NLG
+- **sutra-embedding-service** (Port 8889): Semantic embeddings with ML Foundation
+- **sutra-nlg-service** (Port 8890): Grounded text generation with ML Foundation
 - **sutra-client** (Port 8080): React conversation-first UI
 - **sutra-control** (Port 9000): Monitoring dashboard
-- **embedding-ha** (Port 8888): 3 replicas + HAProxy (Enterprise)
-- **nlg-ha** (Port 8889): 3 replicas + HAProxy (Enterprise)
+- **embedding-ha** (Port 8889): ML Foundation service with HA (Enterprise)
+- **nlg-ha** (Port 8890): ML Foundation service with HA (Enterprise)
 
 ---
 
@@ -91,7 +92,9 @@ Add new knowledge without downtime. The system learns incrementally through its 
 ### Learning Flow
 ```
 Client → API → TCP Binary Protocol → Storage Server
-                                      ├─ Embedding Service (HTTP)
+                                      ├─ ML Foundation Services
+                                      │  ├─ Embedding Service (8889)
+                                      │  └─ NLG Service (8890)
                                       ├─ Semantic Analyzer
                                       ├─ Association Extractor
                                       └─ ConcurrentMemory

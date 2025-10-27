@@ -1,0 +1,127 @@
+# OPTIMIZED Control Service - Target: 100-150MB (down from 387MB)
+# Minimal React build + lightweight Python backend
+
+ARG NODE_VERSION=20
+ARG PYTHON_VERSION=3.11
+
+# ============================================================================
+# Stage 1: Optimized React frontend build
+# ============================================================================
+FROM node:${NODE_VERSION}-alpine AS frontend-builder
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+WORKDIR /build
+
+# Copy package files for better caching
+COPY packages/sutra-control/package*.json ./
+COPY packages/sutra-control/tsconfig*.json ./
+COPY packages/sutra-control/vite.config.ts ./
+
+# Install dependencies with production optimization
+RUN npm ci --silent --only=production && \
+    # Clean npm cache aggressively
+    npm cache clean --force && \
+    rm -rf ~/.npm
+
+# Copy source and build with production optimizations
+COPY packages/sutra-control/index.html ./
+COPY packages/sutra-control/src/ ./src/
+
+# Build with aggressive optimizations
+RUN npm run build && \
+    # Remove source maps and other dev artifacts
+    find dist -name "*.map" -delete && \
+    find dist -name "*.txt" -delete && \
+    # Compress static assets
+    find dist -name "*.js" -exec gzip -9 -k {} \; && \
+    find dist -name "*.css" -exec gzip -9 -k {} \;
+
+# ============================================================================
+# Stage 2: Minimal Python backend build
+# ============================================================================
+FROM python:${PYTHON_VERSION}-slim AS backend-builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create minimal Python requirements for control service
+RUN cat > /tmp/requirements.txt <<EOF
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+requests>=2.31.0
+python-multipart>=0.0.6
+jinja2>=3.1.0
+aiofiles>=23.0.0
+EOF
+
+# Install with minimal footprint
+RUN pip install --no-cache-dir --prefix=/install --no-compile \
+    -r /tmp/requirements.txt
+
+# Aggressive Python cleanup
+RUN find /install -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
+    find /install -type f -name "*.pyc" -delete && \
+    find /install -type f -name "*.pyo" -delete && \
+    find /install -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
+    find /install -type d -name "test" -exec rm -rf {} + 2>/dev/null || true && \
+    find /install -type d -name "*.dist-info" -exec rm -rf {}/direct_url.json {} + 2>/dev/null || true && \
+    find /install -type f -name "*.so" -exec strip {} + 2>/dev/null || true && \
+    # Remove FastAPI docs and examples (saves significant space)
+    rm -rf /install/lib/python*/site-packages/fastapi/openapi && \
+    rm -rf /install/lib/python*/site-packages/fastapi/security && \
+    find /install -name "*.md" -delete && \
+    find /install -name "LICENSE*" -delete
+
+# ============================================================================
+# Stage 3: Ultra-minimal production runtime
+# ============================================================================
+FROM python:${PYTHON_VERSION}-slim
+
+# Install ONLY essential runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* /var/tmp/*
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash --uid 1000 --gid 100 sutra
+
+WORKDIR /app
+
+# Copy optimized Python environment
+COPY --from=backend-builder /install /usr/local
+
+# Copy optimized React build
+COPY --from=frontend-builder --chown=sutra:100 /build/dist ./static
+
+# Copy ONLY essential backend files
+COPY --chown=sutra:100 packages/sutra-control/backend/main.py ./backend/
+COPY --chown=sutra:100 packages/sutra-control/backend/api/ ./backend/api/
+
+# Create minimal config
+RUN echo '{"environment": "production", "static_dir": "/app/static"}' > config.json && \
+    chown sutra:100 config.json
+
+# Switch to non-root user  
+USER sutra
+
+# Production environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    ENVIRONMENT=production \
+    STATIC_DIR=/app/static
+
+# Minimal health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=2 \
+    CMD curl -f http://localhost:9000/health || exit 1
+
+EXPOSE 9000
+
+# Production command optimized for minimal resource usage
+CMD ["python", "backend/main.py"]

@@ -1,0 +1,72 @@
+# Multi-stage build for Sutra ML services using sutra-ml-base foundation
+# This Dockerfile can be used by both embedding and NLG services
+ARG SUTRA_EDITION=simple
+ARG SUTRA_VERSION=latest
+ARG SERVICE_NAME=ml-service
+
+FROM python:3.11-slim as builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy sutra-ml-base and install it first
+COPY packages/sutra-ml-base /tmp/sutra-ml-base
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e /tmp/sutra-ml-base[optimized]
+
+# Install PyTorch CPU version
+RUN pip install --no-cache-dir torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu
+
+# Production stage
+FROM python:3.11-slim
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Create non-root user
+RUN groupadd -g 1000 sutra && \
+    useradd -u 1000 -g sutra -m -d /home/sutra sutra
+
+# Set up cache directories with appropriate permissions
+RUN mkdir -p /tmp/.cache/huggingface && \
+    mkdir -p /tmp/.cache/torch && \
+    chown -R sutra:sutra /tmp/.cache
+
+# Create app directory and models directory
+WORKDIR /app
+RUN mkdir -p /app/models && chown -R sutra:sutra /app
+
+# Copy service files (to be overridden by specific services)
+ARG SERVICE_NAME
+COPY packages/sutra-${SERVICE_NAME}-service/main_v2.py ./main.py
+
+# Switch to non-root user
+USER sutra
+
+# Environment defaults (edition-aware)
+ARG SUTRA_EDITION
+ENV SUTRA_EDITION=${SUTRA_EDITION}
+ENV SUTRA_VERSION=${SUTRA_VERSION}
+
+# Service-specific environment variables (will be overridden)
+ENV PORT=8888
+ENV LOG_LEVEL=INFO
+
+# Health check (generic for ML services)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+# Run application
+CMD ["python", "main.py"]

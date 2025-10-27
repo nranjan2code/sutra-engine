@@ -90,6 +90,33 @@ New to Sutra AI? Start here:
 
 ---
 
+## 🐳 Docker Optimization (NEW)
+
+**Production-ready optimized Docker builds with massive size savings:**
+
+### Essential Docs
+- **[Optimized Docker Guide](deployment/OPTIMIZED_DOCKER_GUIDE.md)** - Complete optimization guide
+- **[Quick Reference](deployment/OPTIMIZED_BUILD_QUICK_REF.md)** - Fast command reference
+- **[Optimization Results](../docs/AGGRESSIVE_ML_OPTIMIZATION_RESULTS.md)** - Detailed savings analysis
+
+### Quick Commands
+```bash
+export SUTRA_EDITION=simple
+./scripts/optimize-images.sh build-all     # Build all optimized services
+./scripts/optimize-images.sh compare       # Compare sizes
+SUTRA_VERSION=latest-optimized ./sutra-deploy.sh install  # Deploy optimized
+```
+
+### Current Results
+- **Embedding Service**: 838MB (36.5% reduction from 1.32GB)
+- **NLG Service**: 820MB (41% reduction from 1.39GB)
+- **Total ML Services**: 1.05GB saved
+- **Overall System**: 17.2% average reduction
+
+**Use for:** Production deployments, resource optimization, cost reduction
+
+---
+
 ## Operations
 
 - [Deployment](operations/DEPLOYMENT.md) - Production deployment

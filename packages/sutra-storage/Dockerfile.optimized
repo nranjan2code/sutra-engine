@@ -1,0 +1,79 @@
+# OPTIMIZED Storage Server - Target: 160MB (down from 168MB)
+# Pure Rust binary with minimal dependencies
+
+ARG RUST_VERSION=1.82
+
+# ============================================================================
+# Stage 1: Build optimized Rust binary
+# ============================================================================
+FROM rust:${RUST_VERSION}-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy workspace configuration
+COPY Cargo.toml Cargo.lock ./
+
+# Copy all Rust packages
+COPY packages/sutra-storage ./packages/sutra-storage/
+COPY packages/sutra-protocol ./packages/sutra-protocol/
+
+# Build with maximum optimization for production
+ENV CARGO_PROFILE_RELEASE_LTO=fat
+ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1  
+ENV CARGO_PROFILE_RELEASE_PANIC=abort
+ENV CARGO_PROFILE_RELEASE_STRIP=symbols
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release -p sutra-storage && \
+    # Additional stripping for minimal size
+    strip /app/target/release/sutra-storage && \
+    cp /app/target/release/sutra-storage /tmp/sutra-storage
+
+# ============================================================================
+# Stage 2: Distroless runtime (minimal footprint)
+# ============================================================================
+FROM debian:bookworm-slim
+
+# Install ONLY essential runtime libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 netcat-traditional && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/* && \
+    # Remove package manager to reduce attack surface
+    apt-get purge -y apt && \
+    rm -rf /var/lib/apt
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash --uid 1000 --gid 100 storage
+
+# Copy optimized binary
+COPY --from=builder --chown=storage:100 /tmp/sutra-storage /usr/local/bin/sutra-storage
+
+# Create data directory
+RUN mkdir -p /data && chown storage:100 /data
+
+# Switch to non-root user
+USER storage
+
+WORKDIR /data
+
+# Production environment
+ENV RUST_LOG=info \
+    STORAGE_PATH=/data \
+    STORAGE_HOST=0.0.0.0 \
+    STORAGE_PORT=50051 \
+    VECTOR_DIMENSION=768
+
+# Minimal health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=2 \
+    CMD nc -z localhost 50051 || exit 1
+
+EXPOSE 50051
+
+# Production command
+CMD ["/usr/local/bin/sutra-storage"]

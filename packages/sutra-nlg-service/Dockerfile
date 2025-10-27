@@ -1,12 +1,13 @@
-# Multi-stage build for production-grade NLG service
-# Optimized for CPU deployment with gemma-2-2b
+# Sutra NLG Service - Next Generation
+# Uses sutra-ml-base foundation for grounded text generation
 
-FROM python:3.11-slim as builder
+# Build stage - Install ML foundation and dependencies
+FROM python:3.11-slim AS builder
 
-# Install build dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    git \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -14,11 +15,15 @@ RUN apt-get update && apt-get install -y \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy and install requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt
+# Set up workspace structure
+WORKDIR /workspace
+
+# Copy ML foundation first (consistent with embedding service)
+COPY packages/sutra-ml-base/ ./sutra-ml-base/
+COPY packages/sutra-nlg-service/requirements.txt ./nlg-service/
+
+# Install service dependencies  
+RUN cd nlg-service && pip install -r requirements.txt
 
 # Production stage
 FROM python:3.11-slim
@@ -26,40 +31,40 @@ FROM python:3.11-slim
 # Install curl for health checks
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Copy virtual environment from builder
+# Copy virtual environment with dependencies
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Create non-root user
+# Create service user
 RUN groupadd -g 1000 nlg && \
     useradd -u 1000 -g nlg -m -d /home/nlg nlg
 
-# Set up cache directories
-RUN mkdir -p /tmp/.cache/huggingface && \
-    mkdir -p /tmp/.cache/torch && \
-    chown -R nlg:nlg /tmp/.cache
+# Set up directories
+RUN mkdir -p /home/nlg/.cache/huggingface /app && \
+    chown -R nlg:nlg /home/nlg /app
 
-# Copy application
+# Copy ML Foundation source code directly 
 WORKDIR /app
-COPY main.py .
+COPY packages/sutra-ml-base/sutra_ml_base ./sutra_ml_base
 
-# Create models directory for volume mount
-RUN mkdir -p /app/models && chown -R nlg:nlg /app
+# Copy application code
+COPY packages/sutra-nlg-service/main.py .
 
-# Switch to non-root user
+# Switch to service user
 USER nlg
 
-# Environment defaults (swappable via docker-compose)
+# Environment configuration for new architecture
+ENV SUTRA_SERVICE_TYPE=nlg
+ENV SUTRA_EDITION=${SUTRA_EDITION:-simple}
 ENV PORT=8889
-ENV NLG_MODEL=google/gemma-3-270m-it
-ENV INSTANCE_ID=nlg-default
+ENV LOG_LEVEL=INFO
 
-# Health check (longer start period for model loading)
+# Health check using new foundation endpoints (longer start period for model loading)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -f http://localhost:8889/health || exit 1
 
 # Expose port
 EXPOSE 8889
 
-# Run application
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8889", "--workers", "1"]
+# Run using new ML foundation
+CMD ["python", "main.py"]

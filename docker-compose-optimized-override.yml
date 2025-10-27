@@ -1,0 +1,48 @@
+# Override compose file to use optimized images instead of building
+version: '3.8'
+services:
+  # Storage Layer - Use optimized images (remove build, keep image)
+  storage-server:
+    build: {}
+    image: sutra-storage-server:latest-optimized
+
+  grid-event-storage:
+    build: {}
+    image: sutra-storage-server:latest-optimized
+
+  user-storage-server:
+    build: {}
+    image: sutra-storage-server:latest-optimized
+
+  # ML Foundation Services - Use optimized images
+  embedding-single:
+    build: {}
+    image: sutra-embedding-service:latest-optimized
+    
+  nlg-service:
+    build: {}
+    image: sutra-nlg-service:latest-optimized
+
+  # API Layer - Use optimized images  
+  sutra-api:
+    build: {}
+    image: sutra-api:latest-optimized
+
+  sutra-hybrid:
+    build: {}
+    image: sutra-hybrid:latest-optimized
+
+  # Control Panel - Use optimized images
+  sutra-control:
+    build: {}
+    image: sutra-control:latest-optimized
+
+  # Bulk Ingester - Use optimized images
+  bulk-ingester:
+    build: {}
+    image: sutra-bulk-ingester:latest-optimized
+
+  # Client - Use optimized images
+  sutra-client:
+    build: {}
+    image: sutra-client:latest-optimized

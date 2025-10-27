@@ -97,7 +97,7 @@ class EmbeddingServiceProvider(EmbeddingProvider):
             if not health_data.get("model_loaded", False):
                 raise ConnectionError("Embedding model not loaded in service")
             
-            # Check service info for model validation
+                # Check service info for basic health
             info_response = self.session.get(
                 f"{self.service_url}/info",
                 timeout=self.timeout
@@ -105,18 +105,31 @@ class EmbeddingServiceProvider(EmbeddingProvider):
             info_response.raise_for_status()
             
             info_data = info_response.json()
+            logger.info(f"Embedding service info: {info_data}")
             
-            if info_data.get("dimension") != 768:
+            # Validate dimensions with a test embedding request
+            test_response = self.session.post(
+                f"{self.service_url}/embed",
+                json={"texts": ["test validation"]},
+                timeout=self.timeout
+            )
+            test_response.raise_for_status()
+            
+            test_data = test_response.json()
+            dimension = test_data.get("dimension", 0)
+            model = test_data.get("model", "")
+            
+            if dimension != 768:
                 raise ValueError(
-                    f"Service produces {info_data.get('dimension')}-d embeddings, expected 768-d"
+                    f"Service produces {dimension}-d embeddings, expected 768-d"
                 )
             
-            if "nomic-embed-text-v1.5" not in info_data.get("model", ""):
+            if "nomic-embed-text-v1.5" not in model:
                 logger.warning(
-                    f"Expected nomic-embed-text-v1.5, service reports: {info_data.get('model')}"
+                    f"Expected nomic-embed-text-v1.5, service reports: {model}"
                 )
             
-            logger.info(f"Validated embedding service: {info_data}")
+            logger.info(f"Validated embedding service: dimension={dimension}, model={model}")
             
         except requests.RequestException as e:
             raise ConnectionError(f"Cannot connect to embedding service at {self.service_url}: {e}")
