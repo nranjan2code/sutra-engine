@@ -1,52 +1,86 @@
-# Multi-stage build for Sutra Client
-# Stage 1: Builder
-FROM node:20-slim AS builder
+# Sutra Client (Web UI) - Simple Build
+FROM node:20-alpine AS builder
 
-WORKDIR /build
+RUN apk add --no-cache python3 make g++
+WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+COPY packages/sutra-client/package*.json ./
+COPY packages/sutra-client/tsconfig*.json ./
+COPY packages/sutra-client/vite.config.ts ./
 
-# Install dependencies
-RUN npm ci --production=false
+RUN npm ci --silent && \
+    npm cache clean --force && \
+    rm -rf ~/.npm
 
-# Copy source code
-COPY . .
+COPY packages/sutra-client/index.html ./
+COPY packages/sutra-client/src/ ./src/
+RUN npm run build && \
+    find dist -name "*.map" -delete
 
-# Build application
-RUN npm run build
+# Final stage
+FROM nginx:1.26-alpine
 
-# Stage 2: Runtime with nginx
-FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Install curl for health check
-RUN apk add --no-cache curl
+# Simple nginx configuration
+RUN cat > /etc/nginx/nginx.conf << 'EOF'
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /tmp/nginx.pid;
 
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
+events {
+    worker_connections 1024;
+    use epoll;
+    multi_accept on;
+}
 
-# Copy built assets from builder
-COPY --from=builder /build/dist /usr/share/nginx/html
+http {
+    client_body_temp_path /tmp/client_temp;
+    proxy_temp_path       /tmp/proxy_temp_path;
+    fastcgi_temp_path     /tmp/fastcgi_temp;
+    uwsgi_temp_path       /tmp/uwsgi_temp;
+    scgi_temp_path        /tmp/scgi_temp;
+    
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    
+    gzip on;
+    gzip_vary on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript;
+    
+    server {
+        listen 8080;
+        server_name localhost;
+        root /usr/share/nginx/html;
+        index index.html;
+        
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+        
+        location /api/ {
+            proxy_pass http://sutra-api:8000/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+    }
+}
+EOF
 
-# Create nginx user directories
-RUN mkdir -p /etc/nginx/conf.d && \
-    chown -R nginx:nginx /usr/share/nginx/html && \
-    chown -R nginx:nginx /var/cache/nginx && \
-    chown -R nginx:nginx /var/log/nginx && \
-    chown -R nginx:nginx /etc/nginx/conf.d
+RUN addgroup -g 1000 app && \
+    adduser -D -s /bin/sh -u 1000 -G app app && \
+    chown -R app:app /usr/share/nginx/html && \
+    chmod -R 755 /usr/share/nginx/html && \
+    touch /var/run/nginx.pid && \
+    chown -R app:app /var/cache/nginx /var/run /var/log/nginx
 
-# Run as non-root user
-RUN touch /var/run/nginx.pid && \
-    chown -R nginx:nginx /var/run/nginx.pid
-
-USER nginx
-
-# Expose port
+USER app
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/ || exit 1
-
-# Start nginx
 CMD ["nginx", "-g", "daemon off;"]

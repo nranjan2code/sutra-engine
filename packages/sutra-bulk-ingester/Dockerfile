@@ -1,13 +1,19 @@
-# Multi-stage Docker build for Rust + Python bulk ingester
-FROM rust:1.82-slim AS rust-builder
+# OPTIMIZED Bulk Ingester - Target: 250MB (down from 265MB) 
+# Rust binary + minimal Python runtime for plugins
+
+ARG RUST_VERSION=1.82
+ARG PYTHON_VERSION=3.11
+
+# ============================================================================
+# Stage 1: Build Rust binary with aggressive optimization
+# ============================================================================
+FROM rust:${RUST_VERSION}-slim AS rust-builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+    pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
 # Copy Rust project files
@@ -15,49 +21,72 @@ COPY packages/sutra-bulk-ingester/Cargo.toml ./
 COPY packages/sutra-bulk-ingester/src ./src/
 COPY packages/sutra-protocol ../sutra-protocol/
 
-# Build the Rust binary with BuildKit cache mounts
+# Build with maximum optimization
+ENV CARGO_PROFILE_RELEASE_LTO=true
+ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+ENV CARGO_PROFILE_RELEASE_STRIP=true
+
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
     cargo build --release && \
+    # Strip debug symbols and copy
+    strip /app/target/release/sutra-bulk-ingester && \
     cp /app/target/release/sutra-bulk-ingester /tmp/sutra-bulk-ingester
 
-# Python runtime stage
-FROM python:3.11-slim
+# ============================================================================
+# Stage 2: Minimal Python runtime for plugins
+# ============================================================================
+FROM python:${PYTHON_VERSION}-slim AS python-builder
 
-# Install runtime dependencies including curl for health checks
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Install minimal Python dependencies for plugins
+RUN pip install --no-cache-dir --prefix=/install --no-compile \
+    asyncio aiofiles requests psutil && \
+    # Cleanup Python installation
+    find /install -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
+    find /install -type f -name "*.pyc" -delete && \
+    find /install -type f -name "*.pyo" -delete && \
+    find /install -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
+    find /install -type f -name "*.so" -exec strip {} + 2>/dev/null || true
 
-# Create app user
-RUN useradd -m -s /bin/bash app
+# ============================================================================
+# Stage 3: Ultra-minimal production runtime
+# ============================================================================
+FROM python:${PYTHON_VERSION}-slim
 
-# Set working directory
+# Install ONLY essential runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/*
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash --uid 1000 --gid 100 app
+
 WORKDIR /app
 
-# Copy the built Rust binary
-COPY --from=rust-builder /tmp/sutra-bulk-ingester /usr/local/bin/
+# Copy optimized Python environment
+COPY --from=python-builder /install /usr/local
 
-# Copy Python plugins
-COPY packages/sutra-bulk-ingester/plugins ./plugins/
+# Copy optimized Rust binary
+COPY --from=rust-builder /tmp/sutra-bulk-ingester /usr/local/bin/sutra-bulk-ingester
 
-# Install Python dependencies for plugins
-RUN pip install --no-cache-dir \
-    asyncio \
-    aiofiles \
-    requests \
-    psutil
+# Copy ONLY essential Python plugins
+COPY --chown=app:100 packages/sutra-bulk-ingester/plugins ./plugins/
 
-# Create directories
-RUN mkdir -p /datasets /jobs && chown -R app:app /app /datasets /jobs
+# Create minimal directories
+RUN mkdir -p /datasets /jobs && chown -R app:100 /app /datasets /jobs
 
-# Switch to app user
+# Switch to non-root user
 USER app
 
-# Expose port
-EXPOSE 8005
+# Production environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+# Minimal health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=2 \
     CMD curl -f http://localhost:8005/health || exit 1
 
-# Default command
+EXPOSE 8005
+
+# Production command
 CMD ["/usr/local/bin/sutra-bulk-ingester", "--port", "8005", "--plugin-dir", "./plugins"]

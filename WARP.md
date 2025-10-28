@@ -74,29 +74,58 @@ This document provides structured guidance for AI assistants (like WARP at warp.
 - ✅ **Single-path deployment** - Zero confusion, one command center
 - ✅ **Release management** - Professional version control & customer deployments
 
-### Deployment Infrastructure v2.0 (2025-10-25)
+### Build, Deploy & Release System (2025-10-28)
 
-**✅ COMPLETE: Production-Grade Single Command Center**
+**✅ COMPLETE: Clean Single-Path Build/Deploy/Release**
 
-**What Changed:**
-- ✅ One command center: `sutra-deploy.sh` v2.0
-- ✅ All redundant scripts deleted (clean slate)
-- ✅ Idempotent, self-healing operations
-- ✅ Auto-fixes HA embedding configuration
-- ✅ State-aware (CLEAN/BUILT/STOPPED/RUNNING)
-- ✅ Comprehensive health validation
+**System Architecture:**
+- **Build**: `sutra-optimize.sh` - Docker image builds (single `:latest` tag)
+- **Deploy**: `./sutra deploy` - Unified deployment wrapper
+- **Release**: `./sutra-deploy.sh` - Version management & releases
+- **Documentation**: Organized structure in `docs/` (getting-started/, build/, deployment/, release/)
 
-**Quick Start:**
+**Quick Start - Build:**
 ```bash
-./sutra-deploy.sh clean    # Complete reset
-./sutra-deploy.sh install  # Build + start all
-./sutra-deploy.sh status   # Check health
+# Build all services (8 core services)
+SUTRA_EDITION=simple ./sutra-optimize.sh build-all
 
-# Release Management (NEW)
-./sutra-deploy.sh version          # Show current version
-./sutra-deploy.sh release patch    # Create bug fix release
-./sutra-deploy.sh release minor    # Create feature release
-./sutra-deploy.sh deploy v2.0.1    # Deploy specific version
+# Build enterprise (10 services: core + grid)
+SUTRA_EDITION=enterprise ./sutra-optimize.sh build-all
+
+# Check build status
+./sutra-optimize.sh sizes
+```
+
+**Quick Start - Deploy:**
+```bash
+# Deploy simple edition (default)
+SUTRA_EDITION=simple ./sutra deploy
+
+# Deploy community edition (HA)
+SUTRA_EDITION=community ./sutra deploy
+
+# Deploy enterprise edition (grid)
+SUTRA_EDITION=enterprise ./sutra deploy
+
+# Check status
+./sutra status
+```
+
+**Quick Start - Release:**
+```bash
+# Check version
+./sutra-deploy.sh version          # Shows current version (2.0.0)
+
+# Create release
+./sutra-deploy.sh release patch    # 2.0.0 → 2.0.1
+./sutra-deploy.sh release minor    # 2.0.0 → 2.1.0
+./sutra-deploy.sh release major    # 2.0.0 → 3.0.0
+
+# Push release (triggers automated builds)
+git push origin main --tags
+
+# Deploy specific version
+./sutra-deploy.sh deploy v2.0.1
 ```
 
 **See:** `QUICKSTART.md`, `DEPLOYMENT.md`, `docs/DEPLOYMENT_INFRASTRUCTURE_V2.md`, `docs/release/README.md`
@@ -840,6 +869,72 @@ curl http://localhost:8889/health
 ---
 
 ## Common Development Tasks
+
+### Build, Deploy & Test Workflows
+
+**Build Services:**
+```bash
+# Build all services (single :latest tag)
+SUTRA_EDITION=simple ./sutra-optimize.sh build-all     # 8 services (4.4GB)
+SUTRA_EDITION=enterprise ./sutra-optimize.sh build-all # 10 services (4.76GB)
+
+# Check build status
+./sutra-optimize.sh sizes
+
+# Build individual service
+SUTRA_EDITION=simple ./sutra-optimize.sh build-service storage
+```
+
+**Deploy Services:**
+```bash
+# Deploy by edition
+SUTRA_EDITION=simple ./sutra deploy        # Default, 8 services
+SUTRA_EDITION=community ./sutra deploy     # HA configuration
+SUTRA_EDITION=enterprise ./sutra deploy    # Grid-enabled
+
+# Check status
+./sutra status
+docker compose ps
+```
+
+**Run Tests:**
+```bash
+# Full integration test suite
+PYTHONPATH=packages/sutra-core python -m pytest tests/ -v
+
+# Production smoke test (validates embeddings)
+./scripts/smoke-test-embeddings.sh
+
+# Rust storage tests
+cd packages/sutra-storage && cargo test
+```
+
+**Image Tagging (Single Strategy):**
+- All services: `sutra-<service>:${SUTRA_VERSION:-latest}`
+- No intermediate tags (`:latest-optimized` removed)
+- Compose file: `.sutra/compose/production.yml`
+
+**Release Management:**
+```bash
+# Check version
+./sutra-deploy.sh version                  # Shows 2.0.0
+
+# Create release
+./sutra-deploy.sh release patch           # Bug fix
+./sutra-deploy.sh release minor           # Feature
+./sutra-deploy.sh release major           # Breaking
+
+# Push & deploy
+git push origin main --tags
+./sutra-deploy.sh deploy v2.0.1
+```
+
+**Documentation Navigation:**
+- **Getting Started**: `docs/getting-started/README.md`
+- **Build Guide**: `docs/build/README.md`
+- **Deployment**: `docs/deployment/README.md`
+- **Releases**: `docs/release/README.md`
+- **Architecture**: `docs/architecture/SYSTEM_ARCHITECTURE.md`
 
 ### Adding New NLG Templates
 

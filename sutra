@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""
+Sutra - Unified Build & Deploy System
+Single entry point for all Sutra operations
+
+Usage:
+    sutra build [SERVICE...]       Build services
+    sutra deploy [OPTIONS]         Deploy system
+    sutra validate                 Validate images
+    sutra test [TYPE]              Run tests
+    sutra clean [OPTIONS]          Clean up
+    sutra version                  Show version
+    sutra help                     Show detailed help
+"""
+
+import sys
+import os
+import subprocess
+import argparse
+from pathlib import Path
+from typing import List, Optional
+
+# Constants
+VERSION = "3.0.0"
+SUTRA_ROOT = Path(__file__).parent.absolute()
+SUTRA_DIR = SUTRA_ROOT / ".sutra"
+BUILD_DIR = SUTRA_DIR / "build"
+DEPLOY_DIR = SUTRA_DIR / "deploy"
+
+# Color codes
+class Colors:
+    RED = '\033[0;31m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[1;33m'
+    BLUE = '\033[0;34m'
+    CYAN = '\033[0;36m'
+    BOLD = '\033[1m'
+    NC = '\033[0m'
+
+def log_info(msg: str):
+    print(f"{Colors.BLUE}ℹ {Colors.NC}{msg}")
+
+def log_success(msg: str):
+    print(f"{Colors.GREEN}✓{Colors.NC} {msg}")
+
+def log_error(msg: str):
+    print(f"{Colors.RED}✗{Colors.NC} {msg}", file=sys.stderr)
+
+def log_warning(msg: str):
+    print(f"{Colors.YELLOW}⚠{Colors.NC} {msg}")
+
+def run_command(cmd: List[str], cwd: Optional[Path] = None, check: bool = True) -> subprocess.CompletedProcess:
+    """Run shell command with logging"""
+    log_info(f"Running: {' '.join(cmd)}")
+    return subprocess.run(cmd, cwd=cwd or SUTRA_ROOT, check=check)
+
+def print_banner():
+    """Print Sutra banner"""
+    print(f"{Colors.CYAN}")
+    print("╔═══════════════════════════════════════════════════════════════╗")
+    print("║                    🚀 SUTRA BUILD SYSTEM                      ║")
+    print("║              Unified Build, Deploy & Test Platform           ║")
+    print(f"║                        Version {VERSION}                         ║")
+    print("╚═══════════════════════════════════════════════════════════════╝")
+    print(f"{Colors.NC}")
+
+# Command implementations
+
+def cmd_build(args):
+    """Build services"""
+    services = args.services if args.services else ["all"]
+    edition = os.environ.get("SUTRA_EDITION", "simple")
+    
+    log_info(f"Building services: {', '.join(services)}")
+    log_info(f"Edition: {edition}")
+    
+    # Call existing sutra-optimize.sh for now (will be migrated)
+    build_script = SUTRA_ROOT / "sutra-optimize.sh"
+    
+    if services == ["all"]:
+        run_command([str(build_script), "build-all"])
+    else:
+        for service in services:
+            run_command([str(build_script), "build", service])
+    
+    log_success("Build completed")
+
+def cmd_deploy(args):
+    """Deploy system"""
+    edition = os.environ.get("SUTRA_EDITION", args.edition)
+    
+    log_info(f"Deploying Sutra {edition} edition")
+    
+    # Call existing sutra-optimize.sh for now
+    deploy_script = SUTRA_ROOT / "sutra-optimize.sh"
+    run_command([str(deploy_script), "deploy"])
+    
+    log_success("Deployment completed")
+
+def cmd_validate(args):
+    """Validate images"""
+    log_info("Validating deployment images...")
+    
+    validate_script = BUILD_DIR / "validate-images.sh"
+    if validate_script.exists():
+        run_command([str(validate_script)])
+    else:
+        # Fallback to root scripts/
+        validate_script = SUTRA_ROOT / "scripts" / "validate-images.sh"
+        if validate_script.exists():
+            run_command([str(validate_script)])
+        else:
+            log_error("Validation script not found")
+            sys.exit(1)
+    
+    log_success("Validation passed")
+
+def cmd_test(args):
+    """Run tests"""
+    test_type = args.type or "smoke"
+    
+    log_info(f"Running {test_type} tests...")
+    
+    if test_type == "smoke":
+        test_script = DEPLOY_DIR / "smoke-test.sh"
+        if not test_script.exists():
+            # Fallback
+            test_script = SUTRA_ROOT / "sutrabuild" / "scripts" / "smoke-test-embeddings.sh"
+        
+        if test_script.exists():
+            run_command([str(test_script)])
+        else:
+            log_warning("Smoke test script not found")
+    elif test_type == "integration":
+        test_script = SUTRA_ROOT / "scripts" / "integration-test.sh"
+        if test_script.exists():
+            run_command([str(test_script)])
+        else:
+            log_warning("Integration test script not found")
+    else:
+        log_error(f"Unknown test type: {test_type}")
+        sys.exit(1)
+    
+    log_success(f"{test_type.capitalize()} tests passed")
+
+def cmd_clean(args):
+    """Clean up"""
+    log_info("Cleaning up Docker resources...")
+    
+    if args.images:
+        log_info("Removing untagged images...")
+        run_command(["docker", "image", "prune", "-f"], check=False)
+    
+    if args.containers:
+        log_info("Removing stopped containers...")
+        run_command(["docker", "container", "prune", "-f"], check=False)
+    
+    if args.volumes:
+        log_warning("Removing volumes (data will be lost!)...")
+        if input("Are you sure? [y/N] ").lower() == 'y':
+            run_command(["docker", "volume", "prune", "-f"], check=False)
+    
+    if args.all:
+        log_warning("Full cleanup (this will remove everything)...")
+        if input("Are you sure? [y/N] ").lower() == 'y':
+            run_command(["docker", "system", "prune", "-af", "--volumes"], check=False)
+    
+    log_success("Cleanup completed")
+
+def cmd_version(args):
+    """Show version"""
+    print(f"Sutra Build System v{VERSION}")
+    print(f"Python: {sys.version}")
+    print(f"Location: {SUTRA_ROOT}")
+
+def cmd_status(args):
+    """Show system status"""
+    log_info("Checking Sutra system status...")
+    
+    # Check Docker
+    try:
+        subprocess.run(["docker", "version"], capture_output=True, check=True)
+        log_success("Docker: Running")
+    except:
+        log_error("Docker: Not running")
+    
+    # Check running containers
+    result = subprocess.run(
+        ["docker", "ps", "--filter", "name=sutra-", "--format", "{{.Names}}"],
+        capture_output=True, text=True
+    )
+    containers = result.stdout.strip().split('\n') if result.stdout.strip() else []
+    
+    if containers:
+        log_success(f"Running containers: {len(containers)}")
+        for container in containers:
+            print(f"  • {container}")
+    else:
+        log_warning("No Sutra containers running")
+    
+    # Check images
+    result = subprocess.run(
+        ["docker", "images", "--filter", "reference=sutra-*", "--format", "{{.Repository}}:{{.Tag}}"],
+        capture_output=True, text=True
+    )
+    images = result.stdout.strip().split('\n') if result.stdout.strip() else []
+    
+    if images:
+        log_success(f"Built images: {len(images)}")
+    else:
+        log_warning("No Sutra images found")
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Sutra Unified Build & Deploy System",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  sutra build                    Build all services
+  sutra build embedding nlg      Build specific services
+  sutra deploy                   Deploy system
+  sutra validate                 Validate images
+  sutra test smoke               Run smoke tests
+  sutra clean --images           Clean untagged images
+  sutra status                   Show system status
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+    
+    # Build command
+    build_parser = subparsers.add_parser('build', help='Build services')
+    build_parser.add_argument('services', nargs='*', help='Services to build (default: all)')
+    build_parser.add_argument('--no-cache', action='store_true', help='Build without cache')
+    build_parser.set_defaults(func=cmd_build)
+    
+    # Deploy command
+    deploy_parser = subparsers.add_parser('deploy', help='Deploy system')
+    deploy_parser.add_argument('--edition', choices=['simple', 'community', 'enterprise'], 
+                               default='simple', help='Edition to deploy')
+    deploy_parser.set_defaults(func=cmd_deploy)
+    
+    # Validate command
+    validate_parser = subparsers.add_parser('validate', help='Validate images')
+    validate_parser.set_defaults(func=cmd_validate)
+    
+    # Test command
+    test_parser = subparsers.add_parser('test', help='Run tests')
+    test_parser.add_argument('type', nargs='?', choices=['smoke', 'integration'], 
+                            default='smoke', help='Test type')
+    test_parser.set_defaults(func=cmd_test)
+    
+    # Clean command
+    clean_parser = subparsers.add_parser('clean', help='Clean up')
+    clean_parser.add_argument('--images', action='store_true', help='Clean images')
+    clean_parser.add_argument('--containers', action='store_true', help='Clean containers')
+    clean_parser.add_argument('--volumes', action='store_true', help='Clean volumes')
+    clean_parser.add_argument('--all', action='store_true', help='Full cleanup')
+    clean_parser.set_defaults(func=cmd_clean)
+    
+    # Version command
+    version_parser = subparsers.add_parser('version', help='Show version')
+    version_parser.set_defaults(func=cmd_version)
+    
+    # Status command
+    status_parser = subparsers.add_parser('status', help='Show system status')
+    status_parser.set_defaults(func=cmd_status)
+    
+    args = parser.parse_args()
+    
+    if not args.command:
+        print_banner()
+        parser.print_help()
+        sys.exit(0)
+    
+    # Execute command
+    try:
+        if hasattr(args, 'func'):
+            args.func(args)
+        else:
+            parser.print_help()
+    except KeyboardInterrupt:
+        log_warning("\nOperation cancelled by user")
+        sys.exit(130)
+    except Exception as e:
+        log_error(f"Error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

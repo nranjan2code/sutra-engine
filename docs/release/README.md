@@ -1,321 +1,287 @@
-# Release Management Documentation
+# Release Management
 
-**Professional release management for Sutra AI**
+Sutra uses a centralized versioning system with automated builds and deployment workflows.
 
-This directory contains complete documentation for managing releases, deployments, and customer version control.
+## Contents
 
----
+- **[Release Process](RELEASE_PROCESS.md)** - Step-by-step release workflow
+- **[Versioning Strategy](VERSIONING_STRATEGY.md)** - Semantic versioning guidelines  
+- **[Quick Reference](QUICK_REFERENCE.md)** - Command cheat sheet
+- **[Changelog](changelog.md)** - Version history and changes
+- **[Setup](SETUP_COMPLETE.md)** - Release infrastructure setup
 
-## 📚 Documentation Structure
-
-### Getting Started
-- **[RELEASE_PROCESS.md](RELEASE_PROCESS.md)** - Complete release workflow guide
-  - Version management
-  - Release commands
-  - GitHub Actions pipeline
-  - Customer deployments
-  - Troubleshooting
-
-### Setup & Configuration
-- **[SETUP_COMPLETE.md](SETUP_COMPLETE.md)** - Implementation summary
-  - What was created
-  - System architecture
-  - Next steps
-  - Testing guide
-
-### Quick References
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Command cheat sheet
-  - Common commands
-  - Examples
-  - One-page reference
-
-### Version History
-- **[VERSIONING_STRATEGY.md](VERSIONING_STRATEGY.md)** - Semantic versioning guide
-  - When to bump versions
-  - Version number meanings
-  - Release schedules
-
----
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Check Current Version
+
 ```bash
 ./sutra-deploy.sh version
+cat VERSION  # 2.0.0
 ```
 
-### Create a Release
+### Create New Release
+
 ```bash
-# Bug fixes
+# Bug fix (2.0.0 → 2.0.1)
 ./sutra-deploy.sh release patch
 
-# New features  
+# New features (2.0.0 → 2.1.0)
 ./sutra-deploy.sh release minor
 
-# Breaking changes
+# Breaking changes (2.0.0 → 3.0.0)
 ./sutra-deploy.sh release major
+```
 
-# Push to trigger automated builds
+### Push Release
+
+```bash
 git push origin main --tags
 ```
 
+This triggers automated builds on GitHub Actions.
+
 ### Deploy Specific Version
+
 ```bash
 ./sutra-deploy.sh deploy v2.0.1
 ```
 
----
+## Version Control
 
-## 🎯 Core Concepts
+### Single Source of Truth
 
-### 1. Centralized Version Control
-- Single `VERSION` file at repo root
-- All packages use this version
-- Docker images tagged with version
+The `VERSION` file at the project root controls all package versions:
 
-### 2. Semantic Versioning
-```
-MAJOR.MINOR.PATCH
-  │     │     │
-  │     │     └─ Bug fixes (2.0.0 → 2.0.1)
-  │     └─────── New features (2.0.0 → 2.1.0)
-  └───────────── Breaking changes (2.0.0 → 3.0.0)
-```
-
-### 3. Automated Pipeline
-- Push tag → GitHub Actions builds everything
-- Multi-arch Docker images (amd64 + arm64)
-- Automatic GitHub releases
-- ~15 minute build time
-
-### 4. Customer Deployments
-- Pin to specific versions
-- Easy rollbacks
-- Clear upgrade paths
-
----
-
-## 📋 Release Workflow
-
-```mermaid
-graph LR
-    A[Edit Code] --> B[Test]
-    B --> C[Update CHANGELOG]
-    C --> D[Create Release]
-    D --> E[Push Tags]
-    E --> F[GitHub Actions Build]
-    F --> G[Docker Images Published]
-    G --> H[GitHub Release Created]
-    H --> I[Customers Deploy]
-```
-
-**Detailed steps:**
-1. **Development** - Make changes, test locally
-2. **Documentation** - Update CHANGELOG.md with changes
-3. **Release** - Run `./sutra-deploy.sh release <type>`
-4. **Publish** - Run `git push origin main --tags`
-5. **Automated** - GitHub Actions builds & publishes
-6. **Deploy** - Customers use tagged versions
-
----
-
-## 🔧 Key Files
-
-### Repository Files
-```
-/VERSION                           # Current version (2.0.0)
-/RELEASE.md                        # Quick reference
-/sutra-deploy.sh                   # Release commands
-/docker-compose-grid.yml           # Version-tagged services
-/.github/workflows/release.yml     # Automated builds
-```
-
-### Documentation Files
-```
-docs/release/
-├── README.md                      # This file
-├── RELEASE_PROCESS.md             # Complete guide
-├── SETUP_COMPLETE.md              # Setup summary
-├── QUICK_REFERENCE.md             # Command cheat sheet
-└── VERSIONING_STRATEGY.md         # Version guidelines
-```
-
----
-
-## 🎨 Docker Image Registry
-
-### Image Naming Convention
-```
-ghcr.io/{YOUR_ORG}/sutra-{service}:{version}
-```
-
-### Available Services
-- `sutra-storage-server`
-- `sutra-api`
-- `sutra-hybrid`
-- `sutra-grid-master`
-- `sutra-grid-agent`
-- `sutra-embedding-service`
-- `sutra-nlg-service`
-- `sutra-control`
-- `sutra-client`
-- `sutra-bulk-ingester`
-
-### Example Usage
 ```bash
-# Pull specific version
-docker pull ghcr.io/YOUR_ORG/sutra-api:2.0.1
-
-# Pull latest
-docker pull ghcr.io/YOUR_ORG/sutra-api:latest
+$ cat VERSION
+2.0.0
 ```
 
----
+All services, Docker images, and packages sync to this version.
 
-## 👥 For Team Members
+### Semantic Versioning
 
-### Developers
-- **Before committing:** Update CHANGELOG.md
-- **Testing:** Use `./sutra-deploy.sh build` locally
-- **Releasing:** Only team lead creates releases
+Format: `MAJOR.MINOR.PATCH`
 
-### Release Manager
-- **Weekly:** Review pending changes for release
-- **Release day:** Follow RELEASE_PROCESS.md
-- **Post-release:** Monitor GitHub Actions build
-- **Communication:** Send customer release notes
+- **MAJOR**: Breaking changes (API incompatible)
+- **MINOR**: New features (backward compatible)
+- **PATCH**: Bug fixes (backward compatible)
 
-### Support Team
-- **Know current version:** `./sutra-deploy.sh version`
-- **Deployment help:** See RELEASE_PROCESS.md customer section
-- **Troubleshooting:** Check RELEASE_PROCESS.md troubleshooting
+Examples:
+- `2.0.0` → `2.0.1` - Bug fix
+- `2.0.0` → `2.1.0` - New feature
+- `2.0.0` → `3.0.0` - Breaking change
 
----
+## Release Workflow
 
-## 📊 Release Schedule (Recommended)
+### 1. Development
 
-| Release Type | Frequency | Use Case | Example |
-|-------------|-----------|----------|---------|
-| **Patch** | As needed | Bug fixes, security patches | 2.0.0 → 2.0.1 |
-| **Minor** | 2-4 weeks | New features, improvements | 2.0.0 → 2.1.0 |
-| **Major** | 3-6 months | Breaking changes, major features | 2.0.0 → 3.0.0 |
+Make changes in feature branches:
 
----
-
-## ✅ Pre-Release Checklist
-
-Before creating any release:
-
-- [ ] All tests passing (`pytest -v`)
-- [ ] CHANGELOG.md updated with changes
-- [ ] No uncommitted changes (`git status`)
-- [ ] On correct branch (usually `main`)
-- [ ] Version bump type makes sense
-- [ ] Documentation updated if needed
-- [ ] Team aware of release timing
-
----
-
-## 🆘 Need Help?
-
-### Common Questions
-1. **"How do I create a release?"** → See [RELEASE_PROCESS.md](RELEASE_PROCESS.md)
-2. **"What version should I use?"** → See [VERSIONING_STRATEGY.md](VERSIONING_STRATEGY.md)
-3. **"How do customers deploy?"** → See [RELEASE_PROCESS.md](RELEASE_PROCESS.md#customer-deployments)
-4. **"Build failed, what now?"** → See [RELEASE_PROCESS.md](RELEASE_PROCESS.md#troubleshooting)
-
-### Quick Commands
 ```bash
-# Show help
-./sutra-deploy.sh help
+git checkout -b feature/new-capability
+# ... make changes ...
+git commit -m "feat: add new capability"
+git push origin feature/new-capability
+```
 
-# Check version
-./sutra-deploy.sh version
+### 2. Version Bump
 
-# Test release (don't push)
+On `main` branch:
+
+```bash
+# Determine version type
+./sutra-deploy.sh release patch|minor|major
+
+# This updates:
+# - VERSION file
+# - README.md badge
+# - Creates git commit
+# - Creates git tag
+```
+
+### 3. Push & Build
+
+```bash
+git push origin main --tags
+```
+
+GitHub Actions automatically:
+- Builds all Docker images
+- Tags with version (e.g., `v2.0.1`)
+- Pushes to container registry
+- Creates GitHub release
+
+### 4. Deploy
+
+```bash
+# Deploy specific version
+./sutra-deploy.sh deploy v2.0.1
+
+# Or use latest
+./sutra-deploy.sh deploy latest
+```
+
+## Docker Image Tagging
+
+All images follow the version in `VERSION` file:
+
+```bash
+# After version 2.0.1 release
+sutra-api:v2.0.1
+sutra-api:latest
+sutra-embedding-service:v2.0.1
+sutra-embedding-service:latest
+sutra-storage-server:v2.0.1
+sutra-storage-server:latest
+```
+
+Both version tag and `:latest` are applied.
+
+## Version Files Updated
+
+When you run `./sutra-deploy.sh release <type>`:
+
+1. **VERSION** - Single source of truth
+2. **README.md** - Version badge
+3. **Git commit** - "chore: bump version to X.Y.Z"
+4. **Git tag** - `vX.Y.Z`
+
+## Automated Builds
+
+`.github/workflows/release.yml` triggers on tag push:
+
+```yaml
+on:
+  push:
+    tags:
+      - 'v*'
+```
+
+Builds all services and pushes to registry.
+
+## Rollback
+
+To rollback to previous version:
+
+```bash
+# Deploy older version
+./sutra-deploy.sh deploy v2.0.0
+
+# Or revert git tag
+git tag -d v2.0.1
+git push origin :refs/tags/v2.0.1
+```
+
+## Best Practices
+
+### Before Release
+
+- ✅ All tests passing
+- ✅ Documentation updated
+- ✅ CHANGELOG.md updated
+- ✅ Breaking changes documented
+- ✅ Migration guide provided (if needed)
+
+### Version Selection
+
+**Patch (X.Y.Z):**
+- Bug fixes
+- Security patches
+- Documentation fixes
+- Minor performance improvements
+
+**Minor (X.Y.0):**
+- New features
+- New API endpoints
+- New services
+- Deprecations (with backward compatibility)
+
+**Major (X.0.0):**
+- Breaking API changes
+- Removed deprecated features
+- Major architecture changes
+- Incompatible data formats
+
+### Release Notes
+
+Always include:
+- What's new
+- Bug fixes
+- Breaking changes (if major)
+- Migration guide (if needed)
+- Known issues
+
+## CI/CD Integration
+
+### GitHub Actions Workflow
+
+```yaml
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build and push images
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          ./sutra-optimize.sh build-all
+          # Push to registry
+```
+
+### Docker Registry
+
+Images are pushed to:
+- Docker Hub: `sutra/SERVICE:VERSION`
+- GitHub Container Registry: `ghcr.io/nranjan2code/sutra-SERVICE:VERSION`
+
+## Troubleshooting
+
+### Version Mismatch
+
+```bash
+# Verify VERSION file
+cat VERSION
+
+# Check git tags
+git tag -l
+
+# Verify Docker images
+docker images | grep sutra
+```
+
+### Failed Build
+
+```bash
+# Check GitHub Actions
+# Visit: https://github.com/nranjan2code/sutra-memory/actions
+
+# Retry locally
+SUTRA_VERSION=v2.0.1 ./sutra-optimize.sh build-all
+```
+
+### Tag Already Exists
+
+```bash
+# Delete local tag
+git tag -d v2.0.1
+
+# Delete remote tag
+git push origin :refs/tags/v2.0.1
+
+# Create new release
 ./sutra-deploy.sh release patch
-git reset --hard HEAD~1  # Undo if testing
-git tag -d v2.0.1        # Remove tag
+git push origin main --tags
 ```
 
-### Support Channels
-- GitHub Issues: Technical problems
-- Team Chat: Quick questions
-- Email: Customer-facing issues
+## Related Documentation
 
----
-
-## 🔗 Related Documentation
-
-### Core System Docs
-- [System Overview](../SYSTEM_OVERVIEW.md)
-- [Architecture](../ARCHITECTURE.md)
-- [Quick Start](../QUICKSTART.md)
-- [Production Guide](../PRODUCTION_GUIDE.md)
-
-### Deployment Docs
-- [Deployment Guide](../deployment/DEPLOYMENT.md)
-- [Docker Compose](../../docker-compose-grid.yml)
-- [Fast Development](../../FAST_DEVELOPMENT.md)
-
-### Development Docs
-- [Contributing](../CONTRIBUTING.md)
-- [Development Guide](../development/)
-- [Testing Guide](../../tests/README.md)
-
----
-
-## 📈 Metrics & Monitoring
-
-### Release Metrics to Track
-- **Time to release:** Target < 20 minutes (from tag to published)
-- **Build success rate:** Target > 95%
-- **Customer deployment success:** Track customer feedback
-- **Rollback frequency:** Should be rare
-
-### Monitoring Release Health
-```bash
-# Check GitHub Actions status
-# Visit: https://github.com/YOUR_ORG/sutra-models/actions
-
-# Verify images published
-docker pull ghcr.io/YOUR_ORG/sutra-api:latest
-
-# Check release page
-# Visit: https://github.com/YOUR_ORG/sutra-models/releases
-```
-
----
-
-## 🎯 Future Enhancements
-
-### Planned Improvements
-- [ ] Automated CHANGELOG generation from commits
-- [ ] Release candidate (RC) process
-- [ ] Beta channel for early adopters
-- [ ] Automated security scanning in pipeline
-- [ ] Multi-region Docker registry mirrors
-- [ ] Release rollback automation
-
-### Under Consideration
-- [ ] Homebrew formula for CLI tools
-- [ ] PyPI packages for Python libraries
-- [ ] NPM packages for JavaScript clients
-- [ ] Helm charts for Kubernetes
-
----
-
-## 📝 Changelog
-
-### v1.0.0 (October 26, 2025)
-- Initial release management system
-- Centralized VERSION file
-- Release commands in sutra-deploy.sh
-- GitHub Actions pipeline
-- Complete documentation
-
----
-
-**Last Updated:** October 26, 2025  
-**Maintained By:** Sutra AI Team  
-**Questions:** Open an issue or see [RELEASE_PROCESS.md](RELEASE_PROCESS.md#support)
+- [Build Guide](../build/README.md)
+- [Deployment Guide](../deployment/README.md)
+- [Contributing Guide](../guides/contributing.md)
+- [Changelog](changelog.md)

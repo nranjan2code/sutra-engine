@@ -99,6 +99,7 @@ async fn write_event_to_storage(
         embedding: vec![], // TODO: Add embeddings for semantic search
         strength: 1.0,
         confidence: 1.0,
+        metadata: None, // Grid events don't need concept metadata classification
     };
     
     send_message(stream, &learn_msg).await?;

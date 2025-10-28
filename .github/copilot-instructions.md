@@ -28,14 +28,41 @@ Sutra AI is a **12-service distributed system** that provides explainable reason
 
 ## Essential Workflows
 
-### Single Command Deployment
+### Build System (2025-10-28)
 ```bash
-./sutra-deploy.sh install    # Complete system deployment
-./sutra-deploy.sh status     # Check all services
-./sutra-deploy.sh logs storage-server  # Debug specific service
+# Build all services (single :latest tag strategy)
+SUTRA_EDITION=simple ./sutra-optimize.sh build-all      # 8 services (4.4GB)
+SUTRA_EDITION=enterprise ./sutra-optimize.sh build-all  # 10 services (4.76GB)
+
+# Check what was built
+./sutra-optimize.sh sizes
+
+# Build individual service
+SUTRA_EDITION=simple ./sutra-optimize.sh build-service storage
 ```
 
-### Release Management (NEW - 2025-10-26)
+**Image Tagging:**
+- All services: `sutra-<service>:${SUTRA_VERSION:-latest}`
+- Single tag strategy (no `:latest-optimized` or intermediate tags)
+- Compose file: `.sutra/compose/production.yml`
+
+### Deployment System
+```bash
+# Deploy by edition (profile-based)
+SUTRA_EDITION=simple ./sutra deploy        # 8 services
+SUTRA_EDITION=community ./sutra deploy     # HA configuration
+SUTRA_EDITION=enterprise ./sutra deploy    # 10 services with grid
+
+# Check status
+./sutra status                             # Overall health
+docker compose ps                          # Raw Docker status
+```
+
+**Service Breakdown:**
+- **Simple/Community**: 8 services (storage, api, hybrid, embedding, nlg, bulk-ingester, client, control)
+- **Enterprise**: +2 grid services (grid-master, grid-agent)
+
+### Release Management (2025-10-26)
 ```bash
 ./sutra-deploy.sh version          # Show current version (2.0.0)
 ./sutra-deploy.sh release patch    # Bug fix release (2.0.0 → 2.0.1)
@@ -123,14 +150,53 @@ System monitors itself using its own reasoning engine:
 
 ## Critical File Locations
 
-- **Main deployment:** `./sutra-deploy.sh` (1100+ lines, handles everything including releases)
+- **Build script:** `./sutra-optimize.sh` (929 lines, single-tag build system)
+- **Main deployment:** `./sutra-deploy.sh` (1100+ lines, handles releases)
 - **Version control:** `VERSION` (single source of truth, currently 2.0.0)
+- **Compose file:** `.sutra/compose/production.yml` (unified, profile-based)
 - **Storage engine:** `packages/sutra-storage/src/` (14K+ LOC Rust)
 - **Reasoning core:** `packages/sutra-core/sutra_core/` (42 Python modules)
-- **Docker orchestration:** `docker-compose-grid.yml` (715 lines, version-tagged services)
-- **Architecture docs:** `WARP.md` (AI assistant guidance, 1500+ lines)
-- **Release docs:** `docs/release/` (Complete release management documentation)
+- **Architecture docs:** `WARP.md` (AI assistant guidance, 1600+ lines)
+- **Documentation hub:** `docs/README.md` (navigation, user journeys)
+- **Build docs:** `docs/build/README.md` (build system guide)
+- **Deployment docs:** `docs/deployment/README.md` (deployment guide)
+- **Release docs:** `docs/release/README.md` (release management)
 - **Smoke tests:** `scripts/smoke-test-embeddings.sh` (production validation)
+
+## Documentation Structure (2025-10-28)
+
+**Organized by User Journey:**
+```
+docs/
+├── README.md                    # Main hub with navigation
+├── getting-started/             # New users start here
+│   ├── README.md               # Prerequisites, quickstart
+│   ├── quickstart.md           # 5-minute setup
+│   ├── editions.md             # Edition comparison
+│   └── tutorial.md             # Complete walkthrough
+├── build/                       # Building services
+│   ├── README.md               # Build hub
+│   └── building-services.md    # Detailed build guide
+├── deployment/                  # Deploying services
+│   ├── README.md               # Complete deployment guide
+│   ├── docker-compose.md       # Compose details
+│   └── editions/               # Edition configs
+├── release/                     # Release management
+│   ├── README.md               # Release guide
+│   └── RELEASE_PROCESS.md      # Complete workflow
+├── architecture/                # Technical deep dives
+│   ├── SYSTEM_ARCHITECTURE.md
+│   ├── storage/
+│   ├── ml-foundation/
+│   └── protocols/
+└── guides/                      # Feature guides
+```
+
+**User Journeys:**
+1. **New Users**: getting-started/ → quickstart.md → tutorial.md
+2. **Developers**: build/ → deployment/ → architecture/
+3. **DevOps**: deployment/ → release/ → monitoring
+4. **Contributors**: guides/ → architecture/ → development/
 
 ## Release Management System
 

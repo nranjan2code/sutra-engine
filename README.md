@@ -246,8 +246,31 @@ Benefits:
 
 - Docker & Docker Compose
 - Python 3.11+ (for local development)
-- 8GB RAM minimum (16GB recommended)
+- 8GB RAM minimum (16GB recommended for Enterprise)
 - macOS, Linux, or Windows with WSL2
+
+### Three Editions
+
+Sutra AI offers three editions with **identical features**—differentiated only by scale, performance, and SLA:
+
+| Edition | Services | Docker Images | Use Case | Price |
+|---------|----------|---------------|----------|-------|
+| **Simple** | 8 | 4.4GB | Development, testing, <100K concepts | **FREE** |
+| **Community** | 8 | 4.4GB | Small teams, MVPs, <1M concepts, HA embedding | $99/mo |
+| **Enterprise** | 10 | 4.76GB | Production, >1M concepts, Grid infrastructure | $999/mo |
+
+**All Features Available in All Editions:**
+- ✅ Graph reasoning, semantic embeddings, NLG
+- ✅ Control Center, REST API, bulk ingestion
+- ✅ Explainable reasoning with audit trails
+- ✅ Real-time learning without retraining
+
+**Differentiation:**
+- **Simple**: Single instances, lower rate limits (10 learn/min, 50 reason/min)
+- **Community**: HA embedding service (3 replicas + HAProxy), 10× higher limits
+- **Enterprise**: + Grid infrastructure (grid-master, grid-agent), 100× limits, 99.9% SLA
+
+**📖 Complete Edition Comparison:** [docs/getting-started/editions.md](docs/getting-started/editions.md)
 
 ### ⚠️ IMPORTANT: Choose Your Deployment Mode
 
@@ -266,13 +289,15 @@ Benefits:
 
 ```bash
 # Development deployment (NO security - localhost only)
-./sutra-deploy.sh install
+export SUTRA_EDITION=simple  # or community, enterprise
+./sutra deploy
 
 # Production deployment (WITH security)
+export SUTRA_EDITION=enterprise
 export SUTRA_SECURE_MODE=true
 export SUTRA_AUTH_SECRET="$(openssl rand -hex 32)"
 ./scripts/generate-secrets.sh  # Generate TLS certificates
-./sutra-deploy.sh install
+./sutra deploy
 
 # Verify security is active
 docker logs sutra-storage | grep "Authentication: ENABLED"
@@ -281,56 +306,56 @@ docker logs sutra-storage | grep "Authentication: ENABLED"
 
 **📖 Read [DEPLOYMENT_MODES.md](docs/deployment/DEPLOYMENT_MODES.md) for detailed comparison and compliance information.**
 
-### 1. Deploy (Development Mode)
+### 1. Build Services
 
 ```bash
 # Clone repository
 git clone <repository-url>
 cd sutra-models
 
-# Development installation (NO security - localhost only)
-./sutra-deploy.sh install
+# Build all services (single :latest tag)
+SUTRA_EDITION=simple ./sutra-optimize.sh build-all      # 8 services (4.4GB)
+SUTRA_EDITION=enterprise ./sutra-optimize.sh build-all  # 10 services (4.76GB)
+
+# Check what was built
+./sutra-optimize.sh sizes
 ```
 
-### 2. Alternative: Manual Steps
+**📖 Complete Build Guide:** [docs/build/README.md](docs/build/README.md)
+
+### 2. Deploy by Edition
 
 ```bash
-# Build images only
-./sutra-deploy.sh build
+# Deploy Simple edition (default)
+SUTRA_EDITION=simple ./sutra deploy
 
-# Start services
-./sutra-deploy.sh up
+# Deploy Community edition (HA embedding)
+SUTRA_EDITION=community ./sutra deploy
 
-# Check status
-./sutra-deploy.sh status
+# Deploy Enterprise edition (Grid infrastructure)
+SUTRA_EDITION=enterprise ./sutra deploy
 
-# Complete reset
-./sutra-deploy.sh clean
+# Check deployment status
+./sutra status
 ```
 
-### 🏗️ NEW: World-Class Build System
+**📖 Complete Deployment Guide:** [docs/deployment/README.md](docs/deployment/README.md)
 
-**Consolidated, optimized build infrastructure with 100% reproducible builds:**
+### 3. Access Services
 
 ```bash
-# Build all services (3 minutes, optimized caching)
-./sutrabuild/scripts/build-all.sh --profile simple
-
-# Parallel builds (faster on multi-core systems)
-./sutrabuild/scripts/build-all.sh --profile simple --parallel
-
-# Production builds with version tags
-./sutrabuild/scripts/build-all.sh --profile enterprise --version v2.1.0
+open http://localhost:9000    # Control Center (monitoring)
+open http://localhost:8080    # Interactive Client (queries)
+open http://localhost:8000    # REST API documentation
+open http://localhost:8889    # Embedding Service (ML Foundation)
+open http://localhost:8890    # NLG Service (ML Foundation)
 ```
 
-**Key Benefits:**
-- ✅ **50%+ faster builds** through shared base images
-- ✅ **100% reproducible** builds (verified through testing)
-- ✅ **Profile-based deployment** - build only what you need
-- ✅ **Built-in health checks** and monitoring
-- ✅ **Centralized management** - no scattered build files
-
-**📖 Complete Build Documentation:** [docs/sutrabuild/README.md](docs/sutrabuild/README.md)
+**ML Foundation Services:**
+- **:8889/health** - Embedding service health and info
+- **:8889/generate** - Generate semantic embeddings  
+- **:8890/health** - NLG service health and info
+- **:8890/generate** - Grounded text generation
 
 ### � NEW: Docker Image Optimization
 
@@ -437,6 +462,7 @@ curl -X POST http://localhost:8000/reason \
 # Returns reasoning paths through YOUR hospital's protocols:
 # Path 1: Protocol 247 → ceftriaxone dosing (confidence: 0.92)
 # Path 2: Similar case 1823 → successful outcome (confidence: 0.85)
+# Path 3: Drug safety check → no contraindications (confidence: 0.88)
 ```
 
 **Step 3: Test ML Foundation Services:**
@@ -454,54 +480,60 @@ curl -X POST http://localhost:8890/generate \
     "context_concepts": ["protocol_247", "ceftriaxone"],
     "grounding_mode": "strict"
   }'
-# Path 3: Drug safety check → no contraindications (confidence: 0.88)
 ```
 
-**Step 4: Stream Progressive Responses with NLG Service:**
+**📖 Complete Quick Start Guide:** [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
+
+---
+
+## Release Management
+
+### Professional Version Control for Customer Deployments
+
+**Centralized versioning with semantic versioning and automated builds:**
+
 ```bash
-curl -X POST http://localhost:8890/generate/stream \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Is ceftriaxone safe with acetaminophen?", 
-    "context_concepts": ["drug_safety", "ceftriaxone"],
-    "grounding_mode": "strict"
-  }'
+# Check current version
+./sutra-deploy.sh version                  # Shows 2.0.0
 
-# Streams real-time generation with confidence scoring
-# If confidence is low, system returns: "I don't know - insufficient data"  
-# If confidence is high, provides grounded response with audit trail
+# Create releases
+./sutra-deploy.sh release patch           # Bug fix (2.0.0 → 2.0.1)
+./sutra-deploy.sh release minor           # New feature (2.0.0 → 2.1.0)
+./sutra-deploy.sh release major           # Breaking change (2.0.0 → 3.0.0)
+
+# Push release (triggers automated builds)
+git push origin main --tags
+
+# Deploy specific version
+./sutra-deploy.sh deploy v2.0.1
+
+# Rollback if needed
+./sutra-deploy.sh deploy v2.0.0
 ```
 
-**Step 5: Advanced Semantic Queries:**
-```bash
-# Query with semantic filters
-curl -X POST http://localhost:8000/api/semantic/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "pediatric sepsis treatment",
-    "filters": {
-      "semantic_type": "clinical_protocol",
-      "domain": "pediatrics",
-      "min_confidence": 0.8
-    }
-  }'
+### What Happens During Release
 
-# Find temporal chains (events over time)
-curl -X POST http://localhost:8000/api/semantic/temporal-chain \
-  -H "Content-Type: application/json" \
-  -d '{
-    "start_concept": "sepsis_diagnosis",
-    "end_concept": "patient_recovery",
-    "time_range": {"start": "2024-01-01", "end": "2024-12-31"}
-  }'
+1. **VERSION file updated** - Single source of truth for all packages
+2. **README badge updated** - Version badge reflects new version
+3. **Git commit + tag created** - Semantic version tag (e.g., v2.0.1)
+4. **GitHub Actions triggered** - Builds all Docker images on tag push
+5. **Images tagged** - All services tagged with version (e.g., sutra-api:v2.0.1)
+6. **Registry push** - Images pushed to Docker registry
 
-# Detect contradictions in knowledge
-curl -X POST http://localhost:8000/api/semantic/contradictions \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "drug_interactions", "min_confidence": 0.75}'
-```
+### Key Benefits
 
-**[Complete Quick Start Guide →](docs/guides/QUICK_START.md)**
+✅ **Single source of truth** - VERSION file controls all package versions  
+✅ **Semantic versioning** - MAJOR.MINOR.PATCH (2.0.0)  
+✅ **Automated builds** - GitHub Actions on tag push  
+✅ **Customer pinning** - Deploy specific versions (no breaking updates)  
+✅ **Easy rollbacks** - Revert to any previous version instantly  
+✅ **Complete audit trail** - Git tags + Docker image versions
+
+**📖 Complete Release Documentation:**
+- [Release Overview](docs/release/README.md) - Complete system overview
+- [Release Process](docs/release/RELEASE_PROCESS.md) - Step-by-step workflow
+- [Quick Reference](docs/release/QUICK_REFERENCE.md) - Command cheat sheet
+- [Versioning Strategy](docs/release/VERSIONING_STRATEGY.md) - When to bump versions
 
 ---
 
@@ -639,39 +671,48 @@ http://localhost:9000  # Navigate to Dependencies tab
 
 ## Documentation
 
-### Essential Reading
+### Getting Started
 
-- **[Quick Start Guide](docs/guides/QUICK_START.md)** - Get running in 5 minutes
-- **[Release Management](docs/release/README.md)** - Version control & deployments ⭐ NEW
-- **[Production Deployment](docs/guides/PRODUCTION_DEPLOYMENT.md)** - Complete production setup
-- **[API Reference](docs/api/API_REFERENCE.md)** - All endpoints documented
-- **[Architecture Overview](WARP.md)** - System design and patterns
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and fixes
-- **[🔒 Dependency Management](docs/dependency-management/QUICK_START.md)** - Security & compliance
+- **[📚 Documentation Hub](docs/README.md)** - Main navigation and user journeys
+- **[🚀 Quick Start](docs/getting-started/quickstart.md)** - 5-minute setup
+- **[📖 Complete Tutorial](docs/getting-started/tutorial.md)** - Step-by-step walkthrough
+- **[🎯 Edition Comparison](docs/getting-started/editions.md)** - Choose your edition
 
-### Release Management ⭐ NEW
+### Build, Deploy & Release
 
-- **[Release Overview](docs/release/README.md)** - Complete release system
-- **[Release Process](docs/release/RELEASE_PROCESS.md)** - Step-by-step workflow
-- **[Quick Reference](docs/release/QUICK_REFERENCE.md)** - Command cheat sheet
-- **[Versioning Strategy](docs/release/VERSIONING_STRATEGY.md)** - When to bump versions
+- **[🔨 Build Guide](docs/build/README.md)** - Building Docker images
+- **[📦 Building Services](docs/build/building-services.md)** - Detailed build instructions
+- **[🚀 Deployment Guide](docs/deployment/README.md)** - Complete deployment documentation
+- **[📋 Release Management](docs/release/README.md)** - Version control & releases
+- **[📝 Release Process](docs/release/RELEASE_PROCESS.md)** - Step-by-step release workflow
 
-**Commands:**
-```bash
-./sutra-deploy.sh version          # Show current version (2.0.0)
-./sutra-deploy.sh release patch    # Create release (2.0.0 → 2.0.1)
-./sutra-deploy.sh deploy v2.0.1    # Deploy specific version
-```
+### Architecture & APIs
 
-### Component Documentation
+- **[🏗️ System Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)** - Complete system design
+- **[⚡ Storage Engine](docs/architecture/storage/DEEP_DIVE.md)** - Storage deep dive
+- **[🔌 API Reference](docs/api/API_REFERENCE.md)** - All REST endpoints
+- **[🤖 ML Foundation API](docs/api/ML_FOUNDATION_API.md)** - ML services API
+- **[🧠 Embedding API](docs/api/EMBEDDING_SERVICE_API.md)** - Embedding service details
+- **[✍️ NLG API](docs/api/NLG_SERVICE_API.md)** - Text generation API
 
-- **[sutra-storage](packages/sutra-storage/README.md)** - Rust storage engine (694 lines)
-- **[sutra-core](packages/sutra-core/README.md)** - Reasoning engine (318 lines)
-- **[sutra-hybrid](packages/sutra-hybrid/README.md)** - Semantic orchestration (109 lines)
-- **[sutra-api](packages/sutra-api/README.md)** - REST API (89 lines)
-- **All 16 packages documented** - See `packages/*/README.md`
+### Operations & Security
 
-**[Complete Documentation Index →](docs/INDEX.md)**
+- **[🔒 Production Security](docs/security/PRODUCTION_SECURITY_SETUP.md)** - Complete security setup
+- **[🚨 Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and fixes
+- **[� Performance Benchmarks](docs/performance/BENCHMARKS.md)** - Detailed performance data
+- **[🔐 Dependency Management](docs/dependency-management/QUICK_START.md)** - Security & compliance
+
+### Development
+
+- **[💻 Development Guide](docs/guides/DEVELOPMENT.md)** - Setup and workflow
+- **[🤝 Contributing](docs/CONTRIBUTING.md)** - Contribution guidelines
+- **[🏛️ Architecture Overview](WARP.md)** - AI assistant guidance (1600+ lines)
+
+**User Journeys:**
+1. **New Users**: [Getting Started](docs/getting-started/README.md) → [Quickstart](docs/getting-started/quickstart.md) → [Tutorial](docs/getting-started/tutorial.md)
+2. **Developers**: [Build Guide](docs/build/README.md) → [Deployment](docs/deployment/README.md) → [Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)
+3. **DevOps**: [Deployment](docs/deployment/README.md) → [Release Management](docs/release/README.md) → [Security](docs/security/PRODUCTION_SECURITY_SETUP.md)
+4. **Contributors**: [Development](docs/guides/DEVELOPMENT.md) → [Architecture](docs/architecture/) → [Contributing](docs/CONTRIBUTING.md)
 
 ---
 

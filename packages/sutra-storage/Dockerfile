@@ -1,71 +1,35 @@
-# Production Sutra Storage Server - Optimized Multi-Stage Build (Target: 10-15MB)
-# Build from monorepo root: docker build -f packages/sutra-storage/Dockerfile -t sutra-storage-server:latest .
+# Sutra Storage Service - Simple Build
+# Updated to Rust 1.87+ for cxx dependency compatibility
+FROM rust:1.87-slim AS builder
 
-# Stage 1: Builder with full Rust toolchain
-FROM rust:1.82-slim AS builder
-
-# Install build dependencies and nightly
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential pkg-config libssl-dev \
-    && rm -rf /var/lib/apt/lists/* && \
-    rustup install nightly && \
-    rustup default nightly
-
-WORKDIR /build
-
-# Copy manifests
-COPY packages/sutra-storage/Cargo.toml packages/sutra-storage/Cargo.lock ./
-COPY packages/sutra-storage/proto ./proto
-COPY packages/sutra-storage/src ./src
-
-# Build for release with static linking and optimization
-# Use BuildKit cache mounts for faster incremental builds
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/build/target \
-    cargo build --release --bin storage-server && \
-    cp /build/target/release/storage-server /tmp/storage-server && \
-    strip /tmp/storage-server
-
-# Stage 2: Minimal runtime (NO build tools, NO Rust toolchain)
-FROM debian:bookworm-slim
-
-# PRODUCTION: Only essential runtime libraries
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    netcat-openbsd \
-    && rm -rf /var/lib/apt/lists/* /tmp/*
-
-# Create non-root user
-RUN groupadd -g 1000 sutra && \
-    useradd -m -u 1000 -g sutra sutra
-
-# Create data directory
-RUN mkdir -p /data && chown sutra:sutra /data
+    pkg-config libssl-dev g++ && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY Cargo.toml ./
+COPY packages/sutra-storage/ ./
+COPY packages/sutra-protocol/ ../sutra-protocol/
 
-# Copy ONLY the stripped binary from builder
-COPY --from=builder /tmp/storage-server /app/storage_server
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --release --bin storage-server && \
+    cp target/release/storage-server /tmp/
 
-# Set ownership
-RUN chown sutra:sutra /app/storage_server && \
-    chmod +x /app/storage_server
+# Runtime stage
+FROM debian:bookworm-slim
 
-# Switch to non-root user
-USER sutra
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/*
 
-# Expose TCP port
-EXPOSE 50051
+RUN useradd --create-home --shell /bin/bash --uid 1000 storage
+WORKDIR /app
 
-# Health check (using nc since we removed curl)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD nc -z localhost 50051 || exit 1
+COPY --from=builder /tmp/storage-server /usr/local/bin/storage-server
+RUN mkdir -p /data && chown -R storage:storage /app /data
 
-# Environment variables
-ENV RUST_LOG=info \
-    STORAGE_PATH=/data \
-    STORAGE_HOST=0.0.0.0 \
-    STORAGE_PORT=50051
+USER storage
+EXPOSE 7000
 
-# Run server
-ENTRYPOINT ["/app/storage_server"]
+CMD ["storage-server"]

@@ -1,61 +1,45 @@
-# Multi-stage secure build for Sutra Control Center
-# Client -> Python Gateway -> gRPC -> Internal Services
-
-# Stage 1: Build React frontend
-FROM node:20-slim AS frontend-builder
+# Sutra Control Service - Simple Build
+FROM node:20-alpine AS builder
 
 WORKDIR /build
-
-# Copy React app files
 COPY packages/sutra-control/package*.json ./
 COPY packages/sutra-control/tsconfig*.json ./
 COPY packages/sutra-control/vite.config.ts ./
+
+RUN npm ci --silent && \
+    npm cache clean --force && \
+    rm -rf ~/.npm
+
 COPY packages/sutra-control/index.html ./
 COPY packages/sutra-control/src/ ./src/
+RUN npm run build && \
+    find dist -name "*.map" -delete
 
-# Install dependencies and build
-RUN npm ci --silent --include=dev
-RUN npm run build
+# Python backend
+FROM python:3.11-slim AS python-builder
 
-# Stage 2: Python backend with built React app
+RUN pip install --no-cache-dir --prefix=/install --no-compile \
+    fastapi uvicorn aiofiles requests grpcio httpx toml pydantic
+
+# Final stage
 FROM python:3.11-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-# System dependencies already in base image
-RUN adduser --disabled-password --gecos '' --uid 1000 sutra
-
+RUN useradd --create-home --shell /bin/bash --uid 1000 --gid 100 sutra
 WORKDIR /app
 
-# Create requirements file for better caching
-COPY packages/sutra-control/backend/requirements.txt /app/requirements.txt
+COPY --from=python-builder /install /usr/local
+COPY --from=builder --chown=sutra:100 /build/dist ./static
+COPY --chown=sutra:100 packages/sutra-control/backend/ ./backend/
 
-# Install Python dependencies (cached layer)
-RUN pip install --no-cache-dir -r requirements.txt
+# Remove any Python cache files
+RUN find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+RUN find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
-# Copy built React app from frontend builder
-COPY --from=frontend-builder --chown=sutra:sutra /build/dist /app/build
-
-# Copy Python backend
-COPY --chown=sutra:sutra packages/sutra-control/backend/ /app/backend/
-
-# No gRPC client needed; backend talks to REST APIs
-
-# Switch to non-root user
 USER sutra
-
-# Set Python path
-ENV PYTHONPATH=/app:$PYTHONPATH \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
-
-# Security: Remove docs in production
-ENV ENVIRONMENT=production
-
-# Expose port (internal to Docker network only)
 EXPOSE 9000
 
-# Health check - abstract endpoint only
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:9000/health || exit 1
-
-# Run secure gateway with Grid integration
-CMD ["python", "backend/main.py"]
+# Use python -u to disable bytecode caching and ensure fresh code
+CMD ["python", "-u", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "9000"]

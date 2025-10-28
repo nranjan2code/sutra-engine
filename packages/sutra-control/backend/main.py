@@ -22,9 +22,9 @@ from pydantic import BaseModel
 # Import gRPC client for internal communication
 # from sutra_storage_client.client import StorageClient  # TODO: Add when available
 # Import Grid API integration
-from grid_api import GridManager
+from backend.grid_api import GridManager
 # Import dependency scanner
-from dependency_scanner import DependencyScanner, PackageHealth, VulnerabilitySeverity
+from backend.dependency_scanner import DependencyScanner, PackageHealth, VulnerabilitySeverity
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -156,9 +156,13 @@ app.add_middleware(
 import os
 from fastapi.responses import FileResponse
 
-# Mount assets directory
-if os.path.exists("/app/build/assets"):
-    app.mount("/assets", StaticFiles(directory="/app/build/assets"), name="assets")
+# Determine static files location (Docker vs local dev)
+STATIC_DIR = "/app/static" if os.path.exists("/app/static") else "/app/build"
+
+# Mount assets directory if it exists
+assets_dir = os.path.join(STATIC_DIR, "assets")
+if os.path.exists(assets_dir):
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 # Initialize gateway
 gateway = ControlGateway()
@@ -170,8 +174,9 @@ active_connections: List[WebSocket] = []
 @app.get("/", response_class=HTMLResponse)
 async def serve_app():
     """Serve React application"""
+    index_path = os.path.join(STATIC_DIR, "index.html")
     try:
-        with open("/app/build/index.html", "r") as f:
+        with open(index_path, "r") as f:
             return f.read()
     except FileNotFoundError:
         return HTMLResponse("<h1>Sutra AI Control Center</h1><p>System initializing...</p>")
@@ -586,33 +591,46 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/manifest.webmanifest")
 async def serve_manifest():
     """Serve PWA manifest"""
-    return FileResponse("/app/build/manifest.webmanifest", media_type="application/manifest+json")
+    manifest_path = os.path.join(STATIC_DIR, "manifest.webmanifest")
+    if os.path.exists(manifest_path):
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+    raise HTTPException(status_code=404, detail="Manifest not found")
 
 
 @app.get("/registerSW.js")
 async def serve_register_sw():
     """Serve service worker registration"""
-    return FileResponse("/app/build/registerSW.js", media_type="application/javascript")
+    sw_path = os.path.join(STATIC_DIR, "registerSW.js")
+    if os.path.exists(sw_path):
+        return FileResponse(sw_path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="Service worker registration not found")
 
 
 @app.get("/sw.js")
 async def serve_sw():
     """Serve service worker"""
-    return FileResponse("/app/build/sw.js", media_type="application/javascript")
+    sw_path = os.path.join(STATIC_DIR, "sw.js")
+    if os.path.exists(sw_path):
+        return FileResponse(sw_path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="Service worker not found")
 
 
 @app.get("/workbox-{filename}")
 async def serve_workbox(filename: str):
     """Serve workbox files"""
-    return FileResponse(f"/app/build/workbox-{filename}", media_type="application/javascript")
+    workbox_path = os.path.join(STATIC_DIR, f"workbox-{filename}")
+    if os.path.exists(workbox_path):
+        return FileResponse(workbox_path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="Workbox file not found")
 
 
 # Catch-all route for React Router
 @app.get("/{path:path}")
 async def serve_react_app(path: str):
     """Serve React app for any route - SPA support"""
+    index_path = os.path.join(STATIC_DIR, "index.html")
     try:
-        with open("/app/build/index.html", "r") as f:
+        with open(index_path, "r") as f:
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Application not found")
