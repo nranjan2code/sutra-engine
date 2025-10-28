@@ -1,680 +1,491 @@
 #!/usr/bin/env python3
 """
-Sutra NLG Service - Next Generation
-Built on sutra-ml-base foundation with edition-aware grounded text generation
+Lightweight NLG Service - Production Grade
+Uses ML-Base Service for all text generation operations
+
+This is a major refactor from the original heavyweight NLG service.
+The new architecture:
+- Uses ML-Base Service for all text generation
+- Lightweight client (~50MB vs 1.39GB)
+- Better horizontal scaling
+- Production monitoring and caching
 """
 
 import asyncio
+import hashlib
+import json
 import logging
-import time
 import os
-from typing import List, Optional, Dict, Any
+import time
+from typing import Dict, List, Optional, Any
+from datetime import datetime, timedelta
+from dataclasses import dataclass
 
-# Import the new ML foundation
-from sutra_ml_base import (
-    BaseMlService, ServiceConfig, HealthStatus,
-    ModelLoader, LoaderConfig, ModelType,
-    MetricsCollector, CacheManager, CacheConfig,
-    EditionManager, setup_environment, setup_logging
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+import uvicorn
+
+# Import ML-Base client
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'sutra-ml-base-service'))
+from client import MLBaseClient
+from monitoring import PerformanceMonitor, HealthCheckManager, handle_ml_errors
+
+# Environment Configuration
+ML_BASE_URL = os.getenv("ML_BASE_URL", "http://ml-base-service:8887")
+ML_BASE_TIMEOUT = float(os.getenv("ML_BASE_TIMEOUT", "60.0"))
+ML_BASE_MAX_RETRIES = int(os.getenv("ML_BASE_MAX_RETRIES", "3"))
+SUTRA_EDITION = os.getenv("SUTRA_EDITION", "simple")
+PORT = int(os.getenv("PORT", "8003"))
+NLG_CACHE_SIZE = int(os.getenv("NLG_CACHE_SIZE", "500"))
+NLG_CACHE_TTL = int(os.getenv("NLG_CACHE_TTL", "1800"))
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('/var/log/sutra/nlg-service.log', mode='a')
+    ]
 )
+logger = logging.getLogger(__name__)
 
-try:
-    import torch
-    from fastapi import HTTPException
-    from pydantic import BaseModel, Field
-    HAS_TORCH = True
-except ImportError:
-    HAS_TORCH = False
-    raise RuntimeError("PyTorch and FastAPI required for NLG service")
 
-# Setup environment first
-setup_environment()
-logger = setup_logging("sutra-nlg-service")
+@dataclass
+class GenerationRequest:
+    """Request for text generation"""
+    prompt: str
+    max_tokens: int = 512
+    temperature: float = 0.7
+    top_p: float = 0.9
+    stop_sequences: Optional[List[str]] = None
+    stream: bool = False
 
-# Request/Response Models (Enhanced with validation)
+
+@dataclass
+class GenerationResponse:
+    """Response from text generation"""
+    text: str
+    tokens_used: int
+    generation_time: float
+    model_used: str
+    cached: bool = False
+
+
+class NLGCache:
+    """Production-grade caching for NLG operations"""
+    
+    def __init__(self, max_size: int = 1000, ttl_seconds: int = 3600):
+        self.cache: Dict[str, Dict] = {}
+        self.access_times: Dict[str, datetime] = {}
+        self.max_size = max_size
+        self.ttl = timedelta(seconds=ttl_seconds)
+        self.hits = 0
+        self.misses = 0
+        
+    def _generate_key(self, request: GenerationRequest) -> str:
+        """Generate cache key from request parameters"""
+        key_data = {
+            'prompt': request.prompt,
+            'max_tokens': request.max_tokens,
+            'temperature': request.temperature,
+            'top_p': request.top_p,
+            'stop_sequences': request.stop_sequences
+        }
+        return hashlib.sha256(json.dumps(key_data, sort_keys=True).encode()).hexdigest()
+    
+    def get(self, request: GenerationRequest) -> Optional[GenerationResponse]:
+        """Get cached response if available"""
+        key = self._generate_key(request)
+        
+        if key not in self.cache:
+            self.misses += 1
+            return None
+            
+        # Check TTL
+        if datetime.now() - self.access_times[key] > self.ttl:
+            del self.cache[key]
+            del self.access_times[key]
+            self.misses += 1
+            return None
+            
+        self.hits += 1
+        self.access_times[key] = datetime.now()
+        cached_data = self.cache[key]
+        
+        return GenerationResponse(
+            text=cached_data['text'],
+            tokens_used=cached_data['tokens_used'],
+            generation_time=cached_data['generation_time'],
+            model_used=cached_data['model_used'],
+            cached=True
+        )
+    
+    def set(self, request: GenerationRequest, response: GenerationResponse):
+        """Cache response"""
+        if request.stream:  # Don't cache streaming responses
+            return
+            
+        key = self._generate_key(request)
+        
+        # Evict oldest if at capacity
+        if len(self.cache) >= self.max_size:
+            oldest_key = min(self.access_times.keys(), key=lambda k: self.access_times[k])
+            del self.cache[oldest_key]
+            del self.access_times[oldest_key]
+        
+        self.cache[key] = {
+            'text': response.text,
+            'tokens_used': response.tokens_used,
+            'generation_time': response.generation_time,
+            'model_used': response.model_used
+        }
+        self.access_times[key] = datetime.now()
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cache statistics"""
+        total_requests = self.hits + self.misses
+        hit_rate = self.hits / total_requests if total_requests > 0 else 0
+        
+        return {
+            'hits': self.hits,
+            'misses': self.misses,
+            'hit_rate': hit_rate,
+            'cache_size': len(self.cache),
+            'max_size': self.max_size
+        }
+
+
+class NLGService:
+    """Lightweight NLG Service using ML-Base backend"""
+    
+    def __init__(self):
+        self.monitor = PerformanceMonitor()
+        self.health_manager = HealthCheckManager()
+        self.cache = NLGCache(
+            max_size=NLG_CACHE_SIZE,
+            ttl_seconds=NLG_CACHE_TTL
+        )
+        
+        # ML-Base client
+        self.ml_client = None
+        
+        # Edition limits
+        self.max_concurrent = self._get_edition_limits()
+        self.active_generations = 0
+        
+        logger.info(f"NLG Service initialized for {SUTRA_EDITION} edition")
+        logger.info(f"Max concurrent generations: {self.max_concurrent}")
+    
+    def _get_edition_limits(self) -> int:
+        """Get concurrent generation limits by edition"""
+        limits = {
+            'simple': 5,
+            'community': 20,
+            'enterprise': 100
+        }
+        return limits.get(SUTRA_EDITION, 5)
+    
+    async def initialize(self):
+        """Initialize ML-Base client connection"""
+        try:
+            self.ml_client = MLBaseClient(
+                base_url=ML_BASE_URL,
+                timeout=ML_BASE_TIMEOUT
+            )
+            
+            # Test connection
+            health = await self.ml_client.health()
+            if not health.get('status') == 'healthy':
+                raise Exception("ML-Base service health check failed")
+                
+            logger.info("Successfully connected to ML-Base service")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize ML-Base client: {e}")
+            raise
+    
+    async def cleanup(self):
+        """Cleanup resources"""
+        if self.ml_client:
+            await self.ml_client.close()
+    
+    @handle_ml_errors(logger)
+    async def generate_text(self, request: GenerationRequest) -> GenerationResponse:
+        """Generate text using ML-Base service"""
+        
+        # Check concurrent limits
+        if self.active_generations >= self.max_concurrent:
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Too many concurrent generations. Limit: {self.max_concurrent}"
+            )
+        
+        # Check cache first
+        cached_response = self.cache.get(request)
+        if cached_response:
+            logger.debug("Returning cached generation response")
+            self.monitor.record_metric('nlg_cache_hits', 1)
+            return cached_response
+        
+        self.monitor.record_metric('nlg_cache_misses', 1)
+        
+        try:
+            self.active_generations += 1
+            start_time = time.time()
+            
+            # Call ML-Base service
+            result = await self.ml_client.generate(
+                prompt=request.prompt,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                stop_sequences=request.stop_sequences
+            )
+            
+            generation_time = time.time() - start_time
+            
+            response = GenerationResponse(
+                text=result['generated_text'],
+                tokens_used=result['tokens_used'],
+                generation_time=generation_time,
+                model_used=result['model_name']
+            )
+            
+            # Cache the result
+            self.cache.set(request, response)
+            
+            self.monitor.record_metric('nlg_generations_success', 1)
+            self.monitor.record_metric('nlg_generation_time', generation_time)
+            self.monitor.record_metric('nlg_tokens_generated', response.tokens_used)
+            
+            logger.info(f"Generated {response.tokens_used} tokens in {generation_time:.3f}s using {response.model_used}")
+            
+            return response
+            
+        except Exception as e:
+            self.monitor.record_metric('nlg_generations_error', 1)
+            logger.error(f"Generation failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+            
+        finally:
+            self.active_generations -= 1
+    
+    async def generate_stream(self, request: GenerationRequest):
+        """Stream text generation"""
+        if self.active_generations >= self.max_concurrent:
+            yield json.dumps({'error': f'Too many concurrent generations. Limit: {self.max_concurrent}'}) + '\n'
+            return
+        
+        try:
+            self.active_generations += 1
+            start_time = time.time()
+            
+            async for chunk in self.ml_client.generate_stream(
+                prompt=request.prompt,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                stop_sequences=request.stop_sequences
+            ):
+                yield json.dumps(chunk) + '\n'
+            
+            generation_time = time.time() - start_time
+            self.monitor.record_metric('nlg_streaming_success', 1)
+            self.monitor.record_metric('nlg_streaming_time', generation_time)
+            
+        except Exception as e:
+            self.monitor.record_metric('nlg_streaming_error', 1)
+            logger.error(f"Streaming generation failed: {e}")
+            yield json.dumps({'error': f'Streaming failed: {str(e)}'}) + '\n'
+            
+        finally:
+            self.active_generations -= 1
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get service statistics"""
+        cache_stats = self.cache.get_stats()
+        
+        return {
+            'service': 'nlg-service-v2',
+            'version': '2.0.0',
+            'edition': SUTRA_EDITION,
+            'active_generations': self.active_generations,
+            'max_concurrent': self.max_concurrent,
+            'cache_stats': cache_stats,
+            'ml_base_url': ML_BASE_URL,
+            'uptime_seconds': time.time() - start_time
+        }
+
+
+# Pydantic models for API
 class GenerateRequest(BaseModel):
-    """Request model for text generation"""
-    prompt: str = Field(
-        ..., 
-        min_length=1,
-        max_length=2048,  # Will be limited by edition
-        description="Constrained prompt with grounding facts"
-    )
-    max_tokens: int = Field(
-        default=150, 
-        ge=1, 
-        le=512,  # Will be limited by edition
-        description="Maximum tokens to generate"
-    )
-    temperature: float = Field(
-        default=0.3, 
-        ge=0.0, 
-        le=1.0, 
-        description="Sampling temperature (0.0 = deterministic)"
-    )
-    top_p: float = Field(
-        default=0.9,
-        ge=0.0,
-        le=1.0,
-        description="Nucleus sampling parameter"
-    )
-    stop_sequences: List[str] = Field(
-        default_factory=list,
-        max_items=10,
-        description="Stop generation at these sequences"
-    )
-    grounding_mode: str = Field(
-        default="strict",
-        pattern="^(strict|balanced|creative)$",
-        description="Grounding enforcement level"
-    )
+    prompt: str = Field(..., description="Text prompt for generation")
+    max_tokens: int = Field(default=512, ge=1, le=2048, description="Maximum tokens to generate")
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
+    top_p: float = Field(default=0.9, ge=0.0, le=1.0, description="Top-p sampling parameter")
+    stop_sequences: Optional[List[str]] = Field(default=None, description="Stop sequences")
+    stream: bool = Field(default=False, description="Enable streaming response")
+
 
 class GenerateResponse(BaseModel):
-    """Response model for text generation"""
-    text: str = Field(..., description="Generated text")
-    model: str = Field(..., description="Model used for generation")
-    processing_time_ms: float = Field(..., description="Processing time in milliseconds")
-    tokens_generated: int = Field(..., description="Number of tokens generated")
-    edition: str = Field(..., description="Sutra edition used")
-    grounding_applied: bool = Field(..., description="Whether grounding constraints were applied")
-    cache_used: bool = Field(default=False, description="Whether cached result was used")
+    text: str
+    tokens_used: int
+    generation_time: float
+    model_used: str
+    cached: bool = False
 
 
-class SutraNlgService(BaseMlService):
-    """Next-generation NLG service with ML foundation"""
-    
-    def __init__(self, config: ServiceConfig, edition_manager: Optional[EditionManager] = None):
-        """Initialize NLG service
-        
-        Args:
-            config: Service configuration
-            edition_manager: Edition manager (auto-created if None)
-        """
-        super().__init__(config, edition_manager)
-        
-        # ML-specific components
-        self.model = None
-        self.tokenizer = None
-        self.loader = None
-        
-        # Performance components
-        cache_config = CacheConfig(
-            max_memory_mb=int(self.edition_manager.get_cache_size_gb() * 512),  # Smaller cache for NLG
-            max_items=5000,
-            default_ttl_seconds=1800,  # 30 minutes for generated content
-            persistent=self.edition_manager.supports_advanced_caching()
-        )
-        self.cache = CacheManager(cache_config)
-        
-        # Model configuration
-        self.model_name = self._get_model_for_edition()
-        
-        logger.info(f"NLG service initialized for {self.edition_manager.edition.value} edition")
-    
-    def _get_model_for_edition(self) -> str:
-        """Get appropriate model based on edition"""
-        if self.edition_manager.edition.value == "simple":
-            # Lightweight model for simple edition
-            return "microsoft/DialoGPT-small"
-        elif self.edition_manager.edition.value == "community":
-            # Better model for community edition
-            return "google/gemma-2-2b-it"
-        else:  # enterprise
-            # Advanced model for enterprise
-            return "microsoft/DialoGPT-large"
-    
-    async def load_model(self) -> bool:
-        """Load NLG model with edition-aware configuration"""
-        try:
-            logger.info(f"Loading NLG model: {self.model_name}")
-            
-            # Create loader configuration
-            config = LoaderConfig(
-                model_name=self.model_name,
-                model_type=ModelType.GENERATIVE,
-                device="cpu",  # CPU-optimized for all editions
-                torch_dtype="float32",
-                max_memory_gb=self.edition_manager.get_model_size_limit(),
-                cache_dir="/tmp/.cache/huggingface",
-                verify_model=True
-            )
-            
-            # Load model using ML foundation
-            self.model, self.tokenizer, self.loader = ModelLoader.load_model(config, self.edition_manager)
-            
-            # Configure tokenizer for generation
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-            
-            # Update service state
-            model_info = self.loader.get_model_info()
-            model_info["supports_generation"] = True
-            model_info["max_sequence_length"] = self.edition_manager.get_sequence_length_limit()
-            model_info["max_new_tokens"] = self._get_max_tokens_for_edition()
-            
-            self.set_model_loaded(model_info)
-            
-            logger.info(f"NLG model loaded successfully")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to load NLG model: {e}")
-            self.set_health_status(HealthStatus.UNHEALTHY)
-            return False
-    
-    def _get_max_tokens_for_edition(self) -> int:
-        """Get maximum token generation limit for edition"""
-        if self.edition_manager.edition.value == "simple":
-            return 128
-        elif self.edition_manager.edition.value == "community":
-            return 256
-        else:  # enterprise
-            return 512
-    
-    async def process_request(self, request: GenerateRequest) -> GenerateResponse:
-        """Process text generation request"""
-        start_time = time.time()
-        
-        # Validate limits against edition
-        max_tokens = min(request.max_tokens, self._get_max_tokens_for_edition())
-        max_prompt = self.edition_manager.get_sequence_length_limit()
-        
-        if len(request.prompt) > max_prompt:
-            raise HTTPException(
-                status_code=413,
-                detail=f"Prompt length exceeds edition limit of {max_prompt} characters"
-            )
-        
-        # Check cache for existing generation
-        cache_used = False
-        if self.edition_manager.supports_advanced_caching():
-            cache_key = self.cache.cache_key(
-                "generation", request.prompt, request.temperature, 
-                max_tokens, request.grounding_mode
-            )
-            cached_result = self.cache.get(cache_key)
-            
-            if cached_result is not None:
-                logger.info("Using cached generation result")
-                cached_result["cache_used"] = True
-                cached_result["processing_time_ms"] = (time.time() - start_time) * 1000
-                return GenerateResponse(**cached_result)
-        
-        # Apply grounding constraints based on mode
-        processed_prompt = self._apply_grounding(request.prompt, request.grounding_mode)
-        
-        # Generate text
-        generated_text, tokens_generated = self._generate_text_internal(
-            processed_prompt,
-            max_tokens,
-            request.temperature,
-            request.top_p,
-            request.stop_sequences
-        )
-        
-        processing_time = (time.time() - start_time) * 1000
-        
-        # Prepare response
-        response_data = {
-            "text": generated_text,
-            "model": self.model_name,
-            "processing_time_ms": processing_time,
-            "tokens_generated": tokens_generated,
-            "edition": self.edition_manager.edition.value,
-            "grounding_applied": request.grounding_mode == "strict",
-            "cache_used": cache_used
-        }
-        
-        # Cache the result
-        if self.edition_manager.supports_advanced_caching():
-            cache_result = response_data.copy()
-            cache_result.pop("processing_time_ms", None)  # Don't cache timing
-            cache_result.pop("cache_used", None)
-            self.cache.set(cache_key, cache_result, 1800)  # 30 min TTL
-        
-        return GenerateResponse(**response_data)
-    
-    def _apply_grounding(self, prompt: str, mode: str) -> str:
-        """Apply grounding constraints to prompt"""
-        if mode == "strict":
-            # Strict grounding: Add explicit constraints
-            grounding_prefix = (
-                "INSTRUCTIONS: Answer based ONLY on the facts provided. "
-                "If the facts don't contain the answer, say 'I don't know based on the provided information.'\n\n"
-            )
-            return grounding_prefix + prompt
-        elif mode == "balanced":
-            # Balanced: Light constraints
-            grounding_prefix = "Please answer based on the information provided:\n\n"
-            return grounding_prefix + prompt
-        else:  # creative
-            # Creative: Minimal constraints
-            return prompt
-    
-    def _generate_text_internal(
-        self, 
-        prompt: str, 
-        max_tokens: int,
-        temperature: float,
-        top_p: float,
-        stop_sequences: List[str]
-    ) -> tuple[str, int]:
-        """Internal method to generate text"""
-        if not self.model or not self.tokenizer:
-            raise HTTPException(status_code=503, detail="Model not loaded")
-        
-        try:
-            # Tokenize input
-            max_length = min(1024, self.edition_manager.get_sequence_length_limit())
-            
-            inputs = self.tokenizer(
-                prompt,
-                return_tensors="pt",
-                truncation=True,
-                max_length=max_length,
-                padding=False
-            )
-            input_length = inputs['input_ids'].shape[1]
-            
-            # Generate with controlled parameters
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=max_tokens,
-                    temperature=temperature if temperature > 0 else 1.0,
-                    do_sample=temperature > 0,
-                    top_p=top_p,
-                    top_k=50,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id,
-                    repetition_penalty=1.1,
-                    no_repeat_ngram_size=3,  # Reduce repetition
-                )
-            
-            # Decode only new tokens
-            generated_text = self.tokenizer.decode(
-                outputs[0][input_length:],
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=True
-            )
-            
-            # Apply stop sequences
-            for stop in stop_sequences:
-                if stop in generated_text:
-                    generated_text = generated_text.split(stop)[0]
-                    break
-            
-            tokens_generated = outputs.shape[1] - input_length
-            
-            return generated_text.strip(), tokens_generated
-            
-        except Exception as e:
-            logger.error(f"Text generation failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
-    
-    def get_service_info(self) -> Dict[str, Any]:
-        """Get NLG service information"""
-        return {
-            "description": "High-quality grounded text generation with edition-aware scaling",
-            "supported_models": [
-                "microsoft/DialoGPT-small",  # Simple
-                "google/gemma-2-2b-it",     # Community  
-                "microsoft/DialoGPT-large", # Enterprise
-                "custom models (enterprise edition)"
-            ],
-            "features": {
-                "grounded_generation": True,
-                "caching": self.edition_manager.supports_advanced_caching(),
-                "custom_models": self.edition_manager.supports_custom_models(),
-                "prompt_validation": True,
-                "stop_sequences": True
-            },
-            "limits": {
-                "max_prompt_length": self.edition_manager.get_sequence_length_limit(),
-                "max_generation_tokens": self._get_max_tokens_for_edition(),
-                "cache_size_gb": self.edition_manager.get_cache_size_gb()
-            },
-            "model": {
-                "name": self.model_name,
-                "parameters": self.loader.get_model_info().get("parameters", 0) if self.loader else 0,
-                "supports_streaming": False  # Not implemented yet
-            }
-        }
-    
-    def _setup_service_routes(self):
-        """Setup NLG-specific routes"""
-        
-        @self.app.post("/generate", response_model=GenerateResponse)
-        async def generate_text(request: GenerateRequest):
-            """Generate grounded natural language text"""
-            if not self._model_loaded:
-                raise HTTPException(status_code=503, detail="Model not loaded")
-            
-            return await self.process_request(request)
-        
-        @self.app.post("/validate_prompt")
-        async def validate_prompt(prompt: str):
-            """Validate prompt for grounding constraints"""
-            validation_result = {
-                "valid": True,
-                "issues": [],
-                "suggestions": []
-            }
-            
-            if len(prompt) > self.edition_manager.get_sequence_length_limit():
-                validation_result["valid"] = False
-                validation_result["issues"].append("Prompt too long for edition")
-            
-            if not prompt.strip():
-                validation_result["valid"] = False
-                validation_result["issues"].append("Empty prompt")
-            
-            # Check for grounding markers
-            if "FACTS:" not in prompt and "CONTEXT:" not in prompt:
-                validation_result["suggestions"].append("Consider adding FACTS: or CONTEXT: section for better grounding")
-            
-            return validation_result
-        
-        @self.app.get("/cache/stats")
-        async def get_cache_stats():
-            """Get generation cache statistics (if caching enabled)"""
-            if not self.edition_manager.supports_advanced_caching():
-                raise HTTPException(status_code=404, detail="Advanced caching not available in this edition")
-            
-            return self.cache.get_stats()
+# FastAPI app
+app = FastAPI(
+    title="Sutra NLG Service v2",
+    description="Lightweight Natural Language Generation service using ML-Base backend",
+    version="2.0.0"
+)
 
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def main():
-    """Main entry point for NLG service"""
-    # Service configuration
-    config = ServiceConfig(
-        service_name="sutra-nlg-service",
-        service_version="2.0.0",
-        port=int(os.getenv("PORT", "8889")),
-        workers=1,  # Single worker for model services
-        enable_metrics=True,
-        log_level=os.getenv("LOG_LEVEL", "INFO")
-    )
-    
-    # Create and run service
-    service = SutraNlgService(config)
-    
-    try:
-        logger.info("Starting Sutra NLG Service...")
-        service.run()
-    except KeyboardInterrupt:
-        logger.info("Service stopped by user")
-    except Exception as e:
-        logger.error(f"Service failed: {e}")
-        raise
+# Global service instance
+nlg_service = None
+start_time = time.time()
 
-
-if __name__ == "__main__":
-    main()
-
-async def load_model():
-    """Load the NLG model with production-grade error handling"""
-    global model, tokenizer
-    
-    logger.info(f"[{instance_id}] Loading model: {model_name}")
-    start_time = time.time()
-    
-    # Get HuggingFace token for gated models
-    hf_token = os.getenv("HF_TOKEN")
-    if hf_token:
-        logger.info(f"[{instance_id}] HuggingFace token found, will use for authentication")
-    else:
-        logger.warning(f"[{instance_id}] No HuggingFace token found - gated models will fail")
-    
-    # Check for cached local model first
-    local_model_path = f"/app/models/{model_name.split('/')[-1]}"
-    use_local = os.path.isdir(local_model_path) and os.path.isfile(
-        os.path.join(local_model_path, "config.json")
-    )
-    
-    if use_local:
-        logger.info(f"[{instance_id}] Using cached local model: {local_model_path}")
-        model_path = local_model_path
-    else:
-        logger.info(f"[{instance_id}] Local model not found, will download from HuggingFace")
-        model_path = model_name
-    
-    try:
-        # Load tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_path,
-            trust_remote_code=True,
-            token=hf_token,  # Pass HF token for gated models
-            cache_dir='/tmp/.cache/huggingface' if not use_local else None
-        )
-        
-        # Ensure pad token is set
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        
-        # Load model (CPU-optimized)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            trust_remote_code=True,
-            token=hf_token,  # Pass HF token for gated models
-            cache_dir='/tmp/.cache/huggingface' if not use_local else None,
-            torch_dtype=torch.float32,
-            device_map="cpu",
-            low_cpu_mem_usage=True
-        )
-        
-        # Set to eval mode
-        model.eval()
-        
-        load_time = time.time() - start_time
-        logger.info(f"[{instance_id}] Model loaded successfully in {load_time:.2f}s")
-        logger.info(f"[{instance_id}] Model source: {'cached local' if use_local else 'downloaded'}")
-        logger.info(f"[{instance_id}] Device: {next(model.parameters()).device}")
-        logger.info(f"[{instance_id}] Tokenizer vocab size: {len(tokenizer)}")
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"[{instance_id}] Failed to load model: {e}", exc_info=True)
-        return False
-
-def generate_text(
-    prompt: str, 
-    max_tokens: int, 
-    temperature: float, 
-    stop_sequences: List[str]
-) -> tuple[str, int, float]:
-    """
-    Generate text from prompt with grounding constraints
-    
-    Returns:
-        tuple: (generated_text, tokens_generated, processing_time_ms)
-    """
-    if model is None or tokenizer is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    start_time = time.time()
-    
-    try:
-        # Tokenize
-        inputs = tokenizer(
-            prompt, 
-            return_tensors="pt", 
-            truncation=True, 
-            max_length=1024,
-            padding=False
-        )
-        input_length = inputs['input_ids'].shape[1]
-        
-        # Generate with controlled parameters
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=max_tokens,
-                temperature=temperature if temperature > 0 else 1.0,
-                do_sample=temperature > 0,
-                top_p=0.9,
-                top_k=50,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-                repetition_penalty=1.1,  # Reduce repetition
-            )
-        
-        # Decode only new tokens
-        generated_text = tokenizer.decode(
-            outputs[0][input_length:], 
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=True
-        )
-        
-        # Apply stop sequences
-        for stop in stop_sequences:
-            if stop in generated_text:
-                generated_text = generated_text.split(stop)[0]
-                break
-        
-        tokens_generated = outputs.shape[1] - input_length
-        processing_time = (time.time() - start_time) * 1000
-        
-        logger.info(
-            f"[{instance_id}] Generated {tokens_generated} tokens in {processing_time:.2f}ms "
-            f"(temp={temperature})"
-        )
-        
-        return generated_text.strip(), tokens_generated, processing_time
-        
-    except Exception as e:
-        logger.error(f"[{instance_id}] Generation failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
 
 @app.on_event("startup")
 async def startup_event():
-    """Load model on startup with fail-fast validation"""
-    logger.info(f"[{instance_id}] Starting Sutra NLG Service...")
-    
-    success = await load_model()
-    if not success:
-        logger.error(f"[{instance_id}] CRITICAL: Model loading failed")
-        raise RuntimeError("Model loading failed - cannot start service")
-    
-    logger.info(f"[{instance_id}] Service ready for requests")
+    """Initialize service on startup"""
+    global nlg_service
+    nlg_service = NLGService()
+    await nlg_service.initialize()
 
-@app.get("/health", response_model=HealthResponse)
-async def health():
-    """
-    Health check endpoint
-    
-    Returns 200 if model is loaded and ready
-    """
-    model_loaded = model is not None and tokenizer is not None
-    device = str(next(model.parameters()).device) if model else "unknown"
-    
-    return HealthResponse(
-        status="healthy" if model_loaded else "unhealthy",
-        model_loaded=model_loaded,
-        model_name=model_name,
-        device=device,
-        instance_id=instance_id
-    )
 
-@app.get("/info", response_model=InfoResponse)
-async def info():
-    """Model information endpoint"""
-    if model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    device = str(next(model.parameters()).device)
-    
-    return InfoResponse(
-        model=model_name,
-        device=device,
-        max_tokens=300,
-        default_temperature=0.3
-    )
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    if nlg_service:
+        await nlg_service.cleanup()
 
-@app.get("/metrics", response_model=MetricsResponse)
-async def get_metrics():
-    """Service metrics endpoint"""
-    uptime = time.time() - metrics["start_time"]
-    avg_time = (
-        metrics["total_time_ms"] / metrics["total_requests"] 
-        if metrics["total_requests"] > 0 
-        else 0.0
-    )
-    
-    return MetricsResponse(
-        total_requests=metrics["total_requests"],
-        total_tokens_generated=metrics["total_tokens"],
-        avg_generation_time_ms=avg_time,
-        model_name=model_name,
-        uptime_seconds=uptime
-    )
+
+def get_nlg_service() -> NLGService:
+    """Dependency injection for NLG service"""
+    if nlg_service is None:
+        raise HTTPException(status_code=500, detail="Service not initialized")
+    return nlg_service
+
 
 @app.post("/generate", response_model=GenerateResponse)
-async def generate(request: GenerateRequest):
-    """
-    Generate natural language from constrained prompt
+async def generate_text(
+    request: GenerateRequest,
+    service: NLGService = Depends(get_nlg_service)
+) -> GenerateResponse:
+    """Generate text from prompt"""
     
-    CRITICAL: Prompt should include FACTS section to constrain generation
+    gen_request = GenerationRequest(
+        prompt=request.prompt,
+        max_tokens=request.max_tokens,
+        temperature=request.temperature,
+        top_p=request.top_p,
+        stop_sequences=request.stop_sequences,
+        stream=request.stream
+    )
     
-    Example prompt format:
-    ```
-    FACTS:
-    - Paris is the capital of France
-    - The Eiffel Tower is in Paris
+    response = await service.generate_text(gen_request)
     
-    QUESTION: Where is the Eiffel Tower?
-    
-    ANSWER (using ONLY the facts above):
-    ```
-    """
-    if not request.prompt:
-        raise HTTPException(status_code=400, detail="No prompt provided")
-    
-    try:
-        text, tokens, processing_time = generate_text(
-            request.prompt,
-            request.max_tokens,
-            request.temperature,
-            request.stop_sequences
-        )
-        
-        # Update metrics
-        metrics["total_requests"] += 1
-        metrics["total_tokens"] += tokens
-        metrics["total_time_ms"] += processing_time
-        
-        return GenerateResponse(
-            text=text,
-            model=model_name,
-            processing_time_ms=processing_time,
-            tokens_generated=tokens
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[{instance_id}] Generation request failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+    return GenerateResponse(
+        text=response.text,
+        tokens_used=response.tokens_used,
+        generation_time=response.generation_time,
+        model_used=response.model_used,
+        cached=response.cached
+    )
 
-@app.get("/")
-async def root():
-    """Root endpoint with service information"""
+
+@app.post("/generate/stream")
+async def generate_text_stream(
+    request: GenerateRequest,
+    service: NLGService = Depends(get_nlg_service)
+):
+    """Stream text generation"""
+    
+    gen_request = GenerationRequest(
+        prompt=request.prompt,
+        max_tokens=request.max_tokens,
+        temperature=request.temperature,
+        top_p=request.top_p,
+        stop_sequences=request.stop_sequences,
+        stream=True
+    )
+    
+    return StreamingResponse(
+        service.generate_stream(gen_request),
+        media_type="application/x-ndjson"
+    )
+
+
+@app.get("/health")
+async def health_check(service: NLGService = Depends(get_nlg_service)):
+    """Health check endpoint"""
+    try:
+        # Check ML-Base service health
+        ml_health = await service.ml_client.health_check()
+        
+        return {
+            'healthy': True,
+            'service': 'nlg-service-v2',
+            'version': '2.0.0',
+            'ml_base_healthy': ml_health.get('healthy', False),
+            'active_generations': service.active_generations,
+            'timestamp': datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            'healthy': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+
+@app.get("/stats")
+async def get_statistics(service: NLGService = Depends(get_nlg_service)):
+    """Get service statistics"""
+    return service.get_stats()
+
+
+@app.get("/cache/stats")
+async def get_cache_stats(service: NLGService = Depends(get_nlg_service)):
+    """Get cache statistics"""
+    return service.cache.get_stats()
+
+
+@app.delete("/cache")
+async def clear_cache(service: NLGService = Depends(get_nlg_service)):
+    """Clear generation cache"""
+    old_size = len(service.cache.cache)
+    service.cache.cache.clear()
+    service.cache.access_times.clear()
+    service.cache.hits = 0
+    service.cache.misses = 0
+    
     return {
-        "service": "Sutra NLG Service",
-        "version": "1.0.0",
-        "model": model_name,
-        "instance_id": instance_id,
-        "status": "running" if model else "loading"
+        'message': 'Cache cleared',
+        'entries_removed': old_size
     }
 
+
 if __name__ == "__main__":
-    # Run service
-    port = int(os.getenv("PORT", "8889"))
     uvicorn.run(
-        app, 
-        host="0.0.0.0", 
-        port=port, 
+        "main_v2:app",
+        host="0.0.0.0",
+        port=8003,
         log_level="info",
-        access_log=True
+        reload=False
     )

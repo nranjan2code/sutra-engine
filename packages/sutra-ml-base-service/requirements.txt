@@ -1,0 +1,12 @@
+# Sutra ML-Base Service requirements
+# Centralized ML inference platform
+# Note: sutra-ml-base foundation is already included in base image
+
+# Service-specific dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+aiohttp>=3.9.0
+
+# ML optimization for inference server
+einops>=0.7.0         # For efficient tensor operations
+accelerate>=0.25.0    # For optimized model loading/inference

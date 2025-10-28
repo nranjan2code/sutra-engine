@@ -15,7 +15,8 @@
 
 use anyhow::{Context, Result};
 use std::collections::HashMap;
-use tracing::{debug, info};
+use std::sync::Mutex;
+use tracing::{debug, info, warn};
 
 use crate::embedding_client::EmbeddingClient;
 use crate::types::AssociationType;
@@ -54,9 +55,9 @@ impl SemanticExtractor {
     /// This is async because it needs to generate embeddings for relation types.
     /// Call this once during initialization and reuse the instance.
     pub async fn new(embedding_client: EmbeddingClient) -> Result<Self> {
-        info!("Initializing SemanticExtractor with HA embedding service");
+        info!("Initializing SemanticExtractor with HA embedding service (lazy relation embeddings)");
         
-        // Define relation type descriptions for embedding
+        // Define relation type descriptions for embedding (but don't generate embeddings yet)
         let relation_descriptions = vec![
             (
                 AssociationType::Semantic,
@@ -80,24 +81,32 @@ impl SemanticExtractor {
             ),
         ];
         
-        // Batch embed all relation descriptions (efficient!)
+        // Start with empty relation embeddings - will be populated on first use
+        let mut relation_embeddings = HashMap::new();
+        
+        // Try to pre-compute relation embeddings, but don't fail if embedding service is unavailable
         let descriptions: Vec<String> = relation_descriptions
             .iter()
             .map(|(_, desc)| desc.to_string())
             .collect();
         
-        let embeddings = embedding_client
-            .generate_batch(&descriptions, true)
-            .await;
+        // Try to pre-compute relation embeddings, but don't fail if embedding service is unavailable
+        let embeddings_result = embedding_client.generate_batch(&descriptions, true).await;
         
-        // Build relation embedding map
-        let mut relation_embeddings = HashMap::new();
-        for ((rel_type, _), emb_opt) in relation_descriptions.iter().zip(embeddings) {
-            if let Some(emb) = emb_opt {
-                relation_embeddings.insert(*rel_type, emb);
-            } else {
-                anyhow::bail!("Failed to generate embedding for relation type {:?}", rel_type);
+        // Check if any embeddings failed (indicates service issues)
+        let has_failures = embeddings_result.iter().any(|emb_opt| emb_opt.is_none());
+        
+        if !has_failures {
+            // Successfully pre-computed relation embeddings
+            for ((rel_type, _), emb_opt) in relation_descriptions.iter().zip(embeddings_result) {
+                if let Some(emb) = emb_opt {
+                    relation_embeddings.insert(*rel_type, emb);
+                }
             }
+            info!("Pre-computed {} relation embeddings", relation_embeddings.len());
+        } else {
+            // Embedding service unavailable or partial failures - continue with empty relation embeddings
+            warn!("Could not pre-compute all relation embeddings (embedding service issues). Will compute lazily.");
         }
         
         info!(
@@ -111,6 +120,65 @@ impl SemanticExtractor {
             similarity_threshold: 0.65, // Tunable via env var
             min_entity_length: 3,
         })
+    }
+    
+    /// Lazily initialize relation embeddings if they're missing
+    async fn ensure_relation_embeddings(&mut self) -> Result<()> {
+        if !self.relation_embeddings.is_empty() {
+            return Ok(()); // Already initialized
+        }
+        
+        info!("Lazily computing relation embeddings...");
+        
+        // Define relation type descriptions
+        let relation_descriptions = vec![
+            (
+                AssociationType::Semantic,
+                "is a type of, is an example of, belongs to category, classified as, instance of"
+            ),
+            (
+                AssociationType::Causal,
+                "causes, leads to, results in, because of, due to, triggers, produces, creates"
+            ),
+            (
+                AssociationType::Temporal,
+                "happens before, occurs after, during, while, when, then, followed by, preceded by"
+            ),
+            (
+                AssociationType::Hierarchical,
+                "parent of, child of, superclass, subclass, inherits from, extends, derived from"
+            ),
+            (
+                AssociationType::Compositional,
+                "part of, contains, consists of, made of, component of, includes, comprises"
+            ),
+        ];
+        
+        // Batch embed all relation descriptions
+        let descriptions: Vec<String> = relation_descriptions
+            .iter()
+            .map(|(_, desc)| desc.to_string())
+            .collect();
+        
+        let embeddings = self.embedding_client
+            .generate_batch(&descriptions, true)
+            .await;
+        
+        // Check if any embeddings failed
+        let has_failures = embeddings.iter().any(|emb_opt| emb_opt.is_none());
+        if has_failures {
+            anyhow::bail!("Failed to generate some relation embeddings - embedding service may be unavailable");
+        }
+        
+        // Build relation embedding map
+        for ((rel_type, _), emb_opt) in relation_descriptions.iter().zip(embeddings) {
+            if let Some(emb) = emb_opt {
+                self.relation_embeddings.insert(*rel_type, emb);
+            }
+        }
+        
+        info!("✅ Lazy-computed {} relation embeddings", self.relation_embeddings.len());
+        Ok(())
     }
     
     /// Extract semantic associations from text

@@ -94,7 +94,13 @@ class EmbeddingServiceProvider(EmbeddingProvider):
             if health_data.get("status") != "healthy":
                 raise ConnectionError(f"Embedding service unhealthy: {health_data}")
             
-            if not health_data.get("model_loaded", False):
+            # Check if it's a lightweight client (ML-Base architecture) or standalone service
+            if health_data.get("ml_base_connected") is not None:
+                # Lightweight client - check ML-Base connectivity
+                if not health_data.get("ml_base_connected", False):
+                    raise ConnectionError("ML-Base service not connected")
+            elif not health_data.get("model_loaded", False):
+                # Standalone service - check model loaded
                 raise ConnectionError("Embedding model not loaded in service")
             
                 # Check service info for basic health

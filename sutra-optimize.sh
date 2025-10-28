@@ -33,18 +33,19 @@ PUSH_IMAGES="${PUSH_IMAGES:-false}"
 get_edition_targets() {
     local edition="$1"
     case "$edition" in
-        simple) echo "embedding:450MB nlg:550MB hybrid:180MB control:120MB api:80MB bulk-ingester:250MB storage:160MB client:80MB" ;;
-        community) echo "embedding:500MB nlg:600MB hybrid:250MB control:140MB api:100MB bulk-ingester:270MB storage:180MB client:90MB" ;;
-        enterprise) echo "embedding:600MB nlg:700MB hybrid:350MB control:160MB api:120MB bulk-ingester:300MB storage:200MB client:100MB" ;;
-        *) echo "embedding:450MB nlg:550MB hybrid:180MB control:120MB api:80MB bulk-ingester:250MB storage:160MB client:80MB" ;;
+        simple) echo "ml-base-service:1500MB embedding:50MB nlg:50MB hybrid:180MB control:120MB api:80MB bulk-ingester:250MB storage:160MB client:80MB" ;;
+        community) echo "ml-base-service:1600MB embedding:60MB nlg:60MB hybrid:250MB control:140MB api:100MB bulk-ingester:270MB storage:180MB client:90MB" ;;
+        enterprise) echo "ml-base-service:1800MB embedding:70MB nlg:70MB hybrid:350MB control:160MB api:120MB bulk-ingester:300MB storage:200MB client:100MB" ;;
+        *) echo "ml-base-service:1500MB embedding:50MB nlg:50MB hybrid:180MB control:120MB api:80MB bulk-ingester:250MB storage:160MB client:80MB" ;;
     esac
 }
 
 get_service_strategy() {
     local service="$1"
     case "$service" in
-        embedding) echo "ultra" ;;
-        nlg) echo "ultra" ;;
+        ml-base-service) echo "ultra" ;;
+        embedding) echo "simple" ;;
+        nlg) echo "simple" ;;
         hybrid) echo "simple" ;;
         control) echo "simple" ;;
         api) echo "optimized" ;;
@@ -117,8 +118,22 @@ show_size_comparison() {
     local deploy_tag="${SUTRA_IMAGE_TAG:-latest}"
     local total_size_mb=0
     
+    # Show ML base first (foundation for ML services)
+    local ml_base_size=$(get_image_size "sutra-ml-base:$deploy_tag")
+    printf "%-15s %-15s %-12s\n" "ml-base" "$ml_base_size" "~800MB"
+    
+    # Extract size in MB for total calculation
+    if [[ "$ml_base_size" =~ ([0-9]+(\.[0-9]+)?)([GMK]B) ]]; then
+        local size_num="${BASH_REMATCH[1]}"
+        local size_unit="${BASH_REMATCH[3]}"
+        case "$size_unit" in
+            GB) total_size_mb=$(awk "BEGIN {print $total_size_mb + ($size_num * 1024)}") ;;
+            MB) total_size_mb=$(awk "BEGIN {print $total_size_mb + $size_num}") ;;
+        esac
+    fi
+    
     # Core services
-    local services=(embedding nlg hybrid control api bulk-ingester storage client)
+    local services=(ml-base-service embedding nlg hybrid control api bulk-ingester storage client)
     
     # Add grid services for enterprise
     if [ "$EDITION" = "enterprise" ]; then
@@ -128,8 +143,9 @@ show_size_comparison() {
     for service in "${services[@]}"; do
         # Map service names to actual image names
         case "$service" in
-            embedding) local image_name="sutra-embedding-service" ;;
-            nlg) local image_name="sutra-nlg-service" ;;
+            ml-base-service) local image_name="sutra-ml-base-service" ;;
+            embedding) local image_name="sutra-embedding-service-v2" ;;
+            nlg) local image_name="sutra-nlg-service-v2" ;;
             storage) local image_name="sutra-storage-server" ;;
             *) local image_name="sutra-$service" ;;
         esac
@@ -285,6 +301,51 @@ build_ml_service() {
     fi
 }
 
+# NEW: Build ML base foundation image (prerequisite for ML services)
+build_ml_base() {
+    log_info "Building ML base foundation image"
+    
+    local dockerfile="packages/sutra-ml-base/Dockerfile"
+    
+    # Check if Dockerfile exists
+    if [ ! -f "$dockerfile" ]; then
+        log_error "ML base Dockerfile not found: $dockerfile"
+        return 1
+    fi
+    
+    # Build command
+    local build_cmd="docker build"
+    if [ "$NO_CACHE" = "true" ]; then
+        build_cmd="$build_cmd --no-cache"
+    fi
+    
+    # Build arguments
+    build_cmd="$build_cmd --build-arg SUTRA_VERSION=$VERSION"
+    build_cmd="$build_cmd -f $dockerfile"
+    
+    # Build to deployment tag
+    local deploy_tag="${SUTRA_IMAGE_TAG:-latest}"
+    build_cmd="$build_cmd -t sutra-ml-base:$deploy_tag"
+    build_cmd="$build_cmd packages/sutra-ml-base/"
+    
+    log_info "Running: $build_cmd"
+    
+    # Execute build
+    if eval "$build_cmd"; then
+        log_success "Built sutra-ml-base:$deploy_tag"
+        
+        # Show size
+        local size
+        size=$(get_image_size "sutra-ml-base:$deploy_tag")
+        log_info "Size: $size"
+        
+        return 0
+    else
+        log_error "Failed to build ML base foundation"
+        return 1
+    fi
+}
+
 # NEW: Build Rust-based storage service with proper image naming
 build_storage_service() {
     local strategy="$1"
@@ -387,7 +448,15 @@ build_all_services() {
     log_header "🔨 Building All Services"
     echo ""
     
-    # Core services for all editions
+    # Step 1: Build ML base foundation first (required by ML services)
+    log_info "Step 1: Building ML foundation"
+    if ! build_ml_base; then
+        log_error "Failed to build ML base - cannot continue with ML services"
+        return 1
+    fi
+    echo ""
+    
+    # Step 2: Core services for all editions
     local services=(embedding nlg hybrid control api bulk-ingester storage client)
     
     # Add grid services for enterprise edition
@@ -398,8 +467,9 @@ build_all_services() {
     fi
     
     local failed_services=()
-    local success_count=0
+    local success_count=1  # ML base already built successfully
     
+    log_info "Step 2: Building service images"
     for service in "${services[@]}"; do
         echo ""
         if build_service "$service"; then
@@ -412,7 +482,8 @@ build_all_services() {
     
     echo ""
     log_header "📋 Build Summary"
-    log_success "Successfully built: $success_count/${#services[@]} services"
+    local total_services=$((${#services[@]} + 1))  # +1 for ML base
+    log_success "Successfully built: $success_count/${total_services} images (ML base + services)"
     
     if [ ${#failed_services[@]} -gt 0 ]; then
         log_warning "Failed services: ${failed_services[*]}"
@@ -922,13 +993,34 @@ else
         build)
             if [ $# -eq 0 ]; then
                 log_error "Service name required"
-                echo "Available: embedding nlg hybrid control api bulk-ingester storage client"
+                echo "Available: ml-base embedding nlg hybrid control api bulk-ingester storage client"
                 exit 1
             fi
-            build_service "$1"
+            
+            # Handle ml-base specially
+            if [ "$1" = "ml-base" ]; then
+                build_ml_base
+            else
+                # For ML services, ensure ml-base is built first
+                if [ "$1" = "embedding" ] || [ "$1" = "nlg" ]; then
+                    log_info "Building ML base foundation first (required for $1)..."
+                    if ! build_ml_base; then
+                        log_error "Failed to build ML base - cannot build $1"
+                        exit 1
+                    fi
+                    echo ""
+                fi
+                build_service "$1"
+            fi
             ;;
         build-ml)
             log_header "🤖 Building ML Services"
+            log_info "Building ML base foundation first..."
+            if ! build_ml_base; then
+                log_error "Failed to build ML base - cannot build ML services"
+                exit 1
+            fi
+            echo ""
             build_service "embedding"
             echo ""
             build_service "nlg"

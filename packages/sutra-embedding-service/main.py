@@ -1,52 +1,105 @@
 #!/usr/bin/env python3
 """
-Sutra Embedding Service - Next Generation
-Built on sutra-ml-base foundation with edition-aware features and advanced caching
+Sutra Embedding Service - Lightweight Client (v2.0)
+Uses centralized ML-Base service for efficient resource utilization and horizontal scaling.
+
+This service acts as a lightweight proxy to the ML-Base service, providing:
+- API compatibility with existing embedding endpoints
+- Request validation and preprocessing  
+- Edition-aware feature controls
+- Comprehensive monitoring and error handling
+- Local caching for performance optimization
 """
 
 import asyncio
 import logging
-import time
 import os
+import time
+import uuid
 from typing import List, Optional, Dict, Any
 
-# Import the new ML foundation
-from sutra_ml_base import (
-    BaseMlService, ServiceConfig, HealthStatus,
-    ModelLoader, LoaderConfig, ModelType,
-    MetricsCollector, CacheManager, CacheConfig,
-    EditionManager, setup_environment, setup_logging
+import uvicorn
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+import aiohttp
+
+
+# ================================
+# Configuration
+# ================================
+
+# Service Configuration
+SERVICE_NAME = "sutra-embedding-service"
+SERVICE_VERSION = "2.0.0"
+PORT = int(os.getenv("PORT", "8888"))
+
+# ML-Base Service Configuration
+ML_BASE_URL = os.getenv("ML_BASE_URL", "http://ml-base:8887")
+ML_BASE_TIMEOUT = float(os.getenv("ML_BASE_TIMEOUT", "30.0"))
+
+# Edition Configuration
+SUTRA_EDITION = os.getenv("SUTRA_EDITION", "simple")
+
+# Logging Configuration
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# Setup logging
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper()),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+logger = logging.getLogger(SERVICE_NAME)
 
-try:
-    import torch
-    import numpy as np
-    from fastapi import HTTPException
-    from pydantic import BaseModel, Field
-    HAS_TORCH = True
-except ImportError:
-    HAS_TORCH = False
-    raise RuntimeError("PyTorch and FastAPI required for embedding service")
+# ================================
+# Edition Limits
+# ================================
 
-# Setup environment first
-setup_environment()
-logger = setup_logging("sutra-embedding-service")
+EDITION_LIMITS = {
+    "simple": {
+        "max_batch_size": 8,
+        "max_text_length": 512,
+        "cache_enabled": False,
+        "rate_limit_per_minute": 100
+    },
+    "community": {
+        "max_batch_size": 32,
+        "max_text_length": 1024,
+        "cache_enabled": True,
+        "rate_limit_per_minute": 1000
+    },
+    "enterprise": {
+        "max_batch_size": 128,
+        "max_text_length": 2048,
+        "cache_enabled": True,
+        "rate_limit_per_minute": -1  # Unlimited
+    }
+}
 
-# Request/Response Models (Enhanced with validation)
+# Get current edition limits
+LIMITS = EDITION_LIMITS.get(SUTRA_EDITION, EDITION_LIMITS["simple"])
+
+# ================================
+# Request/Response Models
+# ================================
+
 class EmbeddingRequest(BaseModel):
     """Request model for embedding generation"""
     texts: List[str] = Field(
         ..., 
-        min_items=1, 
-        max_items=256,  # Will be limited by edition
+        min_items=1,
         description="List of texts to embed"
     )
     normalize: bool = Field(
-        default=True, 
+        True, 
         description="Whether to L2 normalize embeddings"
     )
+    model_id: Optional[str] = Field(
+        None,
+        description="Model ID to use (optional, uses default if not specified)"
+    )
     cache_ttl_seconds: Optional[int] = Field(
-        default=3600,
+        3600,
         ge=0,
         le=86400,
         description="Cache TTL in seconds (0 = no cache)"
@@ -58,282 +111,374 @@ class EmbeddingResponse(BaseModel):
     dimension: int = Field(..., description="Embedding dimension")
     model: str = Field(..., description="Model used for generation")
     processing_time_ms: float = Field(..., description="Processing time in milliseconds")
-    cached_count: int = Field(default=0, description="Number of cached results used")
+    cached_count: int = Field(0, description="Number of cached results used")
     edition: str = Field(..., description="Sutra edition used")
     batch_size: int = Field(..., description="Actual batch size processed")
 
+class HealthResponse(BaseModel):
+    """Health check response"""
+    status: str = Field(..., description="Service health status")
+    ml_base_connected: bool = Field(..., description="ML-Base service connectivity")
+    edition: str = Field(..., description="Current edition")
+    uptime_seconds: float = Field(..., description="Service uptime")
+    total_requests: int = Field(..., description="Total requests processed")
 
-class SutraEmbeddingService(BaseMlService):
-    """Next-generation embedding service with ML foundation"""
+class InfoResponse(BaseModel):
+    """Service information response"""
+    service: str = Field(..., description="Service name")
+    version: str = Field(..., description="Service version") 
+    edition: str = Field(..., description="Edition")
+    ml_base_url: str = Field(..., description="ML-Base service URL")
+    limits: Dict[str, Any] = Field(..., description="Edition limits")
+    available_models: List[str] = Field(..., description="Available models")
+
+# ================================
+# ML-Base Client
+# ================================
+
+class MLBaseClient:
+    """Async client for ML-Base service"""
     
-    def __init__(self, config: ServiceConfig, edition_manager: Optional[EditionManager] = None):
-        """Initialize embedding service
-        
-        Args:
-            config: Service configuration
-            edition_manager: Edition manager (auto-created if None)
-        """
-        super().__init__(config, edition_manager)
-        
-        # ML-specific components
-        self.model = None
-        self.tokenizer = None
-        self.loader = None
-        
-        # Performance components
-        cache_config = CacheConfig(
-            max_memory_mb=int(self.edition_manager.get_cache_size_gb() * 1024),
-            max_items=10000,
-            default_ttl_seconds=3600,
-            persistent=self.edition_manager.supports_advanced_caching()
-        )
-        self.cache = CacheManager(cache_config)
-        
-        # Model configuration
-        self.model_name = self._get_model_for_edition()
-        self.embedding_dimension = 768  # Will be updated after model load
-        
-        logger.info(f"Embedding service initialized for {self.edition_manager.edition.value} edition")
+    def __init__(self, base_url: str, timeout: float = 30.0):
+        self.base_url = base_url.rstrip('/')
+        self.timeout = aiohttp.ClientTimeout(total=timeout)
+        self.session: Optional[aiohttp.ClientSession] = None
     
-    def _get_model_for_edition(self) -> str:
-        """Get appropriate model based on edition"""
-        if self.edition_manager.edition.value == "simple":
-            # Smaller, faster model for simple edition
-            return "nomic-ai/nomic-embed-text-v1.5"
-        elif self.edition_manager.edition.value == "community":
-            # Better quality model for community
-            return "nomic-ai/nomic-embed-text-v1.5"
-        else:  # enterprise
-            # Best model for enterprise
-            return "nomic-ai/nomic-embed-text-v1.5"  # Could be larger model
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession(timeout=self.timeout)
+        return self
     
-    async def load_model(self) -> bool:
-        """Load embedding model with edition-aware configuration"""
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.session:
+            await self.session.close()
+    
+    async def health(self) -> bool:
+        """Check ML-Base service health"""
         try:
-            logger.info(f"Loading embedding model: {self.model_name}")
-            
-            # Create loader configuration
-            config = LoaderConfig(
-                model_name=self.model_name,
-                model_type=ModelType.EMBEDDING,
-                device="auto",
-                torch_dtype="float32",  # Stable for embeddings
-                max_memory_gb=self.edition_manager.get_model_size_limit(),
-                cache_dir="/tmp/.cache/huggingface",
-                verify_model=True
-            )
-            
-            # Load model using ML foundation
-            self.model, self.tokenizer, self.loader = ModelLoader.load_model(config, self.edition_manager)
-            
-            # Update service state
-            model_info = self.loader.get_model_info()
-            self.embedding_dimension = self._detect_embedding_dimension()
-            
-            # Update model info with embedding-specific data
-            model_info["embedding_dimension"] = self.embedding_dimension
-            model_info["supports_batch"] = True
-            model_info["max_sequence_length"] = self.edition_manager.get_sequence_length_limit()
-            
-            self.set_model_loaded(model_info)
-            
-            logger.info(f"Embedding model loaded successfully (dimension: {self.embedding_dimension})")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to load embedding model: {e}")
-            self.set_health_status(HealthStatus.UNHEALTHY)
+            async with self.session.get(f"{self.base_url}/health") as resp:
+                return resp.status == 200
+        except Exception:
             return False
     
-    def _detect_embedding_dimension(self) -> int:
-        """Detect embedding dimension by running test input"""
-        try:
-            test_text = "Test input for dimension detection"
-            embeddings = self._generate_embeddings_internal([test_text], normalize=True)
-            return len(embeddings[0])
-        except Exception:
-            logger.warning("Could not detect embedding dimension, using default 768")
-            return 768
+    async def list_models(self) -> List[Dict[str, Any]]:
+        """List available models"""
+        async with self.session.get(f"{self.base_url}/models") as resp:
+            resp.raise_for_status()
+            return await resp.json()
     
-    async def process_request(self, request: EmbeddingRequest) -> EmbeddingResponse:
-        """Process embedding generation request"""
-        start_time = time.time()
+    async def embed(self, model_id: str, texts: List[str], normalize: bool = True) -> Dict[str, Any]:
+        """Generate embeddings"""
+        payload = {
+            "model_id": model_id,
+            "texts": texts,
+            "normalize": normalize
+        }
         
-        # Validate batch size against edition limits
-        max_batch_size = self.edition_manager.get_batch_size_limit()
-        if len(request.texts) > max_batch_size:
+        async with self.session.post(f"{self.base_url}/embed", json=payload) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+
+# ================================
+# Service Metrics
+# ================================
+
+class ServiceMetrics:
+    """Track service metrics"""
+    
+    def __init__(self):
+        self.start_time = time.time()
+        self.request_count = 0
+        self.error_count = 0
+        self.total_processing_time = 0.0
+        self.cache_hits = 0
+    
+    def record_request(self, processing_time: float, success: bool = True, cache_hit: bool = False):
+        """Record request metrics"""
+        self.request_count += 1
+        self.total_processing_time += processing_time
+        
+        if not success:
+            self.error_count += 1
+        
+        if cache_hit:
+            self.cache_hits += 1
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get current statistics"""
+        uptime = time.time() - self.start_time
+        return {
+            "uptime_seconds": uptime,
+            "total_requests": self.request_count,
+            "error_count": self.error_count,
+            "error_rate": self.error_count / max(self.request_count, 1),
+            "requests_per_second": self.request_count / max(uptime, 1),
+            "average_response_time_ms": (
+                self.total_processing_time / max(self.request_count, 1) * 1000
+            ),
+            "cache_hit_rate": self.cache_hits / max(self.request_count, 1)
+        }
+
+# Global metrics instance
+metrics = ServiceMetrics()
+
+# ================================
+# Embedding Service
+# ================================
+
+class EmbeddingService:
+    """Lightweight embedding service using ML-Base backend"""
+    
+    def __init__(self):
+        self.ml_base_url = ML_BASE_URL
+        self.default_model_id = self._get_default_model_id()
+        self.cache = {}  # Simple in-memory cache
+    
+    def _get_default_model_id(self) -> str:
+        """Get default model ID based on edition"""
+        if SUTRA_EDITION == "simple":
+            return "embedding-nomic-v1.5"  # Match ML-Base model ID
+        elif SUTRA_EDITION == "community":
+            return "embedding-nomic-v1.5"
+        else:  # enterprise
+            return "embedding-nomic-v1.5"
+    
+    def _validate_request(self, request: EmbeddingRequest) -> None:
+        """Validate request against edition limits"""
+        # Check batch size
+        if len(request.texts) > LIMITS["max_batch_size"]:
             raise HTTPException(
                 status_code=413,
-                detail=f"Batch size {len(request.texts)} exceeds edition limit of {max_batch_size}"
+                detail=f"Batch size {len(request.texts)} exceeds edition limit of {LIMITS['max_batch_size']}"
             )
         
-        # Check cache for existing embeddings
-        cached_embeddings = []
-        texts_to_compute = []
-        cache_keys = []
-        
-        for text in request.texts:
-            if request.cache_ttl_seconds > 0:
-                cache_key = self.cache.cache_key("embedding", text, self.model_name, request.normalize)
-                cached_result = self.cache.get(cache_key)
-                
-                if cached_result is not None:
-                    cached_embeddings.append((len(texts_to_compute), cached_result))
-                    cache_keys.append(None)  # Placeholder
-                else:
-                    texts_to_compute.append(text)
-                    cache_keys.append(cache_key)
-            else:
-                texts_to_compute.append(text)
-                cache_keys.append(None)
-        
-        # Generate embeddings for non-cached texts
-        new_embeddings = []
-        if texts_to_compute:
-            new_embeddings = self._generate_embeddings_internal(texts_to_compute, request.normalize)
-            
-            # Cache new embeddings
-            if request.cache_ttl_seconds > 0:
-                cache_idx = 0
-                for i, cache_key in enumerate(cache_keys):
-                    if cache_key is not None:
-                        self.cache.set(cache_key, new_embeddings[cache_idx], request.cache_ttl_seconds)
-                        cache_idx += 1
-        
-        # Combine cached and new embeddings in correct order
-        final_embeddings = new_embeddings.copy()
-        for cache_idx, cached_embedding in cached_embeddings:
-            final_embeddings.insert(cache_idx, cached_embedding)
-        
-        processing_time = (time.time() - start_time) * 1000
-        
-        return EmbeddingResponse(
-            embeddings=final_embeddings,
-            dimension=self.embedding_dimension,
-            model=self.model_name,
-            processing_time_ms=processing_time,
-            cached_count=len(cached_embeddings),
-            edition=self.edition_manager.edition.value,
-            batch_size=len(request.texts)
-        )
+        # Check text length
+        max_length = LIMITS["max_text_length"]
+        for i, text in enumerate(request.texts):
+            if len(text) > max_length:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Text {i} length {len(text)} exceeds edition limit of {max_length}"
+                )
     
-    def _generate_embeddings_internal(self, texts: List[str], normalize: bool) -> List[List[float]]:
-        """Internal method to generate embeddings"""
-        if not self.model or not self.tokenizer:
-            raise HTTPException(status_code=503, detail="Model not loaded")
+    def _get_cache_key(self, model_id: str, texts: List[str], normalize: bool) -> str:
+        """Generate cache key for request"""
+        import hashlib
+        content = f"{model_id}:{normalize}:{':'.join(texts)}"
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    async def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
+        """Process embedding request"""
+        start_time = time.time()
+        request_id = str(uuid.uuid4())[:8]
+        
+        logger.info(f"[{request_id}] Embedding request: {len(request.texts)} texts")
         
         try:
-            # Tokenize with sequence length limits
-            max_length = min(512, self.edition_manager.get_sequence_length_limit())
+            # Validate request
+            self._validate_request(request)
             
-            encoded_input = self.tokenizer(
-                texts,
-                padding=True,
-                truncation=True,
-                return_tensors='pt',
-                max_length=max_length
-            )
+            # Use provided model or default
+            model_id = request.model_id or self.default_model_id
             
-            # Generate embeddings
-            with torch.no_grad():
-                model_output = self.model(**encoded_input)
+            # Check cache (if enabled)
+            cache_key = None
+            if LIMITS["cache_enabled"] and request.cache_ttl_seconds > 0:
+                cache_key = self._get_cache_key(model_id, request.texts, request.normalize)
+                if cache_key in self.cache:
+                    cached_result = self.cache[cache_key]
+                    if time.time() - cached_result["timestamp"] < request.cache_ttl_seconds:
+                        # Cache hit
+                        processing_time = time.time() - start_time
+                        metrics.record_request(processing_time, success=True, cache_hit=True)
+                        
+                        cached_result["data"]["processing_time_ms"] = processing_time * 1000
+                        cached_result["data"]["cached_count"] = len(request.texts)
+                        
+                        logger.info(f"[{request_id}] Cache hit: {processing_time*1000:.2f}ms")
+                        return EmbeddingResponse(**cached_result["data"])
+            
+            # Call ML-Base service
+            async with MLBaseClient(self.ml_base_url, ML_BASE_TIMEOUT) as client:
+                result = await client.embed(model_id, request.texts, request.normalize)
+            
+            processing_time = time.time() - start_time
+            
+            # Prepare response
+            response_data = {
+                "embeddings": result["embeddings"],
+                "dimension": result["dimension"],
+                "model": result["model_used"],
+                "processing_time_ms": processing_time * 1000,
+                "cached_count": 0,
+                "edition": SUTRA_EDITION,
+                "batch_size": len(request.texts)
+            }
+            
+            # Cache result (if enabled)
+            if LIMITS["cache_enabled"] and cache_key and request.cache_ttl_seconds > 0:
+                self.cache[cache_key] = {
+                    "data": response_data.copy(),
+                    "timestamp": time.time()
+                }
                 
-                # Mean pooling
-                token_embeddings = model_output[0]
-                input_mask_expanded = encoded_input['attention_mask'].unsqueeze(-1).expand(token_embeddings.size()).float()
-                embeddings = torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-                
-                # Normalize if requested
-                if normalize:
-                    embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+                # Simple cache cleanup - remove oldest entries if cache too large
+                if len(self.cache) > 1000:
+                    oldest_key = min(self.cache.keys(), key=lambda k: self.cache[k]["timestamp"])
+                    del self.cache[oldest_key]
             
-            # Convert to list
-            return embeddings.cpu().numpy().tolist()
+            # Record metrics
+            metrics.record_request(processing_time, success=True)
+            
+            logger.info(f"[{request_id}] Completed: {processing_time*1000:.2f}ms")
+            return EmbeddingResponse(**response_data)
+            
+        except HTTPException:
+            processing_time = time.time() - start_time
+            metrics.record_request(processing_time, success=False)
+            logger.error(f"[{request_id}] Client error: {processing_time*1000:.2f}ms")
+            raise
             
         except Exception as e:
-            logger.error(f"Embedding generation failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Embedding generation failed: {str(e)}")
+            processing_time = time.time() - start_time
+            metrics.record_request(processing_time, success=False)
+            logger.error(f"[{request_id}] Error: {e} ({processing_time*1000:.2f}ms)")
+            raise HTTPException(status_code=503, detail=f"ML-Base service error: {str(e)}")
     
-    def get_service_info(self) -> Dict[str, Any]:
-        """Get embedding service information"""
-        return {
-            "description": "High-performance embedding service with edition-aware scaling",
-            "supported_models": [
-                "nomic-ai/nomic-embed-text-v1.5",
-                "sentence-transformers/all-MiniLM-L6-v2",
-                "custom models (community+ editions)"
-            ],
-            "features": {
-                "caching": self.edition_manager.supports_advanced_caching(),
-                "custom_models": self.edition_manager.supports_custom_models(),
-                "batch_processing": True,
-                "sequence_truncation": True
-            },
-            "limits": {
-                "max_batch_size": self.edition_manager.get_batch_size_limit(),
-                "max_sequence_length": self.edition_manager.get_sequence_length_limit(),
-                "cache_size_gb": self.edition_manager.get_cache_size_gb()
-            },
-            "model": {
-                "name": self.model_name,
-                "dimension": self.embedding_dimension,
-                "parameters": self.loader.get_model_info().get("parameters", 0) if self.loader else 0
-            }
-        }
+    async def get_available_models(self) -> List[str]:
+        """Get list of available embedding models"""
+        try:
+            async with MLBaseClient(self.ml_base_url, 5.0) as client:
+                models = await client.list_models()
+                return [m["id"] for m in models if m["type"] == "embedding"]
+        except Exception as e:
+            logger.warning(f"Failed to get models from ML-Base: {e}")
+            return [self.default_model_id]
     
-    def _setup_service_routes(self):
-        """Setup embedding-specific routes"""
-        
-        @self.app.post("/embed", response_model=EmbeddingResponse)
-        async def generate_embeddings(request: EmbeddingRequest):
-            """Generate embeddings for input texts"""
-            if not self._model_loaded:
-                raise HTTPException(status_code=503, detail="Model not loaded")
-            
-            return await self.process_request(request)
-        
-        @self.app.get("/cache/stats")
-        async def get_cache_stats():
-            """Get cache statistics (if caching enabled)"""
-            if not self.edition_manager.supports_advanced_caching():
-                raise HTTPException(status_code=404, detail="Advanced caching not available in this edition")
-            
-            return self.cache.get_stats()
-        
-        @self.app.delete("/cache")
-        async def clear_cache():
-            """Clear embedding cache (if caching enabled)"""
-            if not self.edition_manager.supports_advanced_caching():
-                raise HTTPException(status_code=404, detail="Advanced caching not available in this edition")
-            
-            success = self.cache.clear()
-            return {"cache_cleared": success}
+    async def check_ml_base_health(self) -> bool:
+        """Check ML-Base service connectivity"""
+        try:
+            async with MLBaseClient(self.ml_base_url, 5.0) as client:
+                return await client.health()
+        except Exception:
+            return False
 
+# ================================
+# FastAPI Application
+# ================================
+
+# Create service instance
+embedding_service = EmbeddingService()
+
+# Create FastAPI app
+app = FastAPI(
+    title="Sutra Embedding Service",
+    description="Lightweight embedding client using centralized ML-Base service",
+    version=SERVICE_VERSION
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ================================
+# API Endpoints
+# ================================
+
+@app.get("/health", response_model=HealthResponse)
+async def health():
+    """Service health check"""
+    ml_base_connected = await embedding_service.check_ml_base_health()
+    stats = metrics.get_stats()
+    
+    return HealthResponse(
+        status="healthy" if ml_base_connected else "degraded",
+        ml_base_connected=ml_base_connected,
+        edition=SUTRA_EDITION,
+        uptime_seconds=stats["uptime_seconds"],
+        total_requests=stats["total_requests"]
+    )
+
+@app.get("/info", response_model=InfoResponse)
+async def info():
+    """Service information"""
+    available_models = await embedding_service.get_available_models()
+    
+    return InfoResponse(
+        service=SERVICE_NAME,
+        version=SERVICE_VERSION,
+        edition=SUTRA_EDITION,
+        ml_base_url=ML_BASE_URL,
+        limits=LIMITS,
+        available_models=available_models
+    )
+
+@app.post("/embed", response_model=EmbeddingResponse)
+async def embed(request: EmbeddingRequest):
+    """Generate embeddings for input texts"""
+    return await embedding_service.embed(request)
+
+@app.get("/metrics")
+async def get_metrics():
+    """Service metrics"""
+    return metrics.get_stats()
+
+@app.get("/cache/clear")
+async def clear_cache():
+    """Clear embedding cache (if caching enabled)"""
+    if not LIMITS["cache_enabled"]:
+        raise HTTPException(status_code=404, detail="Caching not available in this edition")
+    
+    cache_size = len(embedding_service.cache)
+    embedding_service.cache.clear()
+    
+    return {
+        "cache_cleared": True,
+        "entries_removed": cache_size
+    }
+
+@app.get("/cache/stats")
+async def cache_stats():
+    """Cache statistics (if caching enabled)"""
+    if not LIMITS["cache_enabled"]:
+        raise HTTPException(status_code=404, detail="Caching not available in this edition")
+    
+    return {
+        "cache_size": len(embedding_service.cache),
+        "cache_enabled": True,
+        "hit_rate": metrics.get_stats()["cache_hit_rate"]
+    }
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "service": SERVICE_NAME,
+        "version": SERVICE_VERSION,
+        "description": "Lightweight embedding client using centralized ML-Base service",
+        "edition": SUTRA_EDITION,
+        "ml_base_url": ML_BASE_URL,
+        "status": "running"
+    }
 
 def main():
-    """Main entry point for embedding service"""
-    # Service configuration
-    config = ServiceConfig(
-        service_name="sutra-embedding-service",
-        service_version="2.0.0",
-        port=int(os.getenv("PORT", "8888")),
-        workers=1,  # Single worker for model services
-        enable_metrics=True,
-        log_level=os.getenv("LOG_LEVEL", "INFO")
+    """Main entry point"""
+    logger.info(f"Starting {SERVICE_NAME} v{SERVICE_VERSION}")
+    logger.info(f"Edition: {SUTRA_EDITION}")
+    logger.info(f"ML-Base URL: {ML_BASE_URL}")
+    logger.info(f"Limits: {LIMITS}")
+    
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=PORT,
+        log_level=LOG_LEVEL.lower(),
+        access_log=True
     )
-    
-    # Create and run service
-    service = SutraEmbeddingService(config)
-    
-    try:
-        logger.info("Starting Sutra Embedding Service...")
-        service.run()
-    except KeyboardInterrupt:
-        logger.info("Service stopped by user")
-    except Exception as e:
-        logger.error(f"Service failed: {e}")
-        raise
-
 
 if __name__ == "__main__":
     main()

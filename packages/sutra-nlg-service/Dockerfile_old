@@ -1,0 +1,46 @@
+# Sutra NLG Service - Uses shared ML base image  
+# Optimized build using sutra-ml-base foundation to reduce size
+
+ARG SUTRA_VERSION=latest
+
+# Start from shared ML base with all heavy dependencies pre-installed
+FROM sutra-ml-base:${SUTRA_VERSION} AS ml-base
+
+# Build stage - Install only service-specific dependencies
+FROM ml-base AS builder
+
+# Switch to root to install packages
+USER root
+
+# Install service-specific dependencies
+COPY packages/sutra-nlg-service/requirements.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Production stage - Inherit from ML base
+FROM ml-base
+
+# Copy service-specific dependencies from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application code
+COPY packages/sutra-nlg-service/main.py .
+
+# Switch to service user (inherited from ml-base)
+USER sutra
+
+# Environment configuration for new architecture
+ARG SUTRA_EDITION=simple
+ENV SUTRA_SERVICE_TYPE=nlg
+ENV SUTRA_EDITION=${SUTRA_EDITION}
+ENV PORT=8889
+ENV LOG_LEVEL=INFO
+
+# Health check using new foundation endpoints (longer start period for model loading)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:8889/health || exit 1
+
+# Expose port
+EXPOSE 8889
+
+# Run using new ML foundation
+CMD ["python", "main.py"]

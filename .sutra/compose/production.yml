@@ -274,10 +274,61 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # EMBEDDING SERVICES
+  # ML FOUNDATION SERVICES
   # ============================================================================
   
-  # Single Embedding Service (Simple & Community Editions)
+  # ML-Base Service (Centralized ML Inference Platform)
+  ml-base-service:
+    build:
+      context: ../../packages/sutra-ml-base-service
+      dockerfile: Dockerfile
+    image: sutra-ml-base-service:${SUTRA_VERSION:-latest}
+    container_name: sutra-ml-base
+    ports:
+      - "8887:8887"  # ML inference endpoint
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ML_BASE_PORT=8887
+      - ML_BASE_HOST=0.0.0.0
+      # Edition Configuration
+      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
+      - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
+      # Model Configuration
+      - ML_BASE_EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
+      - ML_BASE_NLG_MODEL=google/gemma-2-2b-it
+      - ML_BASE_CACHE_SIZE=10000
+      - ML_BASE_MODEL_CACHE_DIR=/models/cache
+      # Performance Configuration
+      - ML_BASE_MAX_BATCH_SIZE=64
+      - ML_BASE_BATCH_TIMEOUT_MS=50
+      - ML_BASE_MODEL_UNLOAD_TIMEOUT=300
+      # Monitoring
+      - ML_BASE_METRICS_ENABLED=true
+      - ML_BASE_LOG_LEVEL=INFO
+    volumes:
+      - ml-models-cache:/models/cache
+      - /var/log/sutra:/var/log/sutra
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8887/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 4G
+
+  # ============================================================================
+  # EMBEDDING SERVICES (Lightweight Clients)
+  # ============================================================================
+  
+  # Single Embedding Service (Simple & Community Editions) - Lightweight Client
   embedding-single:
     build:
       context: ../../packages/sutra-embedding-service
@@ -285,21 +336,31 @@ services:
     image: sutra-embedding-service:${SUTRA_VERSION:-latest}
     container_name: embedding-single
     ports:
-      - "8888:8888"  # Direct access
+      - "8888:8888"  # Client endpoint (proxies to ML-Base)
     environment:
-      - RUST_LOG=info
+      - PYTHONUNBUFFERED=1
       - EMBEDDING_PORT=8888
-      - MODEL_PATH=/models/nomic-embed-text-v1.5
-      - CACHE_SIZE=10000
-      - BATCH_SIZE=32
+      - EMBEDDING_HOST=0.0.0.0
+      # ML-Base Service Configuration
+      - ML_BASE_URL=http://ml-base-service:8887
+      - ML_BASE_TIMEOUT=30
+      - ML_BASE_MAX_RETRIES=3
+      # Edition Configuration
+      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
+      - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
+      # Cache Configuration
+      - EMBEDDING_CACHE_SIZE=1000
+      - EMBEDDING_CACHE_TTL=3600
+      # Instance Configuration
       - INSTANCE_ID=embedding-single
-    volumes:
-      - ../../packages/sutra-embedding-service/models:/models:ro
+    depends_on:
+      ml-base-service:
+        condition: service_healthy
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health').read()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -307,9 +368,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 256M
         reservations:
-          memory: 1G
+          memory: 128M
     profiles:
       - simple
       - community
@@ -444,39 +505,49 @@ services:
   # NLG SERVICES
   # ============================================================================
   
-  # NLG Service (Simple/Community Edition)
+  # NLG Service (Simple/Community Edition) - Lightweight Client
   nlg-single:
     build:
       context: ../../packages/sutra-nlg-service
       dockerfile: Dockerfile
     image: sutra-nlg-service:${SUTRA_VERSION:-latest}
     container_name: nlg-single
-    env_file:
-      - .env
     ports:
-      - "8889:8889"  # Direct access
+      - "8003:8003"  # Client endpoint (proxies to ML-Base)
     environment:
-      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-3-270m-it}
+      - PYTHONUNBUFFERED=1
+      - NLG_PORT=8003
+      - NLG_HOST=0.0.0.0
+      # ML-Base Service Configuration
+      - ML_BASE_URL=http://ml-base-service:8887
+      - ML_BASE_TIMEOUT=60
+      - ML_BASE_MAX_RETRIES=3
+      # Edition Configuration
+      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
+      - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
+      # Cache Configuration
+      - NLG_CACHE_SIZE=500
+      - NLG_CACHE_TTL=1800
+      # Instance Configuration
       - INSTANCE_ID=nlg-single
-      - PORT=8889
-      - HF_TOKEN=${HF_TOKEN}
-    volumes:
-      - ../../packages/sutra-nlg-service/models:/app/models:ro
+    depends_on:
+      ml-base-service:
+        condition: service_healthy
     networks:
       - sutra-network
     restart: "on-failure:3"  # NLG is optional - stop after 3 failed attempts
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8889/health').read()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 120s
+      start_period: 30s
     deploy:
       resources:
         limits:
-          memory: 5G
+          memory: 256M
         reservations:
-          memory: 3G
+          memory: 128M
     profiles:
       - simple
       - community
@@ -778,6 +849,9 @@ volumes:
     driver: local
   # New volume for bulk ingestion (only created when bulk-ingester profile used)
   ingestion-jobs:
+    driver: local
+  # ML model cache volume
+  ml-models-cache:
     driver: local
 
 networks:
