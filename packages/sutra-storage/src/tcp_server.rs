@@ -70,7 +70,7 @@ impl From<LearnOptionsMsg> for LearnOptions {
             generate_embedding: m.generate_embedding,
             embedding_model: m.embedding_model,
             extract_associations: m.extract_associations,
-            analyze_semantics: true, // Always enabled in V2
+            analyze_semantics: std::env::var("SUTRA_SEMANTIC_ANALYSIS").ok().and_then(|s| s.parse().ok()).unwrap_or(true),
             min_association_confidence: m.min_association_confidence,
             max_associations_per_concept: m.max_associations_per_concept,
             strength: m.strength,

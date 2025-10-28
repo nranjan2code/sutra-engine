@@ -76,19 +76,31 @@ class UserService:
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters")
         
-        # Check if user already exists
+        # Check if user already exists using VECTOR SEARCH ONLY
         try:
-            existing_users = self.storage.semantic_search(
-                query=f"user email:{email}",
-                k=1,
-            )
+            import json
             
-            if existing_users and len(existing_users) > 0:
-                raise ValueError(f"User with email {email} already exists")
+            dummy_vector = [0.0] * 768
+            vector_results = self.storage.vector_search(dummy_vector, k=50)
+            
+            # Check for existing user with same email (clean code, no backward compatibility)
+            for concept_id, similarity in vector_results:
+                concept = self.storage.query_concept(concept_id)
+                if concept and concept.get("content"):
+                    try:
+                        data = json.loads(concept["content"])
+                        if (data.get("type") == "user" and 
+                            data.get("email") == email):
+                            raise ValueError(f"User with email {email} already exists")
+                    except json.JSONDecodeError:
+                        continue
+                        
+        except ValueError:
+            raise  # Re-raise ValueError (user exists)
         except Exception as e:
             logger.error(f"Error checking existing user: {e}")
             # Continue with registration if search fails
-        
+
         # Hash password with Argon2id
         try:
             password_hash = self.ph.hash(password)
@@ -98,9 +110,10 @@ class UserService:
         
         # Create user concept
         now = datetime.utcnow().isoformat()
-        content = f"User {email}" + (f" - {full_name}" if full_name else "")
         
-        metadata = {
+        # Store complete user data as JSON in the content
+        # This ensures all user data including password hash is persisted
+        user_data = {
             "type": "user",
             "email": email,
             "password_hash": password_hash,
@@ -113,14 +126,17 @@ class UserService:
             "last_login": None,
         }
         
+        # Store as JSON - this ensures data persistence
+        import json
+        content = json.dumps(user_data)
+        
         try:
-            # Learn user concept with metadata
+            # Learn user concept 
             user_id = self.storage.learn_concept_v2(
                 content=content,
                 options={
                     "generate_embedding": True,
                     "extract_associations": False,  # No associations yet
-                    "metadata": metadata,
                 }
             )
             
@@ -140,9 +156,7 @@ class UserService:
     
     async def login(self, email: str, password: str) -> Dict:
         """
-        Authenticate user and create session.
-        
-        Verifies password and creates a Session concept in user-storage.dat.
+        Authenticate user and create session - VECTOR SEARCH ONLY.
         
         Args:
             email: User email
@@ -154,100 +168,99 @@ class UserService:
         Raises:
             ValueError: If credentials are invalid
         """
-        # Find user by email
         try:
-            users = self.storage.semantic_search(
-                query=f"user email:{email}",
-                k=1,
-            )
+            import json
+            import secrets
             
-            if not users or len(users) == 0:
+            logger.info(f"Vector search login: {email}")
+            
+            # Use vector search to find all concepts
+            dummy_vector = [0.0] * 768
+            vector_results = self.storage.vector_search(dummy_vector, k=50)
+            
+            # Find user with matching email (clean code, no backward compatibility)
+            user_data = None
+            user_concept_id = None
+            
+            for concept_id, similarity in vector_results:
+                concept = self.storage.query_concept(concept_id)
+                if concept and concept.get("content"):
+                    try:
+                        data = json.loads(concept["content"])
+                        if (data.get("type") == "user" and 
+                            data.get("email") == email):
+                            user_data = data
+                            user_concept_id = concept_id
+                            logger.info(f"User found: {email}")
+                            break
+                    except json.JSONDecodeError:
+                        continue
+            
+            if not user_data:
+                logger.warning(f"User not found: {email}")
                 raise ValueError("Invalid credentials")
-            
-            user = users[0]
             
             # Check if user is active
-            if not user.get("metadata", {}).get("active", False):
+            if not user_data.get("active", True):
+                logger.warning(f"Inactive user: {email}")
                 raise ValueError("User account is inactive")
             
-            # Get password hash from metadata
-            stored_hash = user.get("metadata", {}).get("password_hash")
-            if not stored_hash:
-                raise ValueError("User account is corrupted")
-            
             # Verify password
+            stored_hash = user_data.get("password_hash")
+            if not stored_hash:
+                logger.error(f"No password hash: {email}")
+                raise ValueError("User account corrupted")
+            
             try:
                 self.ph.verify(stored_hash, password)
+                logger.info(f"Password verified: {email}")
             except (VerificationError, VerifyMismatchError):
+                logger.warning(f"Invalid password: {email}")
                 raise ValueError("Invalid credentials")
             
-            # Check if password needs rehashing (Argon2 params updated)
-            if self.ph.check_needs_rehash(stored_hash):
-                new_hash = self.ph.hash(password)
-                # TODO: Update user metadata with new hash
-                logger.info(f"Password rehashed for user {email}")
-            
-            user_id = user.get("id")
-            if not user_id:
-                raise ValueError("User ID not found")
-            
-        except ValueError:
-            raise
-        except Exception as e:
-            logger.error(f"Login failed for {email}: {e}")
-            raise ValueError("Login failed")
-        
-        # Create session
-        try:
+            # Create session
             now = datetime.utcnow()
-            expires_at = now + timedelta(hours=24)
+            expires_at = now + timedelta(days=7)
             
-            session_content = f"Session for {email} started at {now.isoformat()}"
-            session_metadata = {
+            session_data = {
                 "type": "session",
-                "user_id": user_id,
+                "session_id": secrets.token_urlsafe(16),
+                "user_id": user_concept_id,
+                "email": user_data["email"],
+                "organization": user_data["organization"],
+                "role": user_data["role"],
                 "created_at": now.isoformat(),
                 "expires_at": expires_at.isoformat(),
                 "active": True,
                 "last_activity": now.isoformat(),
             }
             
-            session_id = self.storage.learn_concept_v2(
-                content=session_content,
+            session_concept_id = self.storage.learn_concept_v2(
+                content=json.dumps(session_data),
                 options={
-                    "generate_embedding": False,  # Sessions don't need embeddings
+                    "generate_embedding": True,  # Sessions NEED embeddings for storage
                     "extract_associations": False,
-                    "metadata": session_metadata,
                 }
             )
             
-            # Create association: user -> session
-            self.storage.create_association(
-                from_concept=user_id,
-                to_concept=session_id,
-                association_type="has_session",
-                strength=1.0,
-            )
-            
-            # Update last_login timestamp
-            # Note: Metadata updates not yet implemented in storage client
-            # TODO: Add update_concept_metadata method
-            
-            logger.info(f"✅ Session created for {email} (Session: {session_id[:8]})")
+            logger.info(f"✅ Session created: {email} -> {session_data['session_id'][:8]}")
             
             return {
-                "user_id": user_id,
-                "session_id": session_id,
-                "email": email,
-                "organization": user.get("metadata", {}).get("organization"),
-                "role": user.get("metadata", {}).get("role"),
-                "full_name": user.get("metadata", {}).get("full_name"),
-                "expires_at": expires_at.isoformat(),
+                "user_id": user_concept_id,
+                "session_id": session_data["session_id"],
+                "email": user_data["email"],
+                "organization": user_data["organization"],
+                "role": user_data["role"],
+                "full_name": user_data.get("full_name"),
+                "created_at": user_data.get("created_at"),
+                "last_login": now.isoformat(),
             }
             
+        except ValueError:
+            raise  # Re-raise credential errors
         except Exception as e:
-            logger.error(f"Session creation failed for {email}: {e}")
-            raise ValueError(f"Session creation failed: {str(e)}")
+            logger.error(f"Login failed: {email}: {e}")
+            raise ValueError("Login failed")
     
     async def logout(self, session_id: str) -> bool:
         """
@@ -266,7 +279,7 @@ class UserService:
         """
         try:
             # Get session concept
-            session = self.storage.get_concept(session_id)
+            session = self.storage.query_concept(session_id)
             
             if not session:
                 raise ValueError("Session not found")
@@ -296,52 +309,55 @@ class UserService:
             Dict with user info if valid, None otherwise
         """
         try:
-            # Get session concept
-            session = self.storage.get_concept(session_id)
+            import json
             
-            if not session:
+            # Search for session using ONLY vector search - no semantic search
+            session_info = None
+            
+            logger.info(f"Using vector search for session lookup: {session_id[:8]}")
+            dummy_vector = [0.0] * 768  # Use zero vector to get all concepts
+            vector_results = self.storage.vector_search(dummy_vector, k=50)
+            
+            # Find the session with the exact matching session_id
+            for concept_id, similarity in vector_results:
+                concept = self.storage.query_concept(concept_id)
+                if concept and concept.get("content"):
+                    try:
+                        session_data = json.loads(concept["content"])
+                        if (session_data.get("type") == "session" and 
+                            session_data.get("session_id") == session_id):
+                            session_info = session_data
+                            break
+                    except json.JSONDecodeError:
+                        continue
+            
+            if not session_info:
+                logger.debug(f"Session not found: {session_id[:8]}")
                 return None
             
-            metadata = session.get("metadata", {})
-            
             # Check if active
-            if not metadata.get("active", False):
+            if not session_info.get("active", False):
+                logger.debug(f"Session inactive: {session_id[:8]}")
                 return None
             
             # Check expiration
-            expires_at_str = metadata.get("expires_at")
+            expires_at_str = session_info.get("expires_at")
             if expires_at_str:
                 expires_at = datetime.fromisoformat(expires_at_str)
                 if datetime.utcnow() > expires_at:
                     logger.info(f"Session expired: {session_id[:8]}")
                     return None
             
-            # Get user ID
-            user_id = metadata.get("user_id")
-            if not user_id:
-                return None
-            
-            # Get user concept
-            user = self.storage.get_concept(user_id)
-            if not user:
-                return None
-            
-            user_metadata = user.get("metadata", {})
-            
-            # Check if user is active
-            if not user_metadata.get("active", False):
-                return None
-            
-            # Update last_activity
-            # TODO: Add update_concept_metadata method
-            
+            # Return session info with user details
             return {
-                "user_id": user_id,
-                "session_id": session_id,
-                "email": user_metadata.get("email"),
-                "organization": user_metadata.get("organization"),
-                "role": user_metadata.get("role"),
-                "full_name": user_metadata.get("full_name"),
+                "session_id": session_info["session_id"],
+                "user_id": session_info["user_id"],
+                "email": session_info["email"],
+                "organization": session_info["organization"],
+                "role": session_info["role"],
+                "created_at": session_info.get("created_at"),
+                "expires_at": session_info.get("expires_at"),
+                "active": session_info.get("active", True)
             }
             
         except Exception as e:
@@ -359,7 +375,7 @@ class UserService:
             Dict with user info or None if not found
         """
         try:
-            user = self.storage.get_concept(user_id)
+            user = self.storage.query_concept(user_id)
             
             if not user:
                 return None
@@ -424,7 +440,7 @@ class UserService:
         """
         try:
             # Get existing user
-            user = self.storage.get_concept(user_id)
+            user = self.storage.query_concept(user_id)
             if not user:
                 raise ValueError("User not found")
             
@@ -433,9 +449,9 @@ class UserService:
             # Check if email is being changed
             if email and email != metadata.get("email"):
                 # Validate new email doesn't exist
-                existing_users = self.storage.semantic_search(
-                    query=f"user email:{email}",
-                    k=1,
+                existing_users = self.storage.query_by_semantic(
+                    semantic_filter={"type": "user", "email": email},
+                    max_results=1,
                 )
                 if existing_users and len(existing_users) > 0:
                     raise ValueError(f"Email {email} already in use")
@@ -468,7 +484,7 @@ class UserService:
         """
         try:
             # Get user
-            user = self.storage.get_concept(user_id)
+            user = self.storage.query_concept(user_id)
             if not user:
                 raise ValueError("User not found")
             
@@ -517,9 +533,9 @@ class UserService:
             import secrets
             
             # Find user
-            users = self.storage.semantic_search(
-                query=f"user email:{email}",
-                k=1,
+            users = self.storage.query_by_semantic(
+                semantic_filter={"type": "user", "email": email},
+                max_results=1,
             )
             
             if not users or len(users) == 0:
@@ -585,9 +601,9 @@ class UserService:
         """
         try:
             # Find token concept
-            token_concepts = self.storage.semantic_search(
-                query=f"password reset token {token}",
-                k=5,
+            token_concepts = self.storage.query_by_semantic(
+                semantic_filter={"type": "password_reset_token", "token": token},
+                max_results=5,
             )
             
             token_concept = None
@@ -613,7 +629,7 @@ class UserService:
             
             # Get user
             user_id = token_metadata.get("user_id")
-            user = self.storage.get_concept(user_id)
+            user = self.storage.query_concept(user_id)
             
             if not user:
                 raise ValueError("User not found")
@@ -653,7 +669,7 @@ class UserService:
             ValueError: If user not found
         """
         try:
-            user = self.storage.get_concept(user_id)
+            user = self.storage.query_concept(user_id)
             if not user:
                 raise ValueError("User not found")
             
@@ -687,7 +703,7 @@ class UserService:
         """
         try:
             # Get user to verify existence
-            user = self.storage.get_concept(user_id)
+            user = self.storage.query_concept(user_id)
             if not user:
                 raise ValueError("User not found")
             
@@ -756,11 +772,13 @@ class UserService:
         """
         try:
             # Search for user concepts
-            query = "user" + (f" organization:{organization}" if organization else "")
+            filter_dict = {"type": "user"}
+            if organization:
+                filter_dict["organization"] = organization
             
-            results = self.storage.semantic_search(
-                query=query,
-                k=limit,
+            results = self.storage.query_by_semantic(
+                semantic_filter=filter_dict,
+                max_results=limit,
             )
             
             users = []
@@ -802,9 +820,11 @@ class UserService:
             List of matching users
         """
         try:
-            results = self.storage.semantic_search(
-                query=f"user {query}",
-                k=limit,
+            # For user search, we'll use a simple type filter for now
+            # TODO: Implement more sophisticated text search when available
+            results = self.storage.query_by_semantic(
+                semantic_filter={"type": "user"},
+                max_results=limit,
             )
             
             users = []

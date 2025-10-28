@@ -108,6 +108,7 @@ services:
       - SUTRA_EMBEDDING_TIMEOUT_SEC=30
       - SUTRA_MIN_ASSOCIATION_CONFIDENCE=0.5
       - SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT=10
+      - SUTRA_SEMANTIC_ANALYSIS=false  # Disable for user storage (auth data only)
     depends_on:
       embedding-single:
         condition: service_healthy

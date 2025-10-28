@@ -650,15 +650,26 @@ class StorageClient:
         """Query concepts by semantic filter.
         
         Args:
-            semantic_filter: Semantic filter constraints
+            semantic_filter: Semantic filter constraints (will be converted to proper SemanticFilterMsg format)
             max_results: Maximum number of results
         
         Returns:
             List of matching concepts with metadata
         """
+        # Convert the semantic_filter dict to the proper SemanticFilterMsg structure
+        filter_msg = {
+            "semantic_type": semantic_filter.get("semantic_type"),
+            "domain_context": semantic_filter.get("domain_context"),
+            "temporal_after": semantic_filter.get("temporal_after"),
+            "temporal_before": semantic_filter.get("temporal_before"),
+            "has_causal_relation": semantic_filter.get("has_causal_relation", False),  # Required field
+            "min_confidence": semantic_filter.get("min_confidence", 0.0),
+            "required_terms": semantic_filter.get("required_terms", []),
+        }
+        
         response = self._send_request("QueryBySemantic", {
-            "filter": semantic_filter,
-            "max_results": max_results,
+            "filter": filter_msg,
+            "limit": max_results,
         })
         
         if "Error" in response:
@@ -666,12 +677,38 @@ class StorageClient:
         
         if "QueryBySemanticOk" in response:
             result = response["QueryBySemanticOk"]
-            if isinstance(result, dict) and "results" in result:
-                return result["results"]
+            if isinstance(result, dict) and "concepts" in result:
+                return result["concepts"]
             elif isinstance(result, list):
                 return result
         
         return []
+    
+    # ======================== COMPATIBILITY ALIASES ========================
+    
+    def semantic_search(
+        self,
+        query: str,
+        max_results: int = 10,
+        semantic_filter: Optional[Dict] = None,
+    ) -> List[Dict]:
+        """Compatibility method for semantic search."""
+        # Convert the query into a semantic filter with required terms
+        filter_dict = semantic_filter or {}
+        if query:
+            filter_dict["required_terms"] = [query]
+        
+        # Ensure has_causal_relation is set (required field)
+        filter_dict["has_causal_relation"] = filter_dict.get("has_causal_relation", False)
+        
+        return self.query_by_semantic(
+            semantic_filter=filter_dict,
+            max_results=max_results,
+        )
+    
+    def get_concept(self, concept_id: str) -> Optional[Dict]:
+        """Compatibility alias for query_concept."""
+        return self.query_concept(concept_id)
     
     def close(self):
         """Close connection to server"""
