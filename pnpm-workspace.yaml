@@ -1,9 +1,7 @@
 # Sutra AI - pnpm workspace configuration
 packages:
-  # UI Framework packages
-  - 'packages/sutra-ui-core'
-  - 'packages/sutra-ui-themes'
-  - 'packages/sutra-ui-components'
+  # UI Framework (unified package)
+  - 'packages/sutra-ui-framework'
   
   # Other Node.js packages (if any)
   - 'packages/sutra-client'

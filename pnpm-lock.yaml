@@ -104,7 +104,7 @@ importers:
         specifier: ^1.3.1
         version: 1.6.1(@types/node@24.9.2)(jsdom@26.1.0)
 
-  packages/sutra-ui-components:
+  packages/sutra-ui-framework:
     devDependencies:
       '@storybook/addon-a11y':
         specifier: ^8.6.14
@@ -130,12 +130,6 @@ importers:
       '@storybook/test':
         specifier: ^8.6.14
         version: 8.6.14(storybook@8.6.14(prettier@3.6.2))
-      '@sutra/ui-core':
-        specifier: workspace:*
-        version: link:../sutra-ui-core
-      '@sutra/ui-themes':
-        specifier: workspace:*
-        version: link:../sutra-ui-themes
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -202,66 +196,6 @@ importers:
       vite:
         specifier: ^6.0.7
         version: 6.4.1(@types/node@24.9.2)
-
-  packages/sutra-ui-core:
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.2
-        version: 19.2.2
-      '@types/react-dom':
-        specifier: ^19.2.2
-        version: 19.2.2(@types/react@19.2.2)
-      '@typescript-eslint/eslint-plugin':
-        specifier: ^8.46.2
-        version: 8.46.2(@typescript-eslint/parser@8.46.2(eslint@9.38.0)(typescript@5.9.3))(eslint@9.38.0)(typescript@5.9.3)
-      '@typescript-eslint/parser':
-        specifier: ^8.46.2
-        version: 8.46.2(eslint@9.38.0)(typescript@5.9.3)
-      eslint:
-        specifier: ^9.38.0
-        version: 9.38.0
-      eslint-plugin-react:
-        specifier: ^7.37.5
-        version: 7.37.5(eslint@9.38.0)
-      eslint-plugin-react-hooks:
-        specifier: ^7.0.1
-        version: 7.0.1(eslint@9.38.0)
-      react:
-        specifier: ^19.2.0
-        version: 19.2.0
-      react-dom:
-        specifier: ^19.2.0
-        version: 19.2.0(react@19.2.0)
-      tsup:
-        specifier: ^8.5.0
-        version: 8.5.0(postcss@8.5.6)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@24.9.2)(jsdom@26.1.0)
-
-  packages/sutra-ui-themes:
-    devDependencies:
-      '@sutra/ui-core':
-        specifier: workspace:*
-        version: link:../sutra-ui-core
-      '@typescript-eslint/eslint-plugin':
-        specifier: ^8.46.2
-        version: 8.46.2(@typescript-eslint/parser@8.46.2(eslint@9.38.0)(typescript@5.9.3))(eslint@9.38.0)(typescript@5.9.3)
-      '@typescript-eslint/parser':
-        specifier: ^8.46.2
-        version: 8.46.2(eslint@9.38.0)(typescript@5.9.3)
-      eslint:
-        specifier: ^9.38.0
-        version: 9.38.0
-      tsup:
-        specifier: ^8.5.0
-        version: 8.5.0(postcss@8.5.6)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@24.9.2)(jsdom@26.1.0)
@@ -2147,10 +2081,6 @@ packages:
 
   aria-query@5.3.0:
     resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}
-
-  aria-query@5.3.2:
-    resolution: {integrity: sha512-COROpnaoap1E2F000S62r6A60uHZnmlvomhfyT2DlTcrY1OrBKn2UhH7qn5wTC9zMvD0AY7csdPSNwKP+7WiQw==}
-    engines: {node: '>= 0.4'}
 
   array-buffer-byte-length@1.0.2:
     resolution: {integrity: sha512-LHE+8BuR7RYGDKvnrmcuSq3tDcKv9OFEXQt/HpbZhY7V6h0zlUXutnAD82GiFx9rdieCMjkvtcsPqBwgUl1Iiw==}
@@ -6236,7 +6166,7 @@ snapshots:
   '@testing-library/jest-dom@6.5.0':
     dependencies:
       '@adobe/css-tools': 4.4.4
-      aria-query: 5.3.2
+      aria-query: 5.1.3
       chalk: 3.0.0
       css.escape: 1.5.1
       dom-accessibility-api: 0.6.3
@@ -6246,7 +6176,7 @@ snapshots:
   '@testing-library/jest-dom@6.9.1':
     dependencies:
       '@adobe/css-tools': 4.4.4
-      aria-query: 5.3.2
+      aria-query: 5.1.3
       css.escape: 1.5.1
       dom-accessibility-api: 0.6.3
       picocolors: 1.1.1
@@ -6939,8 +6869,6 @@ snapshots:
   aria-query@5.3.0:
     dependencies:
       dequal: 2.0.3
-
-  aria-query@5.3.2: {}
 
   array-buffer-byte-length@1.0.2:
     dependencies:

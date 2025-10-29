@@ -1,0 +1,112 @@
+{
+  "name": "@sutra/ui-framework",
+  "version": "0.1.0",
+  "description": "Complete UI framework for Sutra - core foundation, themes, and components",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.mjs",
+      "require": "./dist/core/index.js"
+    },
+    "./themes": {
+      "types": "./dist/themes/index.d.ts",
+      "import": "./dist/themes/index.mjs",
+      "require": "./dist/themes/index.js"
+    },
+    "./themes/holographic": {
+      "types": "./dist/themes/holographic/index.d.ts",
+      "import": "./dist/themes/holographic/index.mjs",
+      "require": "./dist/themes/holographic/index.js"
+    },
+    "./themes/professional": {
+      "types": "./dist/themes/professional/index.d.ts",
+      "import": "./dist/themes/professional/index.mjs",
+      "require": "./dist/themes/professional/index.js"
+    },
+    "./themes/command": {
+      "types": "./dist/themes/command/index.d.ts",
+      "import": "./dist/themes/command/index.mjs",
+      "require": "./dist/themes/command/index.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.mjs",
+      "require": "./dist/components/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/core/index.ts src/themes/index.ts src/themes/holographic/index.ts src/themes/professional/index.ts src/themes/command/index.ts src/components/index.ts --format esm,cjs --dts --clean",
+    "dev": "tsup src/index.ts src/core/index.ts src/themes/index.ts src/themes/holographic/index.ts src/themes/professional/index.ts src/themes/command/index.ts src/components/index.ts --format esm,cjs --dts --watch",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:ci": "jest --ci --coverage --maxWorkers=2",
+    "test:accessibility": "jest --testPathPattern=a11y",
+    "typecheck": "tsc --noEmit",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  },
+  "keywords": [
+    "sutra",
+    "ui",
+    "framework",
+    "components",
+    "theme",
+    "design-system",
+    "react"
+  ],
+  "author": "Sutra AI",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@storybook/addon-a11y": "^10.0.0",
+    "@storybook/addon-essentials": "^8.6.14",
+    "@storybook/addon-interactions": "^8.6.14",
+    "@storybook/addon-links": "^10.0.0",
+    "@storybook/blocks": "^8.6.14",
+    "@storybook/react": "^10.0.0",
+    "@storybook/react-vite": "^10.0.0",
+    "@storybook/test": "^8.6.14",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/jest": "^29.5.14",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-storybook": "^10.0.0",
+    "jest": "^30.2.0",
+    "jest-axe": "^10.0.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "storybook": "^10.0.0",
+    "ts-jest": "^29.4.5",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nranjan2code/sutra-memory.git",
+    "directory": "packages/sutra-ui-framework"
+  }
+}
