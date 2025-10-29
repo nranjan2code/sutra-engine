@@ -291,6 +291,26 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+# pnpm
+.pnpm-store/
+pnpm-debug.log*
+
+# Turborepo
+.turbo/
+
+# Storybook
+storybook-static/
+.storybook-out/
+
+# Build outputs for UI packages
+packages/*/dist/
+packages/*/build/
+packages/*/.tsup/
+
+# Jest/Testing
+packages/*/coverage/
+*.lcov
+
 # =============================================================================
 # Rust
 # =============================================================================
