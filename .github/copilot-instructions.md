@@ -28,17 +28,17 @@ Sutra AI is a **12-service distributed system** that provides explainable reason
 
 ## Essential Workflows
 
-### Build System (2025-10-28)
+### Build System (2025-11-03)
 ```bash
 # Build all services (single :latest tag strategy)
-SUTRA_EDITION=simple ./sutra-optimize.sh build-all      # 8 services (4.4GB)
-SUTRA_EDITION=enterprise ./sutra-optimize.sh build-all  # 10 services (4.76GB)
+SUTRA_EDITION=simple sutra build                        # 8 services (4.4GB)
+SUTRA_EDITION=enterprise sutra build                    # 10 services (4.76GB)
 
 # Check what was built
-./sutra-optimize.sh sizes
+sutra status
 
 # Build individual service
-SUTRA_EDITION=simple ./sutra-optimize.sh build-service storage
+SUTRA_EDITION=simple sutra build storage
 ```
 
 **Image Tagging:**
@@ -49,27 +49,28 @@ SUTRA_EDITION=simple ./sutra-optimize.sh build-service storage
 ### Deployment System
 ```bash
 # Deploy by edition (profile-based)
-SUTRA_EDITION=simple ./sutra deploy        # 8 services
-SUTRA_EDITION=community ./sutra deploy     # HA configuration
-SUTRA_EDITION=enterprise ./sutra deploy    # 10 services with grid
+SUTRA_EDITION=simple sutra deploy         # 8 services
+SUTRA_EDITION=community sutra deploy      # HA configuration
+SUTRA_EDITION=enterprise sutra deploy     # 10 services with grid
 
 # Check status
-./sutra status                             # Overall health
-docker compose ps                          # Raw Docker status
+sutra status                               # Overall health
+docker ps                                  # Raw Docker status
 ```
 
 **Service Breakdown:**
 - **Simple/Community**: 8 services (storage, api, hybrid, embedding, nlg, bulk-ingester, client, control)
 - **Enterprise**: +2 grid services (grid-master, grid-agent)
 
-### Release Management (2025-10-26)
+### Release Management (2025-11-03)
 ```bash
-./sutra-deploy.sh version          # Show current version (2.0.0)
+sutra version                      # Show current version (3.0.0)
+# Note: Release management moved to sutra-deploy.sh (backend)
 ./sutra-deploy.sh release patch    # Bug fix release (2.0.0 → 2.0.1)
 ./sutra-deploy.sh release minor    # Feature release (2.0.0 → 2.1.0)
 ./sutra-deploy.sh release major    # Breaking changes (2.0.0 → 3.0.0)
 git push origin main --tags        # Trigger automated builds
-./sutra-deploy.sh deploy v2.0.1    # Deploy specific version
+sutra deploy                       # Deploy current version
 ```
 
 ### Development Testing
@@ -78,7 +79,13 @@ git push origin main --tags        # Trigger automated builds
 PYTHONPATH=packages/sutra-core python -m pytest tests/ -v
 
 # Production smoke test (validates embeddings)
-./scripts/smoke-test-embeddings.sh
+sutra test smoke
+
+# Integration test (validates container deployment)
+sutra test integration
+
+# Validation test (validates Docker images)
+sutra validate
 
 # Rust tests (WAL recovery, 2PC transactions)
 cd packages/sutra-storage && cargo test
@@ -87,7 +94,7 @@ cd packages/sutra-storage && cargo test
 ### Security Modes
 - **Development (default):** No auth/encryption - localhost only
 - **Production:** `SUTRA_SECURE_MODE=true` - TLS 1.3, HMAC-SHA256, RBAC
-- Security code complete but **NOT YET integrated** into main binary
+- Security code **FULLY INTEGRATED** as of October 2025
 
 ## Project-Specific Patterns
 
@@ -214,8 +221,8 @@ Professional version control for customer deployments with centralized versionin
 
 **Check version:**
 ```bash
-./sutra-deploy.sh version
-cat VERSION  # 2.0.0
+sutra version                      # Show current version (3.0.0)
+cat VERSION                        # 3.0.0
 ```
 
 **Create release:**
@@ -241,7 +248,7 @@ cat VERSION  # 2.0.0
 
 **Deploy version:**
 ```bash
-./sutra-deploy.sh deploy v2.0.1
+sutra deploy                       # Deploy current version
 ```
 
 ### Semantic Versioning
@@ -269,6 +276,7 @@ MAJOR.MINOR.PATCH
 - **Don't forget WAL:** Storage operations are transactional with crash recovery
 - **Don't manually edit VERSION:** Use `./sutra-deploy.sh release <type>` for version bumps
 - **Don't skip release docs:** See `docs/release/` for complete release workflow
+- **Don't use removed scripts:** Use `sutra` command as single entry point, not external scripts
 
 ## Performance Expectations
 

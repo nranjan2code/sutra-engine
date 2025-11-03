@@ -290,14 +290,13 @@ Sutra AI offers three editions with **identical features**—differentiated only
 ```bash
 # Development deployment (NO security - localhost only)
 export SUTRA_EDITION=simple  # or community, enterprise
-./sutra deploy
+sutra deploy
 
 # Production deployment (WITH security)
 export SUTRA_EDITION=enterprise
 export SUTRA_SECURE_MODE=true
 export SUTRA_AUTH_SECRET="$(openssl rand -hex 32)"
-./scripts/generate-secrets.sh  # Generate TLS certificates
-./sutra deploy
+sutra deploy  # Security certificates auto-generated
 
 # Verify security is active
 docker logs sutra-storage | grep "Authentication: ENABLED"
@@ -311,14 +310,14 @@ docker logs sutra-storage | grep "Authentication: ENABLED"
 ```bash
 # Clone repository
 git clone <repository-url>
-cd sutra-models
+cd sutra-memory
 
 # Build all services (single :latest tag)
-SUTRA_EDITION=simple ./sutra-optimize.sh build-all      # 8 services (4.4GB)
-SUTRA_EDITION=enterprise ./sutra-optimize.sh build-all  # 10 services (4.76GB)
+SUTRA_EDITION=simple sutra build                        # 8 services (4.4GB)
+SUTRA_EDITION=enterprise sutra build                    # 10 services (4.76GB)
 
 # Check what was built
-./sutra-optimize.sh sizes
+sutra status
 ```
 
 **📖 Complete Build Guide:** [docs/build/README.md](docs/build/README.md)
@@ -327,16 +326,16 @@ SUTRA_EDITION=enterprise ./sutra-optimize.sh build-all  # 10 services (4.76GB)
 
 ```bash
 # Deploy Simple edition (default)
-SUTRA_EDITION=simple ./sutra deploy
+SUTRA_EDITION=simple sutra deploy
 
 # Deploy Community edition (HA embedding)
-SUTRA_EDITION=community ./sutra deploy
+SUTRA_EDITION=community sutra deploy
 
 # Deploy Enterprise edition (Grid infrastructure)
-SUTRA_EDITION=enterprise ./sutra deploy
+SUTRA_EDITION=enterprise sutra deploy
 
 # Check deployment status
-./sutra status
+sutra status
 ```
 
 **📖 Complete Deployment Guide:** [docs/deployment/README.md](docs/deployment/README.md)
@@ -546,12 +545,8 @@ For production deployments:
 ### 1. Quick Production Deploy
 
 ```bash
-# Generate secrets (one-time)
-chmod +x scripts/generate-secrets.sh
-./scripts/generate-secrets.sh
-
-# Deploy with security enabled
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
+# Deploy with security enabled (secrets auto-generated)
+SUTRA_SECURE_MODE=true sutra deploy
 
 # Verify security is active
 docker logs sutra-storage 2>&1 | grep "Authentication: ENABLED"
@@ -659,7 +654,7 @@ See: **[docs/security/PRODUCTION_SECURITY_SETUP.md](docs/security/PRODUCTION_SEC
 
 ```bash
 # Run local scan
-./scripts/scan-dependencies.sh
+# Use sutra status to check dependencies
 
 # Or use Control Center
 http://localhost:9000  # Navigate to Dependencies tab
@@ -780,7 +775,7 @@ cd packages/sutra-storage
 cargo test
 
 # Production smoke test
-./scripts/smoke-test-embeddings.sh
+sutra test smoke  # Test embedding service
 ```
 
 ### Code Quality

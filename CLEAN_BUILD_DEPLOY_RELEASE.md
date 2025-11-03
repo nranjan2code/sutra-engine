@@ -16,26 +16,26 @@ The Sutra AI build, deploy, and release system has been streamlined for clarity 
 
 ```bash
 # Build all services
-SUTRA_EDITION=simple ./sutra-optimize.sh build-all      # 8 services (4.4GB)
-SUTRA_EDITION=enterprise ./sutra-optimize.sh build-all  # 10 services (4.76GB)
+SUTRA_EDITION=simple sutra build           # 8 services (4.4GB)
+SUTRA_EDITION=enterprise sutra build       # 10 services (4.76GB)
 
 # Check what was built
-./sutra-optimize.sh sizes
+sutra status
 
 # Build individual service
-SUTRA_EDITION=simple ./sutra-optimize.sh build-service storage
+SUTRA_EDITION=simple sutra build storage
 ```
 
 ### Deploy
 
 ```bash
 # Deploy by edition
-SUTRA_EDITION=simple ./sutra deploy        # Default, 8 services
-SUTRA_EDITION=community ./sutra deploy     # HA configuration
-SUTRA_EDITION=enterprise ./sutra deploy    # Grid-enabled
+SUTRA_EDITION=simple sutra deploy          # Default, 8 services
+SUTRA_EDITION=community sutra deploy       # HA configuration
+SUTRA_EDITION=enterprise sutra deploy      # Grid-enabled
 
 # Check status
-./sutra status
+sutra status
 docker compose ps
 ```
 

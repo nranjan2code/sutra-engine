@@ -875,25 +875,25 @@ curl http://localhost:8889/health
 **Build Services:**
 ```bash
 # Build all services (single :latest tag)
-SUTRA_EDITION=simple ./sutra-optimize.sh build-all     # 8 services (4.4GB)
-SUTRA_EDITION=enterprise ./sutra-optimize.sh build-all # 10 services (4.76GB)
+SUTRA_EDITION=simple sutra build                       # 8 services (4.4GB)
+SUTRA_EDITION=enterprise sutra build                   # 10 services (4.76GB)
 
 # Check build status
-./sutra-optimize.sh sizes
+sutra status
 
 # Build individual service
-SUTRA_EDITION=simple ./sutra-optimize.sh build-service storage
+SUTRA_EDITION=simple sutra build storage
 ```
 
 **Deploy Services:**
 ```bash
 # Deploy by edition
-SUTRA_EDITION=simple ./sutra deploy        # Default, 8 services
-SUTRA_EDITION=community ./sutra deploy     # HA configuration
-SUTRA_EDITION=enterprise ./sutra deploy    # Grid-enabled
+SUTRA_EDITION=simple sutra deploy          # Default, 8 services
+SUTRA_EDITION=community sutra deploy       # HA configuration
+SUTRA_EDITION=enterprise sutra deploy      # Grid-enabled
 
 # Check status
-./sutra status
+sutra status
 docker compose ps
 ```
 
@@ -917,16 +917,13 @@ cd packages/sutra-storage && cargo test
 **Release Management:**
 ```bash
 # Check version
-./sutra-deploy.sh version                  # Shows 2.0.0
+sutra version                              # Shows 3.0.0
 
-# Create release
-./sutra-deploy.sh release patch           # Bug fix
-./sutra-deploy.sh release minor           # Feature
-./sutra-deploy.sh release major           # Breaking
+# Build for release
+sutra build
 
-# Push & deploy
-git push origin main --tags
-./sutra-deploy.sh deploy v2.0.1
+# Deploy specific version
+SUTRA_VERSION=v2.0.1 sutra deploy
 ```
 
 **Documentation Navigation:**
