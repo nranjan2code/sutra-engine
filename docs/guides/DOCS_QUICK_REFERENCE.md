@@ -191,7 +191,7 @@ SUTRA_SECURE_MODE=true ./sutra deploy
 ### Migration Guides
 - **v3.0.0 Breaking Changes**: `MIGRATION_GUIDE_V3.md`
 - **Complete Transformation**: `PRODUCTION_TRANSFORMATION_COMPLETE.md`
-- **Action Items**: `IMMEDIATE_ACTION_ITEMS.md`
+- **Action Items**: `../project/IMMEDIATE_ACTION_ITEMS.md`
 
 ### Implementation Details
 - **Security Middleware**: `packages/sutra-api/sutra_api/security_middleware.py`

@@ -168,7 +168,7 @@ docker-compose -f docker-compose-grid.yml -f docker-compose.dev.yml up
 ## �📖 Full Documentation
 
 - **[FAST_DEVELOPMENT.md](../FAST_DEVELOPMENT.md)** - **NEW: Quick development guide**
-- **[QUICK_REFERENCE.txt](../QUICK_REFERENCE.txt)** - **NEW: Cheat sheet**
+- **[QUICK_REFERENCE.txt](../guides/QUICK_REFERENCE.txt)** - **NEW: Cheat sheet**
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete deployment guide
 - **[WARP.md](WARP.md)** - Architecture & development guide
 

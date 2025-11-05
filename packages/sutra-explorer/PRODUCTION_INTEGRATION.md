@@ -511,7 +511,7 @@ docker logs storage-server | grep -i slow
 - **Platform Architecture:** `.github/copilot-instructions.md`
 - **Storage Protocol:** `packages/sutra-storage/docs/PROTOCOL.md`
 - **Explorer Vision:** `docs/sutra-explorer/NEXT_GENERATION_VISION.md`
-- **Deep Review:** `SUTRA_EXPLORER_DEEP_REVIEW.md`
+- **Deep Review:** `docs/sutra-explorer/SUTRA_EXPLORER_DEEP_REVIEW.md`
 
 ### Code Locations
 - **Backend API:** `packages/sutra-explorer/backend/main.py`

@@ -395,7 +395,7 @@ services:
 
 1. `README.md` - Updated quickstart with storage client pattern
 2. `frontend/src/services/api.ts` - Multi-storage support
-3. `SUTRA_EXPLORER_DEEP_REVIEW.md` - Architecture review
+3. `docs/sutra-explorer/SUTRA_EXPLORER_DEEP_REVIEW.md` - Architecture review
 
 ### Total New Code
 
@@ -426,4 +426,4 @@ The Sutra Explorer v2.0 now has a **production-grade architecture** that:
 
 **Questions?** See `PRODUCTION_INTEGRATION.md` for complete deployment guide.
 
-**Architecture Review:** See `SUTRA_EXPLORER_DEEP_REVIEW.md` for detailed analysis.
+**Architecture Review:** See `docs/sutra-explorer/SUTRA_EXPLORER_DEEP_REVIEW.md` for detailed analysis.

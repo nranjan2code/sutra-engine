@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Documentation Added
 - `FAST_DEVELOPMENT.md` - Complete fast development guide
 - `SIMPLE_DEPLOYMENT_SOLUTION.md` - Implementation summary
-- `QUICK_REFERENCE.txt` - One-page deployment cheat sheet
+- `docs/guides/QUICK_REFERENCE.txt` - One-page deployment cheat sheet
 
 #### Files Changed
 - `sutra-deploy.sh`: Added `cmd_update()` for selective service updates

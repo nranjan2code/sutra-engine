@@ -215,7 +215,7 @@ sutra-control:
    - Migration guide
    - Metrics comparison
 
-3. **IMMEDIATE_ACTION_ITEMS.md** (200+ lines)
+3. **docs/project/IMMEDIATE_ACTION_ITEMS.md** (200+ lines)
    - Post-fix validation steps
    - Testing procedures
    - Rollback plan
@@ -346,7 +346,7 @@ curl -I https://api.yourdomain.com/health
 **Issues**: Label with `production-grade-v3.1`  
 **Migration Help**: See `docs/migrations/`  
 **Deployment**: See `PRODUCTION_DEPLOYMENT_GUIDE_V3.1.md`  
-**Rollback**: See `IMMEDIATE_ACTION_ITEMS.md`
+**Rollback**: See `docs/project/IMMEDIATE_ACTION_ITEMS.md`
 
 ---
 
