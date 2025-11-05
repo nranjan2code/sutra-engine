@@ -1,0 +1,439 @@
+"""
+Production deployment configuration for Sutra Memory.
+
+Zero external dependencies monitoring and observability.
+All monitoring via internal Grid events and natural language queries.
+"""
+
+version: '3.8'
+
+services:
+  # === STORAGE LAYER ===
+  storage-server:
+    image: sutra-storage:${SUTRA_VERSION:-latest}
+    container_name: sutra-storage-server
+    ports:
+      - "50051:50051"
+    environment:
+      - RUST_LOG=info
+      - SUTRA_STORAGE_PATH=/data
+      - SUTRA_SECURE_MODE=${SUTRA_SECURE_MODE:-false}
+      - SUTRA_GRID_ENABLED=true
+    volumes:
+      - storage_data:/data
+      - ./config/storage.toml:/etc/sutra/storage.toml:ro
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/storage-server", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # === API LAYER ===
+  sutra-api:
+    image: sutra-api:${SUTRA_VERSION:-latest}
+    container_name: sutra-api
+    ports:
+      - "8000:8000"
+    environment:
+      - SUTRA_STORAGE_SERVER=storage-server:50051
+      - SUTRA_SECURE_MODE=${SUTRA_SECURE_MODE:-false}
+      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
+      - LOG_LEVEL=info
+      # Production monitoring (internal only)
+      - MONITORING_ENABLED=true
+      - METRICS_ENDPOINT_ENABLED=true
+    depends_on:
+      storage-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+      - sutra-external
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  sutra-hybrid:
+    image: sutra-hybrid:${SUTRA_VERSION:-latest}
+    container_name: sutra-hybrid
+    ports:
+      - "8001:8001"
+    environment:
+      - SUTRA_STORAGE_SERVER=storage-server:50051
+      - SUTRA_SECURE_MODE=${SUTRA_SECURE_MODE:-false}
+      - LOG_LEVEL=info
+      - MONITORING_ENABLED=true
+    depends_on:
+      storage-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  # === EMBEDDING SERVICES (HA) ===
+  embedding-haproxy:
+    image: haproxy:2.8-alpine
+    container_name: sutra-embedding-lb
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - embedding-service-1
+      - embedding-service-2
+      - embedding-service-3
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8888/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+
+  embedding-service-1:
+    image: sutra-embedding-service:${SUTRA_VERSION:-latest}
+    container_name: sutra-embedding-1
+    ports:
+      - "8889:8000"
+    environment:
+      - ML_BASE_SERVICE_URL=http://ml-base-service:8000
+      - SERVICE_ID=embedding-1
+      - LOG_LEVEL=info
+      - MONITORING_ENABLED=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+
+  embedding-service-2:
+    image: sutra-embedding-service:${SUTRA_VERSION:-latest}
+    container_name: sutra-embedding-2
+    ports:
+      - "8890:8000"
+    environment:
+      - ML_BASE_SERVICE_URL=http://ml-base-service:8000
+      - SERVICE_ID=embedding-2
+      - LOG_LEVEL=info
+      - MONITORING_ENABLED=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+
+  embedding-service-3:
+    image: sutra-embedding-service:${SUTRA_VERSION:-latest}
+    container_name: sutra-embedding-3
+    ports:
+      - "8891:8000"
+    environment:
+      - ML_BASE_SERVICE_URL=http://ml-base-service:8000
+      - SERVICE_ID=embedding-3
+      - LOG_LEVEL=info
+      - MONITORING_ENABLED=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+
+  # === ML FOUNDATION ===
+  ml-base-service:
+    image: sutra-ml-base-service:${SUTRA_VERSION:-latest}
+    container_name: sutra-ml-base
+    ports:
+      - "8002:8000"
+    environment:
+      - MODEL_NAME=nomic-embed-text
+      - BATCH_SIZE=32
+      - MAX_WORKERS=2
+      - LOG_LEVEL=info
+      - MONITORING_ENABLED=true
+    volumes:
+      - ml_models:/app/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+
+  # === BULK INGESTION ===
+  bulk-ingester:
+    image: sutra-bulk-ingester:${SUTRA_VERSION:-latest}
+    container_name: sutra-bulk-ingester
+    ports:
+      - "8005:8005"
+    environment:
+      - SUTRA_STORAGE_SERVER=storage-server:50051
+      - SUTRA_EMBEDDING_SERVICE=http://embedding-haproxy:8888
+      - RUST_LOG=info
+      - MONITORING_ENABLED=true
+    depends_on:
+      storage-server:
+        condition: service_healthy
+      embedding-haproxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/bulk-ingester", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+
+  # === GRID INFRASTRUCTURE (Enterprise) ===
+  grid-master:
+    image: sutra-grid-master:${SUTRA_VERSION:-latest}
+    container_name: sutra-grid-master
+    ports:
+      - "7001:7001"
+    environment:
+      - RUST_LOG=info
+      - GRID_STORAGE_SERVERS=storage-server:50051
+      - SUTRA_SECURE_MODE=${SUTRA_SECURE_MODE:-false}
+      # Self-monitoring via Grid events
+      - SELF_MONITORING_ENABLED=true
+      - GRID_EVENTS_ENABLED=true
+    depends_on:
+      storage-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/sutra-grid-master", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+    profiles:
+      - enterprise
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  grid-agent:
+    image: sutra-grid-agent:${SUTRA_VERSION:-latest}
+    ports:
+      - "7002-7005:7002"  # Scale up to 4 agents
+    environment:
+      - RUST_LOG=info
+      - GRID_MASTER_URL=http://grid-master:7001
+      - SUTRA_SECURE_MODE=${SUTRA_SECURE_MODE:-false}
+      - GRID_EVENTS_ENABLED=true
+    depends_on:
+      grid-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/sutra-grid-agent", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+    profiles:
+      - enterprise
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+
+  # === CLIENT APPLICATIONS ===
+  sutra-client:
+    image: sutra-client:${SUTRA_VERSION:-latest}
+    container_name: sutra-client
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_HYBRID_URL=http://localhost:8001
+    depends_on:
+      - sutra-api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-external
+
+  sutra-control:
+    image: sutra-control:${SUTRA_VERSION:-latest}
+    container_name: sutra-control
+    ports:
+      - "3001:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_MONITORING_ENABLED=true
+    depends_on:
+      - sutra-api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-external
+
+  sutra-explorer:
+    image: sutra-explorer:${SUTRA_VERSION:-latest}
+    container_name: sutra-explorer
+    ports:
+      - "3002:3000"
+      - "8100:8100"
+    environment:
+      - SUTRA_USER_STORAGE=storage-server:50051
+      - SUTRA_DOMAIN_STORAGE=storage-server:50051
+      - CORS_ORIGINS=http://localhost:3002
+      - MONITORING_ENABLED=true
+    depends_on:
+      storage-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sutra-internal
+      - sutra-external
+
+  # === NGINX REVERSE PROXY ===
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: sutra-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - sutra-api
+      - sutra-client
+      - sutra-control
+    restart: unless-stopped
+    networks:
+      - sutra-external
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+# === NETWORKS ===
+networks:
+  sutra-internal:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+  sutra-external:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+# === VOLUMES ===
+volumes:
+  storage_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/storage
+  
+  ml_models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/models
+
+# === PROFILES FOR DIFFERENT EDITIONS ===
+# Simple: Basic services only
+# Community: + HA embedding services
+# Enterprise: + Grid infrastructure with self-monitoring

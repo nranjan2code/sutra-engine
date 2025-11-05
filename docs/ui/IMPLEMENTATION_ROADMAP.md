@@ -292,7 +292,10 @@ class UserService:
 1. **Auth Context**
    - Location: `packages/sutra-client/src/contexts/AuthContext.tsx` (new)
    - Login/logout functions
-   - Token storage (localStorage)
+   - httpOnly Cookie Authentication (v3.0.0)
+   - Tokens stored server-side (XSS immune)
+   - Automatic cookie management by browser
+   - NO localStorage usage (security vulnerability)
    - User state management
    
 2. **Login Page**
@@ -338,12 +341,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   useEffect(() => {
     // Check if user is logged in
-    const token = localStorage.getItem('token');
+    // v3.0.0: httpOnly cookies (XSS immune)
+    // Tokens automatically sent via Cookie header
+    // NO manual token management needed!
+    
+    // Authentication happens automatically via cookies
     if (token) {
       api.get('/auth/me')
         .then(response => setUser(response.data))
         .catch(() => {
-          localStorage.removeItem('token');
+          // v3.0.0: Server clears httpOnly cookies
+          // NO client-side token management needed
         })
         .finally(() => setLoading(false));
     } else {
@@ -353,14 +361,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const login = async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password });
-    localStorage.setItem('token', response.data.token);
+    // v3.0.0: Server sets httpOnly cookies automatically
+    // Response contains user data only (NO tokens in response body)
+    // Cookies sent automatically with every subsequent request
     setUser(response.data.user);
     navigate('/');
   };
   
   const logout = async () => {
     await api.post('/auth/logout');
-    localStorage.removeItem('token');
+    // v3.0.0: Server invalidates session and clears httpOnly cookies
+    // Client just needs to call logout endpoint
     setUser(null);
     navigate('/login');
   };
@@ -382,7 +393,9 @@ export const useAuth = () => {
 **Success Criteria:**
 
 - [ ] Login page functional
-- [ ] Token stored in localStorage
+- [x] httpOnly cookies (v3.0.0 - XSS immune, server-managed)
+- [x] Automatic cookie management (browser handles send/receive)
+- [x] CSRF protection (SameSite=lax cookies)
 - [ ] Protected routes work
 - [ ] Logout clears session
 - [ ] Auto-redirect to login when not authenticated

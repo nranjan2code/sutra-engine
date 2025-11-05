@@ -2,12 +2,18 @@
 Authentication routes.
 
 Handles user registration, login, logout, and session management.
+
+🔥 PRODUCTION SECURITY:
+- httpOnly cookies for tokens (XSS immune)
+- Secure flag for HTTPS-only
+- SameSite=Lax for CSRF protection
 """
 
 import logging
+import os
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from ..config import settings
 from ..middleware.auth import (
@@ -109,23 +115,24 @@ async def register(
     "/login",
     response_model=LoginResponse,
     summary="User login",
-    description="Authenticate user and create session with JWT tokens."
+    description="Authenticate user and create session with httpOnly cookies (production-grade security)."
 )
 async def login(
+    response: Response,  # 🔥 PRODUCTION: FastAPI Response to set cookies
     request: LoginRequest,
     user_service: UserService = Depends(get_user_service)
 ):
     """
-    Authenticate user and create session.
+    Authenticate user and create session with httpOnly cookies.
     
-    Verifies credentials and creates:
-    - Session concept in user-storage.dat
-    - JWT access token (24 hours)
-    - JWT refresh token (7 days)
+    🔥 PRODUCTION SECURITY:
+    - Tokens stored in httpOnly cookies (immune to XSS)
+    - Secure flag for HTTPS-only transmission
+    - SameSite=Lax for CSRF protection
+    - No tokens in response body (client-side never sees them)
     
     **Returns:**
-    - Access token and refresh token
-    - User information
+    - User information only (no tokens)
     
     **Raises:**
     - 401: Invalid credentials
@@ -149,6 +156,31 @@ async def login(
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
         
+        # 🔥 PRODUCTION: Set httpOnly cookies instead of returning tokens
+        secure_mode = os.getenv("SUTRA_SECURE_MODE", "false").lower() == "true"
+        
+        # Access token cookie (24 hours)
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,  # XSS protection
+            secure=secure_mode,  # HTTPS only in production
+            samesite="lax",  # CSRF protection
+            max_age=settings.jwt_expiration_hours * 3600,
+            path="/",
+        )
+        
+        # Refresh token cookie (7 days)
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=secure_mode,
+            samesite="lax",
+            max_age=settings.jwt_refresh_expiration_days * 86400,
+            path="/",
+        )
+        
         user_response = UserResponse(
             user_id=session_info["user_id"],
             email=session_info["email"],
@@ -157,9 +189,10 @@ async def login(
             full_name=session_info.get("full_name"),
         )
         
+        # 🔥 PRODUCTION: Return user info only (NO tokens in response body)
         return LoginResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
+            access_token="<set-in-cookie>",  # Not used by client
+            refresh_token="<set-in-cookie>",  # Not used by client
             token_type="bearer",
             expires_in=settings.jwt_expiration_hours * 3600,
             user=user_response
@@ -183,17 +216,17 @@ async def login(
     "/logout",
     response_model=LogoutResponse,
     summary="User logout",
-    description="Invalidate current session."
+    description="Invalidate current session and clear httpOnly cookies."
 )
 async def logout(
+    response: Response,  # 🔥 PRODUCTION: Clear cookies
     current_user: dict = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service)
 ):
     """
     Logout user and invalidate session.
     
-    Marks the session as inactive in user-storage.dat.
-    Client should discard JWT tokens after logout.
+    🔥 PRODUCTION: Clears httpOnly cookies server-side.
     
     **Returns:**
     - Logout confirmation
@@ -205,6 +238,10 @@ async def logout(
     try:
         session_id = current_user["session_id"]
         await user_service.logout(session_id)
+        
+        # 🔥 PRODUCTION: Clear httpOnly cookies
+        response.delete_cookie(key="access_token", path="/")
+        response.delete_cookie(key="refresh_token", path="/")
         
         return LogoutResponse(
             message="Successfully logged out",
@@ -279,28 +316,39 @@ async def get_current_user_info(
     "/refresh",
     response_model=LoginResponse,
     summary="Refresh access token",
-    description="Use refresh token to get a new access token."
+    description="Use refresh token from httpOnly cookie to get new tokens."
 )
 async def refresh_token(
-    request: RefreshTokenRequest,
+    request: Request,  # 🔥 PRODUCTION: Read cookie
+    response: Response,  # 🔥 PRODUCTION: Set cookies
     user_service: UserService = Depends(get_user_service)
 ):
     """
-    Refresh access token using refresh token.
+    Refresh access token using httpOnly cookie.
     
-    Validates refresh token and issues new access and refresh tokens.
+    🔥 PRODUCTION: Reads refresh_token from httpOnly cookie,
+    validates it, and sets new httpOnly cookies.
     
     **Returns:**
-    - New access token and refresh token
-    - User information
+    - User information (tokens in httpOnly cookies)
     
     **Raises:**
     - 401: Invalid or expired refresh token
     - 500: Server error during refresh
     """
     try:
+        # 🔥 PRODUCTION: Read refresh token from httpOnly cookie
+        refresh_token_value = request.cookies.get("refresh_token")
+        
+        if not refresh_token_value:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
         # Decode refresh token
-        payload = decode_token(request.refresh_token)
+        payload = decode_token(refresh_token_value)
         
         # Validate session still exists
         session_id = payload.get("session_id")
@@ -332,6 +380,29 @@ async def refresh_token(
         access_token = create_access_token(token_data)
         refresh_token_new = create_refresh_token(token_data)
         
+        # 🔥 PRODUCTION: Set new httpOnly cookies
+        secure_mode = os.getenv("SUTRA_SECURE_MODE", "false").lower() == "true"
+        
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=secure_mode,
+            samesite="lax",
+            max_age=settings.jwt_expiration_hours * 3600,
+            path="/",
+        )
+        
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token_new,
+            httponly=True,
+            secure=secure_mode,
+            samesite="lax",
+            max_age=settings.jwt_refresh_expiration_days * 86400,
+            path="/",
+        )
+        
         user_response = UserResponse(
             user_id=session_info["user_id"],
             email=session_info["email"],
@@ -340,9 +411,10 @@ async def refresh_token(
             full_name=session_info.get("full_name"),
         )
         
+        # 🔥 PRODUCTION: Return user info only (tokens in cookies)
         return LoginResponse(
-            access_token=access_token,
-            refresh_token=refresh_token_new,
+            access_token="<set-in-cookie>",
+            refresh_token="<set-in-cookie>",
             token_type="bearer",
             expires_in=settings.jwt_expiration_hours * 3600,
             user=user_response

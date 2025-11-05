@@ -41,16 +41,45 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    target: 'esnext',
+    minify: 'esbuild',
+    sourcemap: false, // Disable for production
+    
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom'],
-          ui: ['@mui/material', '@mui/icons-material'],
-          charts: ['recharts', '@mui/x-charts'],
-          utils: ['date-fns', 'zustand']
-        }
+          // Vendor chunk for stable libraries
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          
+          // UI framework chunk
+          ui: ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
+          
+          // Charts and visualization (optimized)
+          charts: ['recharts', 'd3', 'cytoscape', '@mui/x-charts', '@mui/x-data-grid'],
+          
+          // State management and utilities
+          utils: ['zustand', 'date-fns', 'framer-motion']
+        },
+        
+        // Optimize chunk names
+        chunkFileNames: 'js/[name]-[hash].js',
+        entryFileNames: 'js/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
       }
-    }
+    },
+    
+    // Chunk size warnings
+    chunkSizeWarningLimit: 800, // 800KB
+  },
+  
+  // Performance optimizations
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      '@mui/material',
+      '@mui/icons-material',
+      'recharts',
+    ],
   }
 })

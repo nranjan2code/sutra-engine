@@ -9,6 +9,7 @@ Run with:
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -99,10 +100,10 @@ Examples:
     logger.info(f"Storage path: {storage_path.absolute()}")
     logger.info(f"Starting Sutra AI API server on {args.host}:{args.port}")
 
-    # Initialize AI instance (gRPC)
+    # Initialize AI instance (TCP Binary Protocol)
     storage_server = os.environ.get("SUTRA_STORAGE_SERVER", "storage-server:50051")
     ai = SutraAI(storage_server=storage_server)
-    logger.info("SutraAI (gRPC) instance initialized")
+    logger.info("SutraAI (TCP Binary Protocol) instance initialized")
 
     # Create app with pre-configured AI instance
     app = create_app(ai_instance=ai)

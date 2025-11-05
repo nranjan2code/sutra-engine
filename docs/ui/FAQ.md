@@ -557,7 +557,8 @@ netstat -an | grep 8000
 
 **Solutions:**
 1. Log out and log back in
-2. Clear browser localStorage
+2. Logout to clear httpOnly cookies (server-managed)
+3. Clear browser cache if needed (cookies auto-cleared on logout)
 3. Check `SUTRA_JWT_SECRET_KEY` consistency
 
 ### Messages not appearing

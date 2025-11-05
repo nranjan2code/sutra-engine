@@ -73,6 +73,33 @@ Sutra AI v2.0.0 introduces a **revolutionary ML-Base Service architecture** that
 
 ### 🚨 CRITICAL PRODUCTION REQUIREMENTS
 
+### Production Security (NEW - v3.0.0)
+
+**httpOnly Cookie Authentication (XSS Immune):**
+  - Tokens stored server-side in httpOnly cookies (never in localStorage)
+  - JWT with HS256 signing, Argon2 password hashing
+  - Session management with automatic refresh
+  - Files: `packages/sutra-api/sutra_api/routes/auth.py`, `packages/sutra-client/src/contexts/AuthContext.tsx`
+
+**8-Layer Security Headers Middleware (OWASP Compliant):**
+  - HSTS with 1-year max-age and preload
+  - Content Security Policy (CSP) with strict directives
+  - X-Frame-Options: DENY (clickjacking protection)
+  - X-Content-Type-Options: nosniff
+  - X-XSS-Protection: 1; mode=block
+  - Referrer-Policy: strict-origin-when-cross-origin
+  - Permissions-Policy: restrictive defaults
+  - Secure cookie enforcement in production
+  - File: `packages/sutra-api/sutra_api/security_middleware.py` (230 lines)
+
+**Quality Gates (Automated Enforcement):**
+  - Pre-commit hooks: Black, isort, Flake8, Prettier, Cargo fmt, Bandit, detect-secrets
+  - CI validation: `scripts/ci-validate.sh` (formatting, linting, security, tests, bundle sizes)
+  - Bundle size limits: `.bundlesizerc` enforced at build time
+  - Dependency pinning: 100% exact versions (Python `==`, JavaScript exact)
+
+**See**: `docs/security/` for complete security documentation.
+
 ### ML-Base Service Configuration
 
 **Production-Grade ML Inference Platform:**
@@ -89,16 +116,24 @@ Sutra AI v2.0.0 introduces a **revolutionary ML-Base Service architecture** that
 
 **See**: `docs/EMBEDDING_ARCHITECTURE.md` for complete architecture documentation.
 
-### TCP Protocol Requirements
+### TCP Binary Protocol (Production Standard)
 
 **ALL services MUST use `sutra-storage-client-tcp` package** - NEVER direct storage access:
 
-1. **Message Format**: Unit variants (`GetStats`, `Flush`, `HealthCheck`) send string, not `{variant: {}}`
-2. **Vector Serialization**: Always convert numpy arrays to Python lists before TCP transport
-3. **Error Handling**: Implement retry logic for TCP connection failures
+1. **Protocol**: Custom MessagePack-based binary protocol (10-50x faster than gRPC/REST)
+2. **Message Format**: Unit variants (`GetStats`, `Flush`, `HealthCheck`) send string, not `{variant: {}}`
+3. **Vector Serialization**: Always convert numpy arrays to Python lists before TCP transport
+4. **Error Handling**: Implement retry logic for TCP connection failures
+5. **Security**: TLS 1.3 support with certificate-based authentication
+
+**⚠️ IMPORTANT: gRPC completely removed as of v3.0.0** - All legacy code deleted:
+- Deleted: `packages/sutra-storage/src/server.rs` (205 lines)
+- Deleted: `packages/sutra-control/sutra_storage_client/` (entire directory)
+- Migration: Update any references from gRPC to TCP Binary Protocol
 
 **Common Failure Modes:**
 - "No embedding processor available" → ML-Base service not accessible or model not loaded
+- "Connection refused" → Storage server not running or incorrect port (50051)
 - "can not serialize 'numpy.ndarray' object" → Missing array-to-list conversion
 - "wrong msgpack marker" → Incorrect message format for unit variants
 - "Connection closed" → TCP client using wrong protocol

@@ -7,8 +7,9 @@
 ✅ **Agent Registration**: Agents register on startup  
 ✅ **Heartbeat Monitoring**: Detects failed agents (30s timeout)  
 ✅ **Health Status**: Tracks agent status (healthy/degraded/offline)  
-✅ **Cluster Info**: List agents and cluster status via gRPC  
+✅ **Cluster Info**: List agents and cluster status via TCP Binary Protocol  
 ✅ **Storage Node Control**: Spawn/stop storage nodes (forwarded to agents)  
+⚠️ **BREAKING CHANGE v3.0.0**: gRPC completely removed - TCP Binary Protocol only
 
 ## Building
 
@@ -35,8 +36,9 @@ cargo run
 **Port:** 7000 (hardcoded, will be configurable in future)  
 **Health Check Interval:** 10 seconds  
 **Agent Timeout:** 30 seconds (degraded at 15s)  
+**Protocol:** TCP Binary with MessagePack serialization
 
-## gRPC API
+## TCP Binary Protocol API
 
 ### Agent Lifecycle
 

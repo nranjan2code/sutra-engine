@@ -12,18 +12,17 @@ export const API_BASE_URL = '/api'
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
+  withCredentials: true, // ✅ PRODUCTION: Enable httpOnly cookies
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token (from secure storage)
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('sutra_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    // Token is now handled via httpOnly cookies automatically
+    // No manual Authorization header needed
     return config
   },
   (error) => {
@@ -42,23 +41,16 @@ api.interceptors.response.use(
       originalRequest._retry = true
 
       try {
-        const refreshToken = localStorage.getItem('sutra_refresh_token')
-        if (refreshToken) {
-          const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          })
-          
-          localStorage.setItem('sutra_token', data.access_token)
-          localStorage.setItem('sutra_refresh_token', data.refresh_token)
-          
-          // Retry original request with new token
-          originalRequest.headers.Authorization = `Bearer ${data.access_token}`
-          return api(originalRequest)
-        }
+        // Attempt refresh using httpOnly cookie (no manual token needed)
+        const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
+          withCredentials: true, // Include httpOnly cookies
+        })
+        
+        // Tokens are now set as httpOnly cookies by the server
+        // Retry original request
+        return api({ ...originalRequest, withCredentials: true })
       } catch (refreshError) {
-        // Refresh failed, clear tokens and redirect to login
-        localStorage.removeItem('sutra_token')
-        localStorage.removeItem('sutra_refresh_token')
+        // Refresh failed, redirect to login (cookies cleared by server)
         window.location.href = '/login'
         return Promise.reject(refreshError)
       }
@@ -141,6 +133,8 @@ export const authApi = {
     const { data } = await api.post('/auth/login', {
       email,
       password,
+    }, {
+      withCredentials: true, // Enable httpOnly cookies
     })
     return data
   },
@@ -149,7 +143,9 @@ export const authApi = {
    * Logout user
    */
   async logout() {
-    const { data } = await api.post('/auth/logout')
+    const { data } = await api.post('/auth/logout', {}, {
+      withCredentials: true, // Clear httpOnly cookies
+    })
     return data
   },
 
@@ -164,9 +160,9 @@ export const authApi = {
   /**
    * Refresh access token
    */
-  async refreshToken(refreshToken: string) {
-    const { data } = await api.post('/auth/refresh', {
-      refresh_token: refreshToken,
+  async refreshToken() {
+    const { data } = await api.post('/auth/refresh', {}, {
+      withCredentials: true, // Use httpOnly cookies
     })
     return data
   },

@@ -444,7 +444,9 @@ const api = axios.create({
 
 // Add auth token interceptor
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  // httpOnly cookie authentication (v3.0.0 - XSS immune)
+  // Tokens stored server-side, automatically sent with every request
+  // NO manual token management required!
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

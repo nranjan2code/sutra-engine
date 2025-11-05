@@ -39,21 +39,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
   
-  // Check if user is logged in on mount
+  // Check if user is logged in on mount (via httpOnly cookies)
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('sutra_token')
-      if (token) {
-        try {
-          const userData = await authApi.getCurrentUser()
-          setUser(userData)
-        } catch (err) {
-          console.error('Failed to validate session:', err)
-          localStorage.removeItem('sutra_token')
-          localStorage.removeItem('sutra_refresh_token')
-        }
+      try {
+        // Session validated via httpOnly cookies automatically
+        const userData = await authApi.getCurrentUser()
+        setUser(userData)
+      } catch (err) {
+        // No valid session - user will be redirected to login if needed
+        console.debug('No active session')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     
     checkAuth()
@@ -65,11 +63,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true)
       const response = await authApi.login(email, password)
       
-      // Store tokens
-      localStorage.setItem('sutra_token', response.access_token)
-      localStorage.setItem('sutra_refresh_token', response.refresh_token)
+      // ✅ PRODUCTION SECURITY: Tokens stored in httpOnly cookies (server-side)
+      // No client-side token storage - immune to XSS attacks
       
-      // Set user
+      // Set user from response
       setUser(response.user)
       
       // Navigate to home
@@ -87,13 +84,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = async () => {
     try {
       setLoading(true)
+      // Logout clears httpOnly cookies server-side
       await authApi.logout()
     } catch (err) {
       console.error('Logout error:', err)
     } finally {
-      // Clear local state regardless of API call success
-      localStorage.removeItem('sutra_token')
-      localStorage.removeItem('sutra_refresh_token')
+      // Clear local state (cookies already cleared by server)
       setUser(null)
       setLoading(false)
       navigate('/login')

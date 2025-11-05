@@ -17,13 +17,14 @@ The Sutra Storage Engine is a high-performance, distributed knowledge graph desi
 ├─────────────────────────────────────────────────────────────────┤
 │  Storage:                                                       │
 │  • Binary format: SUTRADAT v2 (mmap + WAL)                    │
-│  • Performance: Optimized reads and writes                 │
+│  • Performance: Optimized reads and writes                     │
 │  • Persistence: Write-Ahead Log with crash recovery           │
 ├─────────────────────────────────────────────────────────────────┤
 │  Interface:                                                     │
-│  • TCP Protocol: Custom binary for 10-50x lower latency       │
+│  • TCP Binary Protocol: MessagePack (10-50x faster than gRPC) │
 │  • Unified Learning: Server-side embeddings + associations    │
 │  • Vector Search: HNSW index with semantic queries            │
+│  ⚠️  BREAKING v3.0.0: gRPC removed - TCP Binary Protocol only │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

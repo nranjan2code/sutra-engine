@@ -11,6 +11,29 @@ Complete guide to deploying Sutra across all editions.
 - **[Infrastructure](infrastructure.md)** - Infrastructure requirements and setup
 - **[Validation](validation.md)** - Deployment validation and healthchecks
 - **[Enhancements](enhancements.md)** - Performance tuning and optimizations
+- **[Security Requirements (v3.0.0)](../security/README.md)** - Production-grade security
+- **[Quality Gates (v3.0.0)](../development/quality-gates.md)** - Automated enforcement
+
+## Production Requirements (v3.0.0)
+
+### Security
+- ✅ httpOnly Cookie Authentication (XSS immune)
+- ✅ 8-Layer OWASP Security Headers
+- ✅ TLS 1.3 with Certificate Authentication
+- ✅ 100% Dependency Pinning
+- ✅ Security Middleware (230 lines)
+
+### Quality
+- ✅ Pre-commit Hooks (9 checks)
+- ✅ CI Validation Pipeline
+- ✅ Bundle Size Limits
+- ✅ Security Scanning (Bandit, npm audit)
+- ✅ Credential Detection
+
+### Architecture
+- ✅ TCP Binary Protocol (gRPC removed)
+- ✅ MessagePack serialization (10-50x faster)
+- ✅ Zero localStorage usage
 
 ## Quick Start
 

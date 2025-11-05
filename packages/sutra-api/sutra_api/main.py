@@ -1,11 +1,18 @@
-"""
-Minimal FastAPI application - Thin gRPC Proxy.
+""" 
+Minimal FastAPI application - Thin TCP Proxy.
 
-This version uses only storage-client for gRPC communication.
+This version uses only storage-client for TCP Binary Protocol communication.
 NO local reasoning engine or heavy ML dependencies.
+
+PRODUCTION SECURITY:
+- httpOnly cookies for authentication (XSS protection)
+- Security headers middleware (OWASP recommendations) 
+- HTTPS enforcement in secure mode
+- Rate limiting and request size limits
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -46,6 +53,21 @@ from .models import (
 )
 from .routes import auth_router, conversations_router, spaces_router, search_router, graph_router, users_router
 
+# 🔥 PRODUCTION SECURITY: Import security middleware
+from .security_middleware import (
+    SecurityHeadersMiddleware,
+    HTTPSRedirectMiddleware, 
+    SecureCookieMiddleware,
+)
+
+# Import production monitoring (zero external dependencies)
+try:
+    from sutra_core.monitoring.metrics_middleware import add_production_monitoring
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
+    logger.warning("Production monitoring not available - install sutra-core")
+
 # Configure logging
 logging.basicConfig(level=settings.log_level, format=settings.log_format)
 logger = logging.getLogger(__name__)
@@ -58,7 +80,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.api_title} v{settings.api_version}")
     logger.info(f"Storage server: {settings.storage_server}")
     
-    # Initialize storage client
+    # Initialize TCP storage client (Binary Protocol)
     init_dependencies(app)
     
     yield
@@ -72,7 +94,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.api_title,
     version=settings.api_version,
-    description="Lightweight REST-to-gRPC proxy for Sutra AI",
+    description="Production REST-to-TCP proxy for Sutra AI (Binary Protocol)",
     lifespan=lifespan,
 )
 
@@ -84,6 +106,37 @@ app.add_middleware(
     allow_methods=settings.allow_methods,
     allow_headers=settings.allow_headers,
 )
+
+# 🔥 PRODUCTION SECURITY: Add security headers middleware
+secure_mode = os.getenv("SUTRA_SECURE_MODE", "false").lower() == "true"
+if secure_mode:
+    logger.info("✅ Production security mode enabled")
+    app.add_middleware(HTTPSRedirectMiddleware, enabled=True)
+    app.add_middleware(SecureCookieMiddleware, secure=True, httponly=True, samesite="lax")
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        strict_transport_security=True,
+        content_security_policy=True,
+        x_frame_options="DENY",
+        x_content_type_options=True,
+        x_xss_protection=True,
+        referrer_policy="strict-origin-when-cross-origin",
+        permissions_policy=True,
+    )
+else:
+    logger.warning("⚠️  Development mode - security features disabled. Set SUTRA_SECURE_MODE=true for production.")
+    # Still add security headers in dev, just less strict
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        strict_transport_security=False,
+        content_security_policy=True,
+        x_frame_options="SAMEORIGIN",  # Allow in dev
+    )
+
+# Add production monitoring (internal metrics)
+if MONITORING_AVAILABLE:
+    app = add_production_monitoring(app, service_name="sutra-api", include_endpoints=True)
+    logger.info("✅ Production monitoring enabled - zero external dependencies")
 
 # Add rate limiting middleware  
 from .middleware import RateLimitMiddleware
@@ -144,7 +197,7 @@ async def health_check(client=Depends(get_storage_client)):
     
     Returns service status, version, uptime, and basic metrics.
     """
-    # Get stats from storage server via gRPC
+    # Get stats from storage server via TCP Binary Protocol
     try:
         stats = client.stats()
         concepts_loaded = stats.get("concepts", 0)

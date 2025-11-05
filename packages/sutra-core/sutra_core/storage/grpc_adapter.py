@@ -1,20 +1,41 @@
-"""
+""" 
 gRPC Storage Adapter for distributed Sutra Storage.
+
+⚠️  DEPRECATED: This adapter is deprecated in favor of TCP Binary Protocol.
+    Use RustStorageAdapter or TcpStorageClient for new deployments.
+    
+    Migration path:
+    - Replace GrpcStorageAdapter with sutra_storage_client.TcpStorageClient
+    - Update SUTRA_STORAGE_SERVER to use TCP port (default: 7000)
+    - Remove gRPC dependencies from requirements
 
 Provides the same interface as RustStorageAdapter but communicates with
 a remote storage server via gRPC instead of using local ConcurrentStorage.
 
-This is the production deployment architecture:
-- Storage Server: Centralized Rust gRPC server with ConcurrentStorage
+This is the LEGACY deployment architecture:
+- Storage Server: Centralized Rust gRPC server with ConcurrentStorage  
 - API/Hybrid Services: Python services using GrpcStorageAdapter
+
+NEW (RECOMMENDED) architecture:
+- Storage Server: TCP Binary Protocol server (10-50x faster)
+- API/Hybrid Services: Python services using TcpStorageClient
 """
 
 import logging
 import os
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+
+# Issue deprecation warning on import
+warnings.warn(
+    "GrpcStorageAdapter is deprecated. Use TcpStorageClient (TCP Binary Protocol) instead. "
+    "gRPC support will be removed in v4.0.0. See migration guide in docs/migrations/",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 try:
     from sutra_storage_client import StorageClient

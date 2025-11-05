@@ -433,6 +433,8 @@ test_outputs/
 test_results/
 .coverage.*
 htmlcov/
+coverage.xml
+.pytest_cache/
 
 # Debug outputs
 debug/

@@ -106,20 +106,10 @@ export function useMessageStream(): UseMessageStreamReturn {
         error: null,
       });
 
-      // Get auth token
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setState((prev) => ({
-          ...prev,
-          isStreaming: false,
-          error: 'Authentication required',
-        }));
-        return;
-      }
+      // 🔥 PRODUCTION: No token needed - httpOnly cookies sent automatically
+      // Authentication handled by browser via withCredentials
 
-      // Create EventSource connection
-      // Note: EventSource doesn't support POST or custom headers directly,
-      // so we use a workaround with fetch + ReadableStream
+      // Create AbortController for cancellation
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
@@ -129,8 +119,8 @@ export function useMessageStream(): UseMessageStreamReturn {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        credentials: 'include', // 🔥 PRODUCTION: Send httpOnly cookies
         body: JSON.stringify({
           message,
           reasoning_depth: 'balanced',

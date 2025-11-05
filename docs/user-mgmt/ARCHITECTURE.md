@@ -63,7 +63,7 @@ The Sutra AI user management system uses a **dual-storage architecture** that se
 7. API Service → Return user data (no session created)
 ```
 
-### Login Flow  
+### Login Flow (httpOnly Cookies - v3.0.0)
 ```
 1. Frontend → API Service (POST /auth/login)
 2. API Service → UserService.login()
@@ -72,19 +72,34 @@ The Sutra AI user management system uses a **dual-storage architecture** that se
 5. UserService → Generate session data
 6. UserService → User Storage (learn_concept_v2 for session)
 7. User Storage → Embedding Service (session embeddings)
-8. UserService → Generate JWT tokens
-9. API Service → Return tokens + user data
+8. UserService → Generate JWT access + refresh tokens
+9. API Service → Set httpOnly cookies (access_token, refresh_token)
+10. API Service → Return user data (tokens NEVER sent to client)
 ```
 
-### Session Validation Flow
+**Security Benefits:**
+- Tokens stored in httpOnly cookies (XSS immune - JavaScript cannot access)
+- Automatic cookie management (browser sends with every request)
+- SameSite=lax protection (CSRF mitigation)
+- Secure flag in production (HTTPS only)
+
+### Session Validation Flow (httpOnly Cookies - v3.0.0)
 ```
-1. Frontend → API Service (with JWT token)
-2. API Service → JWT token validation
-3. API Service → Session ID extraction
-4. UserService → User Storage (vector_search for session)
-5. UserService → Session expiration check
-6. API Service → Allow/deny request
+1. Frontend → API Service (browser auto-sends httpOnly cookies)
+2. API Service → Extract access_token from Cookie header
+3. API Service → JWT token validation (signature, expiration)
+4. API Service → Session ID extraction from JWT payload
+5. UserService → User Storage (vector_search for session)
+6. UserService → Session expiration check
+7. API Service → Allow/deny request
+8. If access_token expired → Refresh flow with refresh_token cookie
 ```
+
+**Authentication Middleware:**
+- All protected endpoints use `get_current_user` dependency
+- Automatic token extraction from Cookie header
+- Transparent refresh token rotation
+- Session invalidation on logout
 
 ## Storage Architecture
 
