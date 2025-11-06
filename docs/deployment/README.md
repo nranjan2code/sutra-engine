@@ -2,8 +2,11 @@
 
 Complete guide to deploying Sutra across all editions.
 
+> **Important:** This deployment uses `sutra-works-` image prefix. See **[Image Naming Convention](IMAGE_NAMING.md)** for details.
+
 ## Contents
 
+- **[Image Naming Convention](IMAGE_NAMING.md)** - Docker image and container naming ⭐ **Start here**
 - **[Simple Edition](simple-edition.md)** - Single-node deployment (8 services)
 - **[Community Edition](community-edition.md)** - High-availability embedding (HA + load balancing)
 - **[Enterprise Edition](enterprise-edition.md)** - Distributed grid with sharding

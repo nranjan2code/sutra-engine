@@ -13,6 +13,8 @@
 
 Explainable reasoning over your private domain knowledge—without frontier LLMs. Built for regulated industries requiring complete audit trails and 1000× lower costs than ChatGPT.
 
+> **Note:** This deployment uses `sutra-works-` prefix for Docker images to avoid conflicts with other Sutra deployments. See `docs/deployment/IMAGE_NAMING.md` for details.
+
 ---
 
 ## 🎉 What's New (2025-12-01)

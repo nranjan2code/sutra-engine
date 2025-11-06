@@ -78,7 +78,7 @@ services:
 networks:
   sutra-network:
     external: true
-    name: sutra_sutra-network
+    name: sutra-works_sutra-network
 
 # NOTE: This compose file is meant to be used alongside the main
 # Sutra platform compose file (.sutra/compose/production.yml)

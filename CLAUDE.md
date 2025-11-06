@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Important Note on Image Naming
+
+This deployment uses the `sutra-works-` prefix for all Docker images to avoid conflicts with other Sutra deployments. See `docs/deployment/IMAGE_NAMING.md` for details. All `./sutra` CLI commands automatically use the correct image naming.
+
 ## Project Overview
 
 Sutra AI is a **production-grade, domain-specific explainable AI platform** providing semantic reasoning over private knowledge graphs. Unlike general-purpose LLMs, Sutra starts empty and learns exclusively from your proprietary data with complete audit trails and millisecond-level query responses.

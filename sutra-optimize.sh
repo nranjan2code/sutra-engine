@@ -119,7 +119,7 @@ show_size_comparison() {
     local total_size_mb=0
     
     # Show ML base first (foundation for ML services)
-    local ml_base_size=$(get_image_size "sutra-ml-base:$deploy_tag")
+    local ml_base_size=$(get_image_size "sutra-works-ml-base:$deploy_tag")
     printf "%-15s %-15s %-12s\n" "ml-base" "$ml_base_size" "~800MB"
     
     # Extract size in MB for total calculation
@@ -143,11 +143,11 @@ show_size_comparison() {
     for service in "${services[@]}"; do
         # Map service names to actual image names
         case "$service" in
-            ml-base-service) local image_name="sutra-ml-base-service" ;;
-            embedding) local image_name="sutra-embedding-service-v2" ;;
-            nlg) local image_name="sutra-nlg-service-v2" ;;
-            storage) local image_name="sutra-storage-server" ;;
-            *) local image_name="sutra-$service" ;;
+            ml-base-service) local image_name="sutra-works-ml-base-service" ;;
+            embedding) local image_name="sutra-works-embedding-service" ;;
+            nlg) local image_name="sutra-works-nlg-service" ;;
+            storage) local image_name="sutra-works-storage-server" ;;
+            *) local image_name="sutra-works-$service" ;;
         esac
         
         local size=$(get_image_size "$image_name:$deploy_tag")
@@ -221,9 +221,9 @@ build_service() {
     fi
     
     # Map service name to image name
-    local image_name="sutra-$service"
+    local image_name="sutra-works-$service"
     local deploy_tag="${SUTRA_IMAGE_TAG:-latest}"
-    
+
     # Build directly to deployment tag (no intermediate tag needed)
     build_cmd="$build_cmd -f $dockerfile -t $image_name:$deploy_tag ."
     
@@ -281,7 +281,7 @@ build_ml_service() {
     
     # Build directly to deployment tag (no intermediate tag needed)
     local deploy_tag="${SUTRA_IMAGE_TAG:-latest}"
-    build_cmd="$build_cmd -t sutra-$service-service:$deploy_tag ."
+    build_cmd="$build_cmd -t sutra-works-$service-service:$deploy_tag ."
     
     log_info "Running: $build_cmd"
     
@@ -291,7 +291,7 @@ build_ml_service() {
         
         # Show size
         local size
-        size=$(get_image_size "sutra-$service-service:$deploy_tag")
+        size=$(get_image_size "sutra-works-$service-service:$deploy_tag")
         log_info "Size: $size"
         
         return 0
@@ -323,25 +323,71 @@ build_ml_base() {
     build_cmd="$build_cmd --build-arg SUTRA_VERSION=$VERSION"
     build_cmd="$build_cmd -f $dockerfile"
     
-    # Build to deployment tag
+    # Build to deployment tag (foundation image, not the service)
     local deploy_tag="${SUTRA_IMAGE_TAG:-latest}"
-    build_cmd="$build_cmd -t sutra-ml-base:$deploy_tag"
+    build_cmd="$build_cmd -t sutra-works-ml-base:$deploy_tag"
     build_cmd="$build_cmd packages/sutra-ml-base/"
     
     log_info "Running: $build_cmd"
     
     # Execute build
     if eval "$build_cmd"; then
-        log_success "Built sutra-ml-base:$deploy_tag"
-        
+        log_success "Built sutra-ml-base:$deploy_tag (foundation)"
+
         # Show size
         local size
-        size=$(get_image_size "sutra-ml-base:$deploy_tag")
+        size=$(get_image_size "sutra-works-ml-base:$deploy_tag")
         log_info "Size: $size"
         
         return 0
     else
         log_error "Failed to build ML base foundation"
+        return 1
+    fi
+}
+
+# Build ML-Base Service (runs as a service on port 8887)
+build_ml_base_service() {
+    log_info "Building ML-Base Service (inference platform)"
+
+    local dockerfile="packages/sutra-ml-base-service/Dockerfile"
+
+    # Check if Dockerfile exists
+    if [ ! -f "$dockerfile" ]; then
+        log_error "ML-Base Service Dockerfile not found: $dockerfile"
+        return 1
+    fi
+
+    # Build command
+    local build_cmd="docker build"
+    if [ "$NO_CACHE" = "true" ]; then
+        build_cmd="$build_cmd --no-cache"
+    fi
+
+    # Build arguments
+    build_cmd="$build_cmd --build-arg SUTRA_VERSION=$VERSION"
+    build_cmd="$build_cmd --build-arg SUTRA_EDITION=$EDITION"
+    build_cmd="$build_cmd -f $dockerfile"
+
+    # Build to deployment tag (same as compose expects)
+    local deploy_tag="${SUTRA_IMAGE_TAG:-latest}"
+    build_cmd="$build_cmd -t sutra-works-ml-base-service:$deploy_tag"
+    build_cmd="$build_cmd ."
+
+    log_info "Running: $build_cmd"
+
+    # Execute build
+    if eval "$build_cmd"; then
+        log_success "Built sutra-ml-base-service:$deploy_tag (service)"
+
+        # Show size
+        local size
+        size=$(get_image_size "sutra-works-ml-base-service:$deploy_tag")
+        log_info "Size: $size"
+
+        return 0
+    else
+        log_error "Failed to build ML-Base Service"
         return 1
     fi
 }
@@ -375,7 +421,7 @@ build_storage_service() {
     
     # Build directly to deployment tag (no intermediate tag needed)
     local deploy_tag="${SUTRA_IMAGE_TAG:-latest}"
-    build_cmd="$build_cmd -t sutra-storage-server:$deploy_tag ."
+    build_cmd="$build_cmd -t sutra-works-storage-server:$deploy_tag ."
     
     log_info "Running: $build_cmd"
     
@@ -385,7 +431,7 @@ build_storage_service() {
         
         # Show size
         local size
-        size=$(get_image_size "sutra-storage-server:$deploy_tag")
+        size=$(get_image_size "sutra-works-storage-server:$deploy_tag")
         log_info "Size: $size"
         
         return 0
@@ -424,7 +470,7 @@ build_grid_service() {
     
     # Build directly to deployment tag
     local deploy_tag="${SUTRA_IMAGE_TAG:-latest}"
-    build_cmd="$build_cmd -t sutra-$service:$deploy_tag ."
+    build_cmd="$build_cmd -t sutra-works-$service:$deploy_tag ."
     
     log_info "Running: $build_cmd"
     
@@ -434,7 +480,7 @@ build_grid_service() {
         
         # Show size
         local size
-        size=$(get_image_size "sutra-$service:$deploy_tag")
+        size=$(get_image_size "sutra-works-$service:$deploy_tag")
         log_info "Size: $size"
         
         return 0
@@ -455,7 +501,15 @@ build_all_services() {
         return 1
     fi
     echo ""
-    
+
+    # Step 1.5: Build ML-Base Service (depends on ML base foundation)
+    log_info "Step 1.5: Building ML-Base Service"
+    if ! build_ml_base_service; then
+        log_error "Failed to build ML-Base Service"
+        return 1
+    fi
+    echo ""
+
     # Step 2: Core services for all editions
     local services=(embedding nlg hybrid control api bulk-ingester storage client)
     
@@ -507,13 +561,13 @@ test_optimized_images() {
     local pass_count=0
     
     for service in "${services[@]}"; do
-        local image_name="sutra-$service"
+        local image_name="sutra-works-$service"
         if [ "$service" = "embedding" ]; then
-            image_name="sutra-embedding-service"
+            image_name="sutra-works-embedding-service"
         elif [ "$service" = "nlg" ]; then
-            image_name="sutra-nlg-service"
+            image_name="sutra-works-nlg-service"
         else
-            image_name="sutra-$service"
+            image_name="sutra-works-$service"
         fi
         
         log_info "Testing $image_name:latest"
@@ -601,14 +655,15 @@ deploy_optimized() {
     # Deploy using docker-compose with pre-built images (skip building)
     log_info "Deploying with docker-compose using pre-built images..."
     log_info "Compose file: $COMPOSE_FILE"
-    log_info "Command: docker-compose -f $COMPOSE_FILE --profile $PROFILE up -d --no-build"
-    
-    if docker-compose -f "$COMPOSE_FILE" --profile "$PROFILE" up -d --no-build; then
+    log_info "Project name: sutra-works"
+    log_info "Command: docker-compose -p sutra-works -f $COMPOSE_FILE --profile $PROFILE up -d --no-build"
+
+    if docker-compose -p sutra-works -f "$COMPOSE_FILE" --profile "$PROFILE" up -d --no-build; then
         echo ""
         log_success "🎉 Deployment completed successfully!"
         echo ""
         log_info "Services are starting up. Check status with:"
-        echo "  docker-compose -f $COMPOSE_FILE --profile $PROFILE ps"
+        echo "  docker-compose -p sutra-works -f $COMPOSE_FILE --profile $PROFILE ps"
         echo ""
         log_info "ML Foundation Services:"
         echo "  • Embedding Service: http://localhost:8889"
@@ -656,13 +711,13 @@ show_optimization_status() {
     local optimized_count=0
     
     for service in "${services[@]}"; do
-        local image_name="sutra-$service"
+        local image_name="sutra-works-$service"
         if [ "$service" = "embedding" ]; then
-            image_name="sutra-embedding-service"
+            image_name="sutra-works-embedding-service"
         elif [ "$service" = "nlg" ]; then
-            image_name="sutra-nlg-service"
+            image_name="sutra-works-nlg-service"
         elif [ "$service" = "storage" ]; then
-            image_name="sutra-storage-server"
+            image_name="sutra-works-storage-server"
         fi
         
         local status="❌ Not built"

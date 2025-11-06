@@ -301,7 +301,7 @@ Explorer should run in the same Docker network as the platform:
 networks:
   sutra-network:
     external: true
-    name: sutra_sutra-network
+    name: sutra-works_sutra-network
 ```
 
 This ensures:

@@ -94,7 +94,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
         
         # Remove server header (information disclosure)
-        response.headers.pop("Server", None)
+        if "Server" in response.headers:
+            del response.headers["Server"]
         
         # Add security notice header (optional)
         response.headers["X-Powered-By"] = "Sutra AI"

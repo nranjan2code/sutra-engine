@@ -109,10 +109,12 @@ def cmd_validate(args):
     # Check essential images exist
     essential_images = [
         "sutra-storage-server",
-        "sutra-api", 
+        "sutra-api",
         "sutra-hybrid",
         "sutra-control",
         "sutra-client",
+        "sutra-explorer-backend",
+        "sutra-explorer-frontend",
         "sutra-ml-base-service",
         "sutra-embedding-service",
         "sutra-nlg-service"
@@ -148,7 +150,7 @@ def cmd_test(args):
             # Fallback to Docker ps check
             try:
                 result = subprocess.run(
-                    ["docker", "compose", "-f", ".sutra/compose/production.yml", "ps"],
+                    ["docker", "compose", "-p", "sutra-works", "-f", ".sutra/compose/production.yml", "ps"],
                     capture_output=True, text=True, check=True
                 )
                 running_count = len([line for line in result.stdout.split('\n') if 'Up' in line])

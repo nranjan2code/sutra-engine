@@ -60,6 +60,10 @@ from .security_middleware import (
     SecureCookieMiddleware,
 )
 
+# Configure logging FIRST
+logging.basicConfig(level=settings.log_level, format=settings.log_format)
+logger = logging.getLogger(__name__)
+
 # Import production monitoring (zero external dependencies)
 try:
     from sutra_core.monitoring.metrics_middleware import add_production_monitoring
@@ -67,10 +71,6 @@ try:
 except ImportError:
     MONITORING_AVAILABLE = False
     logger.warning("Production monitoring not available - install sutra-core")
-
-# Configure logging
-logging.basicConfig(level=settings.log_level, format=settings.log_format)
-logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager

@@ -42,7 +42,7 @@ api.interceptors.response.use(
 
       try {
         // Attempt refresh using httpOnly cookie (no manual token needed)
-        const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
+        await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
           withCredentials: true, // Include httpOnly cookies
         })
         
