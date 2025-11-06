@@ -77,20 +77,35 @@ cargo test test_wal_recovery
 ### Deployment
 
 ```bash
+# Build nginx proxy (required for all deployments)
+cd .sutra/compose
+docker build -t sutra-works-nginx-proxy:latest -f nginx/Dockerfile nginx/
+cd ../..
+
 # Deploy by edition (profile-based Docker Compose)
-SUTRA_EDITION=simple sutra deploy      # 8 services (development)
-SUTRA_EDITION=community sutra deploy   # 8 services + HA embedding
-SUTRA_EDITION=enterprise sutra deploy  # 10 services + grid infrastructure
+export SUTRA_EDITION=simple    # or community, enterprise
+export SUTRA_VERSION=latest
+docker-compose -f .sutra/compose/production.yml --profile simple up -d
 
 # Production deployment with security
-SUTRA_SECURE_MODE=true SUTRA_EDITION=enterprise sutra deploy
+export SUTRA_SECURE_MODE=true
+export SUTRA_EDITION=enterprise
+export SUTRA_SSL_CERT_PATH=/path/to/cert.pem
+export SUTRA_SSL_KEY_PATH=/path/to/key.pem
+docker-compose -f .sutra/compose/production.yml --profile enterprise up -d
 
 # Stop services
-docker compose -f .sutra/compose/production.yml down
+docker-compose -f .sutra/compose/production.yml down
 
-# View logs
-docker logs sutra-storage           # Storage server logs
-docker logs sutra-api              # API service logs
+# View logs (note: all containers use sutra-works- prefix)
+docker logs sutra-works-storage         # Storage server logs
+docker logs sutra-works-api             # API service logs
+docker logs sutra-works-nginx-proxy     # Nginx proxy logs
+
+# Access services through nginx proxy
+curl http://localhost:8080/api/health       # API via proxy
+curl http://localhost:8080/sutra/health     # Hybrid service via proxy
+open http://localhost:8080/                 # Main UI via proxy
 ```
 
 ## Architecture Overview

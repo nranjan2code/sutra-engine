@@ -26,50 +26,75 @@ git clone https://github.com/nranjan2code/sutra-memory.git
 cd sutra-memory
 
 # 2. Set production environment
-export SUTRA_EDITION=enterprise
-export SUTRA_VERSION=3.0.0
+export SUTRA_EDITION=simple        # or community, enterprise
+export SUTRA_VERSION=latest
 export SUTRA_SECURE_MODE=true
 
-# 3. Build all services
-sutra build
+# 3. Build nginx proxy and services
+cd .sutra/compose
+docker build -t sutra-works-nginx-proxy:latest -f nginx/Dockerfile nginx/
 
 # 4. Deploy with Docker Compose
-sutra deploy
+cd ../..
+docker-compose -f .sutra/compose/production.yml --profile simple up -d
 
 # 5. Verify deployment
-curl http://localhost/health
-curl http://localhost:8000/internal/metrics
+curl http://localhost:8080/health
+curl http://localhost:8080/api/health
+curl http://localhost:8080/api/edition
 ```
 
-**🎉 Done! Access your services:**
-- **Main API**: http://localhost:8000
-- **Client UI**: http://localhost:3000  
-- **Control Center**: http://localhost:3001
-- **Explorer**: http://localhost:3002
-- **Internal Metrics**: http://localhost:8000/internal/metrics
+**🎉 Done! Access your services through nginx proxy:**
+- **Main UI**: http://localhost:8080/
+- **API**: http://localhost:8080/api/
+- **Control Center**: http://localhost:8080/control/
+- **Hybrid Service**: http://localhost:8080/sutra/
+- **HTTPS**: https://localhost/ (with SSL certificates)
 
 ## 🏗️ Architecture Overview
 
-### Production Stack
+### Production Stack (with Nginx Reverse Proxy)
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Client Apps   │◄──►│   API Gateway    │◄──►│  Core Services  │
-│                 │    │                  │    │                 │
-│ • React Client  │    │ • sutra-api      │    │ • sutra-storage │
-│ • Control UI    │    │ • sutra-hybrid   │    │ • sutra-core    │
-│ • Explorer      │    │ • Load Balancer  │    │ • Grid Master   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         ▲                        ▲                        ▲
-         │                        │                        │
-         ▼                        ▼                        ▼
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  Reverse Proxy  │    │  Internal Metrics │    │ ML & Embedding  │
-│                 │    │                  │    │                 │
-│ • Nginx         │    │ • Zero external  │    │ • HA Embedding  │
-│ • SSL/TLS       │    │ • Self-monitoring│    │ • Bulk Ingester │
-│ • Rate Limiting │    │ • Grid Events    │    │ • Vector Search │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                    Internet
+                                       │
+                                       ▼
+                           ┌────────────────────┐
+                           │   Nginx Proxy      │
+                           │   (80, 443, 8080)  │
+                           │   sutra-works-     │
+                           │   nginx-proxy      │
+                           └────────┬───────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+                    ▼               ▼               ▼
+           ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+           │  sutra-api  │  │sutra-hybrid │  │sutra-client │
+           │  (8000)     │  │  (8000)     │  │  (8080)     │
+           │  INTERNAL   │  │  INTERNAL   │  │  INTERNAL   │
+           └──────┬──────┘  └──────┬──────┘  └──────┬──────┘
+                  │                │                 │
+                  └────────┬───────┴─────────────────┘
+                           │ Internal Network Only
+                  ┌────────┴───────────────────┐
+                  │                            │
+                  ▼                            ▼
+         ┌─────────────────┐         ┌─────────────────┐
+         │ storage-server  │         │ ml-base-service │
+         │   (50051)       │         │    (8887)       │
+         │  INTERNAL ONLY  │         │  INTERNAL ONLY  │
+         │  sutra-works-   │         │  sutra-works-   │
+         │  storage        │         │  ml-base        │
+         └─────────────────┘         └─────────────────┘
 ```
+
+**Key Security Features:**
+- Single entry point via nginx reverse proxy (ports 80, 443, 8080)
+- All internal services use `expose:` (NOT `ports:`) - isolated from host
+- TLS 1.2/1.3 encryption with modern cipher suites
+- Rate limiting: auth (10/min), API (60/min), general (120/min)
+- Security headers on all responses
+- Consistent `sutra-works-` naming for all containers
 
 ### Key Improvements Made
 

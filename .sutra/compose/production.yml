@@ -3,15 +3,59 @@ services:
   # STORAGE LAYER
   # ============================================================================
   
+  # ============================================================================
+  # REVERSE PROXY & LOAD BALANCER
+  # ============================================================================
+
+  # Nginx Reverse Proxy (Single Entry Point for All External Traffic)
+  nginx-proxy:
+    build:
+      context: .
+      dockerfile: ./nginx/Dockerfile
+    image: sutra-works-nginx-proxy:${SUTRA_VERSION:-latest}
+    container_name: sutra-works-nginx-proxy
+    ports:
+      - "80:80"      # HTTP (redirects to HTTPS in production)
+      - "443:443"    # HTTPS (production)
+      - "8080:8080"  # Development (no SSL)
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-logs:/var/log/nginx
+      # Mount SSL certificates for production (optional - uses self-signed by default)
+      # - ${SUTRA_SSL_CERT_PATH}:/etc/nginx/ssl/cert.pem:ro
+      # - ${SUTRA_SSL_KEY_PATH}:/etc/nginx/ssl/key.pem:ro
+    environment:
+      - NGINX_WORKER_PROCESSES=auto
+      - NGINX_WORKER_CONNECTIONS=2048
+    depends_on:
+      - sutra-api
+      - sutra-hybrid
+      - sutra-client
+      - sutra-control
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # STORAGE LAYER (Internal Only - No External Exposure)
+  # ============================================================================
+
   # Main Storage Server (Core Sutra AI Knowledge Graph)
   storage-server:
     build:
       context: ../..
       dockerfile: ./packages/sutra-storage/Dockerfile
     image: sutra-works-storage-server:${SUTRA_VERSION:-latest}
-    container_name: sutra-storage
-    ports:
-      - "50051:50051"
+    container_name: sutra-works-storage
+    # SECURITY: Removed external port exposure - only accessible via internal network
+    expose:
+      - "50051"
     volumes:
       - storage-data:/data
     environment:
@@ -27,13 +71,10 @@ services:
       - SUTRA_STORAGE_MODE=${SUTRA_STORAGE_MODE:-single}
       - SUTRA_NUM_SHARDS=${SUTRA_NUM_SHARDS:-1}
       # Unified Learning Pipeline Configuration (edition-dependent)
-      - SUTRA_EMBEDDING_SERVICE_URL=${SUTRA_EMBEDDING_URL:-http://embedding-single:8888}
+      - SUTRA_EMBEDDING_SERVICE_URL=${SUTRA_EMBEDDING_URL:-http://sutra-works-embedding-single:8888}
       - SUTRA_EMBEDDING_TIMEOUT_SEC=30
       - SUTRA_MIN_ASSOCIATION_CONFIDENCE=0.5
       - SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT=10
-    depends_on:
-      embedding-single:
-        condition: service_healthy
     networks:
       - sutra-network
     restart: unless-stopped
@@ -50,9 +91,10 @@ services:
       context: ../..
       dockerfile: ./packages/sutra-storage/Dockerfile
     image: sutra-works-storage-server:${SUTRA_VERSION:-latest}
-    container_name: sutra-grid-events
-    ports:
-      - "50052:50051"
+    container_name: sutra-works-grid-events
+    # SECURITY: Internal only - no external exposure
+    expose:
+      - "50051"
     volumes:
       - grid-event-data:/data
     environment:
@@ -89,9 +131,10 @@ services:
       context: ../..
       dockerfile: ./packages/sutra-storage/Dockerfile
     image: sutra-works-storage-server:${SUTRA_VERSION:-latest}
-    container_name: sutra-user-storage
-    ports:
-      - "50053:50051"
+    container_name: sutra-works-user-storage
+    # SECURITY: Internal only - no external exposure
+    expose:
+      - "50051"
     volumes:
       - user-storage-data:/data
     environment:
@@ -104,13 +147,13 @@ services:
       - SUTRA_EDITION=${SUTRA_EDITION:-simple}
       - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
       # Unified Learning Pipeline Configuration
-      - SUTRA_EMBEDDING_SERVICE_URL=${SUTRA_EMBEDDING_URL:-http://embedding-single:8888}
+      - SUTRA_EMBEDDING_SERVICE_URL=${SUTRA_EMBEDDING_URL:-http://sutra-works-embedding-single:8888}
       - SUTRA_EMBEDDING_TIMEOUT_SEC=30
       - SUTRA_MIN_ASSOCIATION_CONFIDENCE=0.5
       - SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT=10
       - SUTRA_SEMANTIC_ANALYSIS=false  # Disable for user storage (auth data only)
     depends_on:
-      embedding-single:
+      storage-server:
         condition: service_healthy
     networks:
       - sutra-network
@@ -132,10 +175,11 @@ services:
       context: ../..
       dockerfile: ./packages/sutra-grid-master/Dockerfile
     image: sutra-works-grid-master:${SUTRA_VERSION:-latest}
-    container_name: sutra-grid-master
-    ports:
-      - "7001:7001"  # HTTP binary distribution
-      - "7002:7002"  # TCP agent connections
+    container_name: sutra-works-grid-master
+    # SECURITY: Internal only - no external exposure
+    expose:
+      - "7001"  # HTTP binary distribution
+      - "7002"  # TCP agent connections
     environment:
       - RUST_LOG=info
       - GRID_MASTER_HOST=0.0.0.0
@@ -165,9 +209,10 @@ services:
       context: ../..
       dockerfile: ./packages/sutra-grid-agent/Dockerfile
     image: sutra-works-grid-agent:${SUTRA_VERSION:-latest}
-    container_name: sutra-grid-agent-1
-    ports:
-      - "8003:8001"
+    container_name: sutra-works-grid-agent-1
+    # SECURITY: Internal only - no external exposure
+    expose:
+      - "8001"
     volumes:
       - agent1-data:/storage-nodes
     environment:
@@ -201,9 +246,10 @@ services:
       context: ../..
       dockerfile: ./packages/sutra-grid-agent/Dockerfile
     image: sutra-works-grid-agent:${SUTRA_VERSION:-latest}
-    container_name: sutra-grid-agent-2
-    ports:
-      - "8004:8001"
+    container_name: sutra-works-grid-agent-2
+    # SECURITY: Internal only - no external exposure
+    expose:
+      - "8001"
     volumes:
       - agent2-data:/storage-nodes
     environment:
@@ -241,9 +287,10 @@ services:
       context: ../..
       dockerfile: ./packages/sutra-api/Dockerfile
     image: sutra-works-api:${SUTRA_VERSION:-latest}
-    container_name: sutra-api
-    ports:
-      - "8000:8000"
+    container_name: sutra-works-api
+    # SECURITY: Access via nginx proxy only
+    expose:
+      - "8000"
     environment:
       - PYTHONUNBUFFERED=1
       - SUTRA_STORAGE_MODE=server
@@ -284,9 +331,10 @@ services:
       context: ../../packages/sutra-ml-base-service
       dockerfile: Dockerfile
     image: sutra-works-ml-base-service:${SUTRA_VERSION:-latest}
-    container_name: sutra-ml-base
-    ports:
-      - "8887:8887"  # ML inference endpoint
+    container_name: sutra-works-ml-base
+    # SECURITY: Internal only - ML inference backend
+    expose:
+      - "8887"
     environment:
       - PYTHONUNBUFFERED=1
       - ML_BASE_PORT=8887
@@ -335,9 +383,10 @@ services:
       context: ../../packages/sutra-embedding-service
       dockerfile: Dockerfile
     image: sutra-works-embedding-service:${SUTRA_VERSION:-latest}
-    container_name: embedding-single
-    ports:
-      - "8888:8888"  # Client endpoint (proxies to ML-Base)
+    container_name: sutra-works-embedding-single
+    # SECURITY: Internal only - embedding service backend
+    expose:
+      - "8888"
     environment:
       - PYTHONUNBUFFERED=1
       - EMBEDDING_PORT=8888
@@ -383,7 +432,7 @@ services:
   # Embedding Service Replica 1
   embedding-1:
     image: sutra-works-embedding-service:latest
-    container_name: embedding-1
+    container_name: sutra-works-embedding-1
     environment:
       - RUST_LOG=info
       - EMBEDDING_PORT=8888
@@ -415,7 +464,7 @@ services:
   # Embedding Service Replica 2
   embedding-2:
     image: sutra-works-embedding-service:latest
-    container_name: embedding-2
+    container_name: sutra-works-embedding-2
     environment:
       - RUST_LOG=info
       - EMBEDDING_PORT=8888
@@ -447,7 +496,7 @@ services:
   # Embedding Service Replica 3
   embedding-3:
     image: sutra-works-embedding-service:latest
-    container_name: embedding-3
+    container_name: sutra-works-embedding-3
     environment:
       - RUST_LOG=info
       - EMBEDDING_PORT=8888
@@ -479,10 +528,11 @@ services:
   # HAProxy Load Balancer for Embedding Services
   embedding-ha:
     image: haproxy:2.8-alpine
-    container_name: embedding-ha
-    ports:
-      - "8888:8888"  # Embedding service endpoint
-      - "8404:8404"  # HAProxy stats
+    container_name: sutra-works-embedding-ha
+    # SECURITY: Internal only - HAProxy load balancer (stats also internal)
+    expose:
+      - "8888"  # Embedding service endpoint
+      - "8404"  # HAProxy stats
     volumes:
       - ./docker/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:
@@ -512,9 +562,10 @@ services:
       context: ../../packages/sutra-nlg-service
       dockerfile: Dockerfile
     image: sutra-works-nlg-service:${SUTRA_VERSION:-latest}
-    container_name: nlg-single
-    ports:
-      - "8003:8003"  # Client endpoint (proxies to ML-Base)
+    container_name: sutra-works-nlg-single
+    # SECURITY: Internal only - NLG service backend
+    expose:
+      - "8003"
     environment:
       - PYTHONUNBUFFERED=1
       - NLG_PORT=8003
@@ -563,7 +614,7 @@ services:
       context: ../../packages/sutra-nlg-service
       dockerfile: Dockerfile
     image: sutra-works-nlg-service:${SUTRA_VERSION:-latest}
-    container_name: nlg-1
+    container_name: sutra-works-nlg-1
     env_file:
       - .env
     environment:
@@ -594,7 +645,7 @@ services:
   # NLG Service Replica 2
   nlg-2:
     image: sutra-works-nlg-service:latest
-    container_name: nlg-2
+    container_name: sutra-works-nlg-2
     env_file:
       - .env
     environment:
@@ -625,7 +676,7 @@ services:
   # NLG Service Replica 3
   nlg-3:
     image: sutra-works-nlg-service:latest
-    container_name: nlg-3
+    container_name: sutra-works-nlg-3
     env_file:
       - .env
     environment:
@@ -656,10 +707,11 @@ services:
   # HAProxy Load Balancer for NLG Services
   nlg-ha:
     image: haproxy:2.8-alpine
-    container_name: nlg-ha
-    ports:
-      - "8889:8889"  # NLG service endpoint
-      - "8405:8405"  # HAProxy stats (different from embedding)
+    container_name: sutra-works-nlg-ha
+    # SECURITY: Internal only - HAProxy load balancer for NLG
+    expose:
+      - "8889"  # NLG service endpoint
+      - "8405"  # HAProxy stats (different from embedding)
     volumes:
       - ./docker/haproxy-nlg.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:
@@ -684,9 +736,10 @@ services:
       context: ../..
       dockerfile: ./packages/sutra-hybrid/Dockerfile
     image: sutra-works-hybrid:${SUTRA_VERSION:-latest}
-    container_name: sutra-hybrid
-    ports:
-      - "8001:8000"
+    container_name: sutra-works-hybrid
+    # SECURITY: Access via nginx proxy only
+    expose:
+      - "8000"
     environment:
       - PYTHONUNBUFFERED=1
       - SUTRA_STORAGE_MODE=server
@@ -727,9 +780,10 @@ services:
       context: ../..
       dockerfile: ./packages/sutra-control/Dockerfile
     image: sutra-works-control:${SUTRA_IMAGE_TAG:-latest}
-    container_name: sutra-control
-    ports:
-      - "9000:9000"
+    container_name: sutra-works-control
+    # SECURITY: Access via nginx proxy only
+    expose:
+      - "9000"
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -763,9 +817,10 @@ services:
       context: ../../packages/sutra-client
       dockerfile: Dockerfile
     image: sutra-works-client:${SUTRA_VERSION:-latest}
-    container_name: sutra-client
-    ports:
-      - "8080:8080"
+    container_name: sutra-works-client
+    # SECURITY: Access via nginx proxy only
+    expose:
+      - "8080"
     environment:
       # Edition Configuration (for UI display)
       - SUTRA_EDITION=${SUTRA_EDITION:-simple}
@@ -795,9 +850,10 @@ services:
       context: ../../packages/sutra-explorer
       dockerfile: ./backend/Dockerfile
     image: sutra-works-explorer-backend:${SUTRA_VERSION:-latest}
-    container_name: sutra-explorer-backend
-    ports:
-      - "8100:8100"
+    container_name: sutra-works-explorer-backend
+    # SECURITY: Access via nginx proxy only
+    expose:
+      - "8100"
     environment:
       # API Configuration
       - API_HOST=0.0.0.0
@@ -835,9 +891,10 @@ services:
       args:
         - VITE_API_URL=http://localhost:8100
     image: sutra-works-explorer-frontend:${SUTRA_VERSION:-latest}
-    container_name: sutra-explorer-frontend
-    ports:
-      - "3000:3000"
+    container_name: sutra-works-explorer-frontend
+    # SECURITY: Access via nginx proxy only
+    expose:
+      - "3000"
     environment:
       - VITE_API_URL=http://sutra-explorer-backend:8100
     depends_on:
@@ -864,9 +921,10 @@ services:
       context: ../..
       dockerfile: ./packages/sutra-bulk-ingester/Dockerfile
     image: sutra-works-bulk-ingester:${SUTRA_VERSION:-latest}
-    container_name: sutra-bulk-ingester
-    ports:
-      - "8005:8005"  # Bulk ingestion API
+    container_name: sutra-works-bulk-ingester
+    # SECURITY: Access via nginx proxy only (optional service)
+    expose:
+      - "8005"
     volumes:
       - ./datasets:/datasets:ro  # Read-only dataset access
       - ingestion-jobs:/jobs     # Job state persistence
@@ -918,6 +976,9 @@ volumes:
     driver: local
   # ML model cache volume
   ml-models-cache:
+    driver: local
+  # Nginx logs volume
+  nginx-logs:
     driver: local
 
 networks:
