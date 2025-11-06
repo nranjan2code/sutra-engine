@@ -30,7 +30,7 @@ chmod +x scripts/scan-dependencies.sh
 #### Option B: Control Center UI
 ```bash
 # Start services
-./sutra-deploy.sh up
+sutra start
 
 # Open browser
 open http://localhost:9000

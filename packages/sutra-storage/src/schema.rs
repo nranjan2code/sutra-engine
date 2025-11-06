@@ -210,7 +210,7 @@ impl SchemaValidator {
     }
     
     /// Validate required fields for a Space concept
-    pub fn validate_space(attributes: &HashMap<String, String>) -> Result<(), String> {
+    pub fn validate_space(_attributes: &HashMap<String, String>) -> Result<(), String> {
         // Spaces only need a name (in content), attributes are optional
         Ok(())
     }
@@ -259,7 +259,7 @@ impl SchemaValidator {
 
 /// Generate standard content format for concepts
 pub mod content_templates {
-    use std::collections::HashMap;
+    
     
     /// Format user concept content
     pub fn format_user(email: &str, username: &str) -> String {

@@ -78,7 +78,7 @@ impl Agent {
     /// Handle incoming commands from Master via TCP
     async fn handle_command(&self, msg: GridMessage) -> GridResponse {
         match msg {
-            GridMessage::SpawnStorageNode { agent_id, storage_path, memory_limit_mb, port } => {
+            GridMessage::SpawnStorageNode { agent_id, storage_path, memory_limit_mb: _, port } => {
                 log::info!("📨 Received spawn request: path={}, port={}", storage_path, port);
                 
                 // Generate node ID
@@ -128,6 +128,12 @@ impl Agent {
             GridMessage::GetStorageNodeStatus { node_id } => {
                 let processes = self.storage_processes.read().await;
                 if let Some(process) = processes.get(&node_id) {
+                    let uptime_secs = current_timestamp().saturating_sub(process.started_at);
+                    log::debug!(
+                        "📊 Node {} status: uptime={}s, storage={}, restarts={}",
+                        node_id, uptime_secs, process.storage_path, process.restart_count
+                    );
+                    
                     GridResponse::GetStorageNodeStatusOk {
                         node_id: process.node_id.clone(),
                         status: "running".to_string(),
@@ -181,13 +187,17 @@ impl Agent {
         
         log::info!("📦 Spawning storage node {} on port {}", node_id, port);
         
-        // Spawn process
+        // Spawn process with configured memory limit
+        let memory_limit = self.config.storage.default_memory_mb;
         let mut cmd = Command::new(&self.config.storage.binary_path);
         cmd.arg("--port").arg(port.to_string())
            .arg("--storage-path").arg(&storage_path)
            .arg("--node-id").arg(&node_id)
+           .arg("--memory-limit").arg(memory_limit.to_string())
            .stdout(std::process::Stdio::null())  // Don't clutter logs
            .stderr(std::process::Stdio::null());
+        
+        log::debug!("💾 Spawning with {}MB memory limit", memory_limit);
         
         let mut child = cmd.spawn()?;
         let pid = child.id().ok_or_else(|| anyhow::anyhow!("Failed to get PID"))?;
@@ -281,8 +291,13 @@ impl Agent {
     
     /// Monitor storage processes and restart if needed
     async fn monitor_storage_nodes(agent_ref: Arc<RwLock<Agent>>) {
+        let health_check_interval_secs = {
+            let agent = agent_ref.read().await;
+            agent.config.monitoring.health_check_interval_secs
+        };
+        
         let mut interval = tokio::time::interval(
-            tokio::time::Duration::from_secs(10)
+            tokio::time::Duration::from_secs(health_check_interval_secs)
         );
         
         log::info!("🔍 Starting storage node monitor");
@@ -311,7 +326,7 @@ impl Agent {
             };
             
             // Emit crash events
-            for (node_id, restart_count, agent_id) in &crashed_nodes {
+            for (node_id, _restart_count, agent_id) in &crashed_nodes {
                 let agent = agent_ref.read().await;
                 if let Some(events) = &agent.events {
                     events.emit(GridEvent::NodeCrashed {
@@ -334,7 +349,7 @@ impl Agent {
                     
                     log::warn!("🔄 Restarting node {} (attempt {})", node_id, restart_count + 1);
                     
-                    let mut agent = agent_ref.write().await;
+                    let agent = agent_ref.write().await;
                     
                     // Update restart count
                     if let Some(process) = agent.storage_processes.write().await.get_mut(&node_id) {
@@ -343,7 +358,7 @@ impl Agent {
                     
                     // Restart the node
                     match agent.spawn_storage_node(node_id.clone()).await {
-                        Ok((port, new_pid)) => {
+                        Ok((_port, new_pid)) => {
                             log::info!("✅ Node {} restarted (new PID: {})", node_id, new_pid);
                             
                             // Emit restart event
@@ -444,7 +459,7 @@ impl Agent {
                     match send_message(&mut stream, &message).await {
                         Ok(_) => {
                             match recv_message::<GridResponse>(&mut stream).await {
-                                Ok(GridResponse::HeartbeatOk { acknowledged, timestamp }) => {
+                                Ok(GridResponse::HeartbeatOk { acknowledged: _, timestamp }) => {
                                     heartbeat_count += 1;
                                     
                                     if heartbeat_count % 12 == 0 {  // Log every minute (12 * 5s)

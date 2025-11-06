@@ -598,8 +598,8 @@ All 14 sessions across 4 phases have been successfully completed:
 
 1. **Test Complete System:**
    ```bash
-   ./sutra-deploy.sh install
-   ./sutra-deploy.sh status
+   sutra deploy
+   sutra status
    open http://localhost:8080
    ```
 
@@ -655,10 +655,10 @@ export SUTRA_JWT_SECRET_KEY=$(openssl rand -hex 32)
 echo "SUTRA_JWT_SECRET_KEY=${SUTRA_JWT_SECRET_KEY}" >> .env
 
 # 2. Deploy all services
-./sutra-deploy.sh install
+sutra deploy
 
 # 3. Check status (wait ~60 seconds)
-./sutra-deploy.sh status
+sutra status
 
 # 4. Access UI
 open http://localhost:8080

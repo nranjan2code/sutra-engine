@@ -118,7 +118,7 @@ pub struct ConceptMetadata {
    - Add volume mount for `./data/user-storage`
    
 2. **Deployment Script Updates**
-   - Location: `sutra-deploy.sh`
+   - Location: `./sutra unified CLI`
    - Add user storage initialization
    - Add health check for user storage
 

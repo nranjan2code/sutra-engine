@@ -64,10 +64,10 @@ Sutra AI is an **explainable AI system** designed for regulated industries (medi
 
 ```bash
 # One command deployment
-./sutra-deploy.sh install
+sutra deploy
 
 # Check status
-./sutra-deploy.sh status
+sutra status
 
 # Access UI
 open http://localhost:8080
@@ -400,7 +400,7 @@ Search is already optimized (<60ms p99), but:
 
 ```bash
 # Stop services
-./sutra-deploy.sh stop
+sutra stop
 
 # Backup data volumes
 docker run --rm \
@@ -409,7 +409,7 @@ docker run --rm \
   alpine tar czf /backup/user-storage-$(date +%Y%m%d).tar.gz /data
 
 # Restart
-./sutra-deploy.sh start
+sutra start
 ```
 
 See [Production Deployment Guide](./PRODUCTION_DEPLOYMENT.md) for full backup procedures.
@@ -418,7 +418,7 @@ See [Production Deployment Guide](./PRODUCTION_DEPLOYMENT.md) for full backup pr
 
 ```bash
 # Stop services
-./sutra-deploy.sh stop
+sutra stop
 
 # Restore data
 docker run --rm \
@@ -427,23 +427,23 @@ docker run --rm \
   alpine sh -c "cd / && tar xzf /backup/user-storage-20241026.tar.gz"
 
 # Restart
-./sutra-deploy.sh start
+sutra start
 ```
 
 ### How do I upgrade to a new version?
 
 ```bash
 # Check current version
-./sutra-deploy.sh version
+sutra version
 
 # Pull latest
 git pull origin main
 
 # Update containers
-./sutra-deploy.sh update
+docker-compose -f .sutra/compose/production.yml up -d --build
 
 # Verify
-./sutra-deploy.sh status
+sutra status
 ```
 
 ### How do I monitor the system?
@@ -451,11 +451,11 @@ git pull origin main
 **Built-in health checks:**
 ```bash
 # Overall status
-./sutra-deploy.sh status
+sutra status
 
 # Service logs
-./sutra-deploy.sh logs sutra-api
-./sutra-deploy.sh logs sutra-storage
+sutra logs sutra-api
+sutra logs sutra-storage
 
 # Health endpoints
 curl http://localhost:8000/health
@@ -538,10 +538,10 @@ Sutra AI is designed for compliance:
 **Solutions:**
 ```bash
 # Check status
-./sutra-deploy.sh status
+sutra status
 
 # Restart services
-./sutra-deploy.sh restart
+sutra restart
 
 # Check ports
 netstat -an | grep 8080
@@ -577,8 +577,8 @@ netstat -an | grep 8000
 
 **Check logs:**
 ```bash
-./sutra-deploy.sh logs sutra-api
-./sutra-deploy.sh logs sutra-storage
+sutra logs sutra-api
+sutra logs sutra-storage
 ```
 
 **Common issues:**
@@ -597,7 +597,7 @@ netstat -an | grep 8000
 **Still broken:**
 ```bash
 # Rebuild UI
-./sutra-deploy.sh update sutra-client
+docker-compose -f .sutra/compose/production.yml up -d --build sutra-client
 ```
 
 ---

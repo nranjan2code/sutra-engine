@@ -15,6 +15,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -99,7 +100,7 @@ pub enum AuthMethod {
     JwtHS256 { secret: String },
 }
 
-/// Authentication manager
+/// Authentication manager with rate limiting
 pub struct AuthManager {
     /// Authentication method configuration
     method: AuthMethod,
@@ -109,11 +110,18 @@ pub struct AuthManager {
     revoked_tokens: Arc<RwLock<HashSet<String>>>,
     /// Token expiration duration (seconds)
     token_ttl: u64,
+    /// Production-grade rate limiter (per-token limits)
+    rate_limiter: Arc<RateLimiter>,
 }
 
 impl AuthManager {
     /// Create new auth manager with HMAC API key method
     pub fn new_hmac(secret: String, token_ttl: u64) -> Self {
+        Self::new_hmac_with_rate_limit(secret, token_ttl, RateLimiterConfig::default())
+    }
+    
+    /// Create new auth manager with HMAC API key method and custom rate limits
+    pub fn new_hmac_with_rate_limit(secret: String, token_ttl: u64, rate_limit_config: RateLimiterConfig) -> Self {
         Self {
             method: AuthMethod::HmacApiKey {
                 key_id: "default".to_string(),
@@ -122,11 +130,17 @@ impl AuthManager {
             secret: secret.into_bytes(),
             revoked_tokens: Arc::new(RwLock::new(HashSet::new())),
             token_ttl,
+            rate_limiter: Arc::new(RateLimiter::with_config(rate_limit_config)),
         }
     }
     
     /// Create new auth manager with JWT HS256 method
     pub fn new_jwt_hs256(secret: String, token_ttl: u64) -> Self {
+        Self::new_jwt_hs256_with_rate_limit(secret, token_ttl, RateLimiterConfig::default())
+    }
+    
+    /// Create new auth manager with JWT HS256 method and custom rate limits
+    pub fn new_jwt_hs256_with_rate_limit(secret: String, token_ttl: u64, rate_limit_config: RateLimiterConfig) -> Self {
         Self {
             method: AuthMethod::JwtHS256 {
                 secret: secret.clone(),
@@ -134,6 +148,7 @@ impl AuthManager {
             secret: secret.into_bytes(),
             revoked_tokens: Arc::new(RwLock::new(HashSet::new())),
             token_ttl,
+            rate_limiter: Arc::new(RateLimiter::with_config(rate_limit_config)),
         }
     }
     
@@ -154,9 +169,22 @@ impl AuthManager {
             return Err(anyhow!("SUTRA_AUTH_SECRET must be at least 32 characters"));
         }
         
+        // Rate limiter configuration from environment
+        let rate_limit_config = RateLimiterConfig {
+            requests_per_second: std::env::var("SUTRA_RATE_LIMIT_RPS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(100),
+            burst_capacity: std::env::var("SUTRA_RATE_LIMIT_BURST")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(200),
+            ..Default::default()
+        };
+        
         match auth_method.as_str() {
-            "hmac" => Ok(Self::new_hmac(secret, token_ttl)),
-            "jwt" | "jwt-hs256" => Ok(Self::new_jwt_hs256(secret, token_ttl)),
+            "hmac" => Ok(Self::new_hmac_with_rate_limit(secret, token_ttl, rate_limit_config)),
+            "jwt" | "jwt-hs256" => Ok(Self::new_jwt_hs256_with_rate_limit(secret, token_ttl, rate_limit_config)),
             _ => Err(anyhow!("Invalid SUTRA_AUTH_METHOD: {}", auth_method)),
         }
     }
@@ -182,12 +210,19 @@ impl AuthManager {
         }
     }
     
-    /// Validate authentication token and extract claims
+    /// Validate authentication token and extract claims (with rate limiting)
     pub fn validate_token(&self, token: &str) -> Result<Claims> {
-        match &self.method {
-            AuthMethod::HmacApiKey { .. } => self.validate_hmac_token(token),
-            AuthMethod::JwtHS256 { .. } => self.validate_jwt_token(token),
-        }
+        // Extract subject from token for rate limiting (before full validation)
+        let claims = match &self.method {
+            AuthMethod::HmacApiKey { .. } => self.validate_hmac_token(token)?,
+            AuthMethod::JwtHS256 { .. } => self.validate_jwt_token(token)?,
+        };
+        
+        // Apply rate limiting per subject
+        self.rate_limiter.check_rate_limit(&claims.sub)
+            .map_err(|e| anyhow!("Rate limit check failed: {}", e))?;
+        
+        Ok(claims)
     }
     
     /// Generate HMAC-signed token

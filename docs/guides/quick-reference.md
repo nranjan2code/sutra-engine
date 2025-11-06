@@ -8,16 +8,16 @@
 
 ```bash
 # One command
-./sutra-deploy.sh up
+sutra start
 
 # Status check
-./sutra-deploy.sh status
+sutra status
 
 # View logs
-./sutra-deploy.sh logs [service_name]
+sutra logs [service_name]
 
 # Stop all
-./sutra-deploy.sh down
+sutra stop
 ```
 
 **Services:**

@@ -47,8 +47,8 @@ pip install -e .
 
 ```bash
 # Rebuild all services
-./sutra-deploy.sh down
-./sutra-deploy.sh up
+sutra stop
+sutra start
 ```
 
 **New images:**
@@ -60,7 +60,7 @@ pip install -e .
 
 ```bash
 # Check all services
-./sutra-deploy.sh status
+sutra status
 
 # Test health endpoints
 curl http://localhost:8001/sutra/health
@@ -361,13 +361,13 @@ If you need to rollback to version 1.0:
 
 ```bash
 # Stop current deployment
-./sutra-deploy.sh down
+sutra stop
 
 # Checkout v1.0 tag
 git checkout v1.0.0
 
 # Redeploy
-./sutra-deploy.sh up
+sutra start
 ```
 
 ### Option 2: Disable New Features
@@ -465,7 +465,7 @@ obs.query("Show me events in the last hour")
 
 ### Support
 
-- Check logs: `./sutra-deploy.sh logs`
+- Check logs: `sutra logs`
 - Query events: `obs.query("What issues occurred today?")`
 - Create GitHub issue with:
   - Version info (`curl http://localhost:8001/sutra/health`)

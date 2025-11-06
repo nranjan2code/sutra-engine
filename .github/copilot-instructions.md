@@ -75,10 +75,11 @@ docker ps                                  # Raw Docker status
 ### Release Management (2025-11-03)
 ```bash
 sutra version                      # Show current version (3.0.0)
-# Note: Release management moved to sutra-deploy.sh (backend)
-./sutra-deploy.sh release patch    # Bug fix release (2.0.0 → 2.0.1)
-./sutra-deploy.sh release minor    # Feature release (2.0.0 → 2.1.0)
-./sutra-deploy.sh release major    # Breaking changes (2.0.0 → 3.0.0)
+# Manual release process:
+echo "3.0.1" > VERSION            # Update version file (patch/minor/major)
+git add VERSION
+git commit -m "Release v3.0.1"
+git tag -a v3.0.1 -m "Release version 3.0.1"
 git push origin main --tags        # Trigger automated builds
 sutra deploy                       # Deploy current version
 ```
@@ -204,8 +205,8 @@ Grid Components → EventEmitter (Rust) → Sutra Storage (TCP) → Natural Lang
 
 ## Critical File Locations
 
-- **Build script:** `./sutra-optimize.sh` (929 lines, single-tag build system)
-- **Main deployment:** `./sutra-deploy.sh` (1100+ lines, handles releases)
+- **Unified CLI:** `./sutra` (Python CLI, single entry point for all operations)
+- **Build script:** `./sutra-optimize.sh` (backend build orchestration, called by ./sutra)
 - **Version control:** `VERSION` (single source of truth, currently 3.0.0)
 - **Compose file:** `.sutra/compose/production.yml` (unified, profile-based)
 - **Storage engine:** `packages/sutra-storage/src/` (14K+ LOC Rust)
@@ -275,8 +276,9 @@ Professional version control for customer deployments with centralized versionin
 
 ### Key Files
 - **VERSION** - Single source of truth for all package versions (3.0.0)
-- **sutra-deploy.sh** - Release commands (version, release, deploy)
-- **docker-compose-grid.yml** - All services use `${SUTRA_VERSION:-latest}`
+- **./sutra** - Unified CLI for build, deploy, test, status commands
+- **sutra-optimize.sh** - Backend build orchestration (called by ./sutra)
+- **.sutra/compose/production.yml** - Docker Compose with edition profiles
 - **.github/workflows/release.yml** - Automated builds on tag push
 - **docs/release/** - Complete documentation (5 docs, 44KB)
 
@@ -290,14 +292,15 @@ cat VERSION                        # 3.0.0
 
 **Create release:**
 ```bash
-# Bug fixes
-./sutra-deploy.sh release patch    # 2.0.0 → 2.0.1
+# Update VERSION file manually based on change type
+echo "3.0.1" > VERSION  # Bug fixes (patch)
+echo "3.1.0" > VERSION  # New features (minor)
+echo "4.0.0" > VERSION  # Breaking changes (major)
 
-# New features
-./sutra-deploy.sh release minor    # 2.0.0 → 2.1.0
-
-# Breaking changes
-./sutra-deploy.sh release major    # 2.0.0 → 3.0.0
+# Commit and tag
+git add VERSION
+git commit -m "Release v3.0.1"
+git tag -a v3.0.1 -m "Release version 3.0.1"
 ```
 
 **What happens:**
@@ -336,7 +339,7 @@ MAJOR.MINOR.PATCH
 - **Don't ignore editions:** Features/performance vary significantly by SUTRA_EDITION
 - **Don't assume security:** Default mode has NO authentication (development only)
 - **Don't forget WAL:** Storage operations are transactional with crash recovery
-- **Don't manually edit VERSION:** Use `./sutra-deploy.sh release <type>` for version bumps
+- **Don't skip semantic versioning:** Update VERSION file, commit, and tag properly
 - **Don't skip release docs:** See `docs/release/` for complete release workflow
 - **Don't use removed scripts:** Use `sutra` command as single entry point, not external scripts
 - **Don't position as "regulated industries only":** Use cases span 20+ industries ($200B+ market)

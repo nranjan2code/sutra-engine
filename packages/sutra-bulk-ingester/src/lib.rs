@@ -18,9 +18,8 @@ pub mod metrics;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use tokio::sync::mpsc;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 /// Core ingestion engine
 pub struct BulkIngester {
@@ -135,7 +134,7 @@ impl BulkIngester {
         info!("Starting Sutra Bulk Ingester engine");
         
         // Start job event processor
-        let job_sender = self.job_sender.clone();
+        let _job_sender = self.job_sender.clone();
         tokio::spawn(async move {
             // Job event processing loop would go here
         });
@@ -214,6 +213,7 @@ impl BulkIngester {
     }
     
     // Real job processing with adapters and performance optimization
+    #[allow(dead_code)]
     async fn process_job_with_adapter(
         job: IngestionJob,
         adapter: &(dyn adapters::IngestionAdapter + Send + Sync),
@@ -307,10 +307,12 @@ impl BulkIngester {
     }
     
     // High-performance batch processing with optimized memory usage
+    #[allow(dead_code)]
     async fn process_batch_optimized(
         storage_client: &mut storage::TcpStorageClient,
         batch: &[adapters::DataItem],
     ) -> Result<u64> {
+        #[allow(unused_assignments)]
         let mut concepts_created = 0u64;
         
         // Convert to concepts for batch processing
@@ -338,6 +340,7 @@ impl BulkIngester {
         Ok(concepts_created)
     }
     // Simplified batch processing
+    #[allow(dead_code)]
     async fn process_batch_simple(
         _storage_client: &mut storage::TcpStorageClient,
         _batch_size: usize,

@@ -935,11 +935,11 @@ SUTRA_AUTH_TOKEN=<hmac-secret>
 
 **Development (Docker Compose):**
 ```bash
-./sutra-deploy.sh install
-./sutra-deploy.sh status
+sutra deploy
+sutra status
 
 # Check logs
-./sutra-deploy.sh logs storage-server
+sutra logs storage-server
 ```
 
 **Production (single storage):**

@@ -95,6 +95,12 @@ See also: [GRID_ARCHITECTURE.md](./architecture/GRID_ARCHITECTURE.md) - Producti
 ### Grid Master
 Single coordinator that manages cluster state, routes queries, and orchestrates failover. Not a single point of failure (can run in HA mode).
 
+**Production Features:**
+- ✅ Background health monitoring (30s interval)
+- ✅ Event emission via sutra-grid-events (EVENT_STORAGE env var)
+- ✅ Automatic agent status updates on heartbeat
+- ✅ Cluster status aggregation and reporting
+
 ### Grid Agent
 Node-local process that spawns and monitors storage nodes. Automatically restarts crashed processes and reports health to Master.
 
@@ -119,6 +125,7 @@ Breadth-first search that spans multiple shards, coordinated by Query Router wit
 - **Durability**: Zero data loss (WAL + 3× replication)
 - **Availability**: <5 second failover, 100% uptime with replicas
 - **Cost**: $500/month for 1TB (vs $3000 for Neo4j Fabric)
+- **Monitoring**: Built-in health checks every 30s with event-driven observability
 
 ---
 
@@ -130,6 +137,8 @@ Breadth-first search that spans multiple shards, coordinated by Query Router wit
 - Gossip protocol for health checks
 - Basic failover
 - **Control Center Web UI** ✅ (Grid management interface)
+- **Health Monitoring** ✅ (30s background task with event emission)
+- **Configuration Integration** ✅ (All agent/master fields in use)
 
 **Phase 2: Data Sharding** 🚧 (In Design)
 - Hash-based shard map

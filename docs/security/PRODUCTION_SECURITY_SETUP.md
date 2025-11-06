@@ -127,7 +127,7 @@ services:
 source .env
 
 # Start with security enabled
-./sutra-deploy.sh up
+sutra start
 
 # Verify security status
 docker logs sutra-storage | grep "✅"

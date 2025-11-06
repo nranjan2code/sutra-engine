@@ -13,7 +13,7 @@ All security code has been implemented (auth.rs, tls.rs, secure_tcp_server.rs) t
 **Current Reality:**
 ```bash
 # This command sets environment variables but does NOTHING for security
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
+SUTRA_SECURE_MODE=true sutra deploy
 
 # Storage server runs WITHOUT authentication/TLS
 docker logs sutra-storage | grep -E "(Authentication|TLS)"
@@ -177,8 +177,8 @@ cargo build --release --bin storage_server
 
 # Deploy with security enabled
 cd ../..
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh clean
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
+SUTRA_SECURE_MODE=true sutra clean
+SUTRA_SECURE_MODE=true sutra deploy
 ```
 
 ### 2. Verify Security is Active

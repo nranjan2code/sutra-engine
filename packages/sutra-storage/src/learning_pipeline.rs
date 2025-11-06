@@ -5,10 +5,10 @@ use anyhow::Result;
 use tracing::{info, warn, debug};
 
 use crate::embedding_client::EmbeddingClient;
-use crate::semantic_extractor::{SemanticExtractor, SemanticAssociation};
+use crate::semantic_extractor::SemanticExtractor;
 use crate::semantic::{SemanticAnalyzer, SemanticMetadata};
 use crate::storage_trait::LearningStorage;
-use crate::types::{ConceptId, AssociationType};
+use crate::types::ConceptId;
 
 #[derive(Debug, Clone)]
 pub struct LearnOptions {

@@ -2,12 +2,13 @@
 //! 
 //! Provides certificate loading, validation, and TLS acceptor creation.
 
+#![allow(unexpected_cfgs)]  // dev-tools feature is optional
+
 use anyhow::{anyhow, Result};
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
 use std::sync::Arc;
 use tokio_rustls::TlsAcceptor;
 

@@ -1,13 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::path::PathBuf;
 use tokio::sync::RwLock;
 use tokio::net::{TcpListener, TcpStream};
 use chrono::{Utc};
 use sutra_grid_events::{EventEmitter, GridEvent};
 use sutra_protocol::{GridMessage, GridResponse, AgentRecord, recv_message, send_message};
-
-mod binary_server;
 
 // ===== Data Structures =====
 
@@ -17,6 +14,7 @@ struct MasterAgentRecord {
     agent_id: String,
     hostname: String,
     platform: String,
+    #[allow(dead_code)]  // Used in future CLI/API expansions
     agent_endpoint: String,  // "hostname:port" for Agent TCP server
     max_storage_nodes: u32,
     current_storage_nodes: u32,
@@ -42,8 +40,11 @@ impl MasterAgentRecord {
 
 #[derive(Debug, Clone)]
 struct StorageNodeRecord {
+    #[allow(dead_code)]  // Tracked for future features
     node_id: String,
+    #[allow(dead_code)]
     endpoint: String,
+    #[allow(dead_code)]
     pid: u32,
     status: NodeStatus,
 }
@@ -66,6 +67,7 @@ impl AgentStatus {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]  // Full lifecycle will be implemented
 enum NodeStatus {
     Starting,
     Running,
@@ -75,6 +77,7 @@ enum NodeStatus {
 }
 
 impl NodeStatus {
+    #[allow(dead_code)]
     fn as_str(&self) -> &'static str {
         match self {
             NodeStatus::Starting => "starting",
@@ -212,6 +215,12 @@ async fn handle_client(mut stream: TcpStream, state: GridMasterService) -> std::
                 if let Some(a) = state.agents.write().await.get_mut(&agent_id) {
                     a.current_storage_nodes = storage_node_count;
                     a.last_heartbeat = current_timestamp();
+                    
+                    // Update status to Healthy on successful heartbeat
+                    if a.status != AgentStatus::Healthy {
+                        log::info!("✅ Agent {} recovered (status: {:?} → Healthy)", agent_id, a.status);
+                        a.status = AgentStatus::Healthy;
+                    }
                 }
                 GridResponse::HeartbeatOk { acknowledged: true, timestamp: current_timestamp() }
             }
@@ -223,12 +232,15 @@ async fn handle_client(mut stream: TcpStream, state: GridMasterService) -> std::
                 GridResponse::ListAgentsOk { agents }
             }
             GridMessage::GetClusterStatus => {
-                let agents = state.agents.read().await;
-                let total_agents = agents.len() as u32;
-                let healthy_agents = agents.values().filter(|a| a.status==AgentStatus::Healthy).count() as u32;
-                let total_storage_nodes = agents.values().map(|a| a.current_storage_nodes).sum();
-                let running_storage_nodes = total_storage_nodes;
-                GridResponse::GetClusterStatusOk { total_agents, healthy_agents, total_storage_nodes, running_storage_nodes, status: "ok".into() }
+                let (total_agents, healthy_agents, total_storage_nodes, running_storage_nodes, status) = 
+                    state.get_cluster_status_internal().await;
+                GridResponse::GetClusterStatusOk { 
+                    total_agents, 
+                    healthy_agents, 
+                    total_storage_nodes, 
+                    running_storage_nodes, 
+                    status: status.to_string() 
+                }
             }
             _ => GridResponse::Error { message: "Unsupported operation".into() },
         };
@@ -249,8 +261,35 @@ fn current_timestamp() -> u64 {
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    // Create Grid master state
-    let state = GridMasterService::new();
+    // Initialize event emitter if EVENT_STORAGE is configured
+    let event_storage = std::env::var("EVENT_STORAGE").ok();
+    let state = if let Some(ref event_addr) = event_storage {
+        match sutra_grid_events::init_events(event_addr.clone()).await {
+            Ok(events) => {
+                log::info!("Ὄa Event emission enabled (storage: {})", event_addr);
+                GridMasterService::new_with_events(events)
+            }
+            Err(e) => {
+                log::warn!("⚠️  Event emission disabled: {}. Continuing without events.", e);
+                GridMasterService::new()
+            }
+        }
+    } else {
+        log::info!("Event emission disabled (no EVENT_STORAGE configured)");
+        GridMasterService::new()
+    };
+
+    // Start health monitoring background task
+    let health_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        log::info!("🔍 Starting agent health monitor (interval: 30s)");
+        
+        loop {
+            interval.tick().await;
+            health_state.check_agent_health().await;
+        }
+    });
 
     // Start TCP server
     let tcp_port: u16 = std::env::var("GRID_MASTER_TCP_PORT").unwrap_or("7002".into()).parse().unwrap_or(7002);
@@ -258,35 +297,21 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(&tcp_addr).await?;
     log::info!("Grid Master TCP listening on {}", tcp_addr);
 
-    // Start HTTP binary server
-    let http_port: u16 = std::env::var("GRID_MASTER_HTTP_PORT").unwrap_or("7001".into()).parse().unwrap_or(7001);
-    let binaries_dir = PathBuf::from("/data/binaries");
-    let distribution = binary_server::BinaryDistribution::new(binaries_dir.clone());
-    let app = binary_server::create_router(distribution, binaries_dir);
-    let http_addr: std::net::SocketAddr = format!("0.0.0.0:{}", http_port).parse().unwrap();
-    let http_server = axum::serve(tokio::net::TcpListener::bind(http_addr).await?, app);
-    log::info!("Grid Master HTTP listening on {}", http_port);
-
-    tokio::spawn(async move {
-        loop {
-            match listener.accept().await {
-                Ok((stream, addr)) => {
-                    let st = state.clone();
-                    log::info!("Client connected: {}", addr);
-                    tokio::spawn(async move {
-                        if let Err(e) = handle_client(stream, st).await {
-                            log::error!("Client error: {}", e);
-                        }
-                    });
-                }
-                Err(e) => {
-                    log::error!("Accept error: {}", e);
-                }
+    loop {
+        match listener.accept().await {
+            Ok((stream, addr)) => {
+                let st = state.clone();
+                log::info!("Client connected: {}", addr);
+                tokio::spawn(async move {
+                    if let Err(e) = handle_client(stream, st).await {
+                        log::error!("Client error: {}", e);
+                    }
+                });
+            }
+            Err(e) => {
+                log::error!("Accept error: {}", e);
             }
         }
-    });
-
-    http_server.await?;
-    Ok(())
+    }
 }
 

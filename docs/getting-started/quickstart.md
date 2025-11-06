@@ -26,12 +26,12 @@
 ### 🔧 Development Mode (Default - NO Security)
 
 ```bash
-./sutra-deploy.sh clean
-./sutra-deploy.sh install
+sutra clean
+sutra deploy
 ```
 
-**Use for:** Local development, testing, learning  
-**Security:** ❌ NO authentication, NO encryption  
+**Use for:** Local development, testing, learning
+**Security:** ❌ NO authentication, NO encryption
 **⚠️ WARNING:** Only use on localhost, never with real data
 
 ### 🔒 Production Mode (Secure - v3.0.0)
@@ -46,7 +46,7 @@ pip install pre-commit
 pre-commit install
 
 # Deploy securely
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
+SUTRA_SECURE_MODE=true sutra deploy
 ```
 
 **Use for:** Production, real data, regulated industries  
@@ -76,8 +76,8 @@ SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
 This deploys **without security** for local development:
 
 ```bash
-./sutra-deploy.sh clean
-./sutra-deploy.sh install
+sutra clean
+sutra deploy
 ```
 
 The system will:
@@ -98,11 +98,11 @@ The system will:
 
 ```bash
 # System management
-./sutra-deploy.sh status      # Check what's running
-./sutra-deploy.sh validate    # Full health check
-./sutra-deploy.sh logs        # View all logs
-./sutra-deploy.sh restart     # Restart services
-./sutra-deploy.sh down        # Stop everything
+sutra status      # Check what's running
+sutra validate    # Full health check
+sutra logs        # View all logs
+sutra restart     # Restart services
+sutra stop        # Stop everything
 
 # Production validation (NEW v2.0.1)
 ./scripts/smoke-test-embeddings.sh    # 7-service smoke tests
@@ -114,7 +114,7 @@ pytest                                 # Run tests with 70% coverage threshold
 open htmlcov/index.html               # View coverage report
 
 # Fast development workflow
-./sutra-deploy.sh update sutra-api    # Update single service (30s!)
+docker-compose -f .sutra/compose/production.yml up -d --build sutra-api    # Update single service (30s!)
 ./scripts/detect-changes.sh           # See what changed
 ```
 
@@ -174,7 +174,7 @@ docker-compose -f docker-compose-grid.yml -f docker-compose.dev.yml up
 
 ## ⚠️ Important
 
-**Only use `./sutra-deploy.sh`** - it's the single command center for all deployment operations.
+**Use the `./sutra` unified CLI** - it's the single command center for all deployment operations.
 
 All redundant scripts have been removed.
 
@@ -183,12 +183,12 @@ All redundant scripts have been removed.
 System not working? Try this:
 
 ```bash
-./sutra-deploy.sh clean     # Complete reset
-./sutra-deploy.sh install   # Fresh install
-./sutra-deploy.sh validate  # Check health
+sutra clean     # Complete reset
+sutra deploy    # Fresh install
+sutra validate  # Check health
 ```
 
 Still stuck? Check the logs:
 ```bash
-./sutra-deploy.sh logs sutra-hybrid
+sutra logs sutra-hybrid
 ```

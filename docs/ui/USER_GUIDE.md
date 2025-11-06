@@ -449,7 +449,7 @@ Press **`?`** or **`Cmd+/`** to view this list in-app.
 1. **Documentation**: Check `docs/` directory
 2. **FAQ**: See [FAQ.md](./FAQ.md)
 3. **Support**: Contact your admin
-4. **Logs**: `./sutra-deploy.sh logs sutra-api`
+4. **Logs**: `sutra logs sutra-api`
 
 ---
 

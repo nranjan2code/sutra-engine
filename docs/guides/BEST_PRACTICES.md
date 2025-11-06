@@ -111,7 +111,7 @@ Unit Tests (80%)   ← Fast, test functions
 pytest tests/unit/
 
 # Full suite (requires services)
-./sutra-deploy.sh up
+sutra start
 pytest tests/
 ```
 

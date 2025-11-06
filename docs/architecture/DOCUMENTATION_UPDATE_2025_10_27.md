@@ -101,7 +101,7 @@ Modernized overview with:
    - Grid: grid-master, grid-agent-1, grid-agent-2
 
 6. **Deployment System**
-   - sutra-deploy.sh (1200+ lines)
+   - ./sutra unified CLI (deployment and management)
    - Edition system (Simple, Community, Enterprise)
    - Version management (VERSION file)
    - Automated releases (GitHub Actions)
@@ -180,7 +180,7 @@ docs/architecture/
 3. **Performance Analysis**: Reviewed benchmarks, measured timings
 4. **Service Mapping**: Documented 12 services with ports and dependencies
 5. **Protocol Analysis**: Decoded TCP binary protocol implementation
-6. **Deployment Review**: Analyzed sutra-deploy.sh (1200 lines)
+6. **Deployment Review**: Analyzed ./sutra unified CLI deployment system
 7. **Edition System**: Documented feature flags and limits
 8. **Professional Writing**: Clear hierarchy, tables, diagrams, examples
 

@@ -87,7 +87,7 @@ docker logs sutra-hybrid 2>&1 | grep "Initialized Ollama"
 # Should see: "Initialized OllamaEmbedding with model: granite-embedding:30m"
 ```
 
-**Full Details:** [`docs/EMBEDDING_TROUBLESHOOTING.md`](docs/EMBEDDING_TROUBLESHOOTING.md) Section 1
+**Full Details:** [`docs/EMBEDDING_TROUBLESHOOTING.md`](../EMBEDDING_TROUBLESHOOTING.md) Section 1
 
 ---
 
@@ -95,7 +95,7 @@ docker logs sutra-hybrid 2>&1 | grep "Initialized Ollama"
 
 **Check logs:**
 ```bash
-./sutra-deploy.sh logs
+sutra logs
 # Or specific service:
 docker logs sutra-api
 docker logs sutra-hybrid
@@ -103,9 +103,9 @@ docker logs sutra-storage
 ```
 
 **Common causes:**
-- Port conflicts (change ports in docker-compose-grid.yml)
+- Port conflicts (change ports in .sutra/compose/production.yml)
 - Ollama not running (see Issue #2)
-- Build errors (run `./sutra-deploy.sh clean && ./sutra-deploy.sh install`)
+- Build errors (run `sutra clean && sutra deploy`)
 
 ---
 
@@ -173,7 +173,7 @@ After any fix, run these checks:
 
 ```bash
 # 1. Services healthy
-./sutra-deploy.sh status
+sutra status
 
 # 2. Embeddings present
 curl -s http://localhost:8000/stats | jq '.total_embeddings'
@@ -204,14 +204,14 @@ If system is completely broken:
 
 ```bash
 # 1. Full cleanup
-./sutra-deploy.sh clean
+sutra clean
 
 # 2. Verify Ollama
 ollama pull granite-embedding:30m
 curl http://localhost:11434/api/tags
 
 # 3. Fresh install
-./sutra-deploy.sh install
+sutra deploy
 
 # 4. Test immediately
 curl -X POST http://localhost:8001/sutra/learn -H "Content-Type: application/json" -d '{"text":"Test"}'
@@ -222,11 +222,11 @@ curl -s http://localhost:8000/stats | jq
 
 ## Getting Help
 
-1. **Check logs first:** `./sutra-deploy.sh logs [service-name]`
+1. **Check logs first:** `sutra logs [service-name]`
 2. **Review docs:**
-   - [`DEPLOYMENT.md`](DEPLOYMENT.md) - Deployment guide
-   - [`docs/EMBEDDING_TROUBLESHOOTING.md`](docs/EMBEDDING_TROUBLESHOOTING.md) - Detailed embedding fixes
-   - [`WARP.md`](WARP.md) - Development reference
+   - [`docs/deployment/README.md`](../deployment/README.md) - Deployment guide
+   - [`docs/EMBEDDING_TROUBLESHOOTING.md`](../EMBEDDING_TROUBLESHOOTING.md) - Detailed embedding fixes
+   - [`WARP.md`](../../WARP.md) - Development reference
 3. **Verify prerequisites:**
    - Docker 20.10+
    - Docker Compose 1.29+

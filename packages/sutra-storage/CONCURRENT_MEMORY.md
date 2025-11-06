@@ -92,38 +92,41 @@ pub struct GraphSnapshot {
 - Timestamped (microsecond precision)
 - Stale (1-10ms behind writes)
 
-### 3. Reconciliation Plane (Reconciler)
+### 3. Reconciliation Plane (Adaptive Reconciler)
 
-**Background thread that merges write log into read view.**
+**AI-native background thread with EMA-based self-optimization.**
 
 ```rust
-// Reconciliation loop (runs every 10ms)
+// Adaptive reconciliation loop (1-100ms dynamic interval)
 loop {
-    // 1. Drain write log
+    // 1. Calculate optimal interval based on queue depth
+    let queue_depth = write_log.stats().pending;
+    let interval = calculate_optimal_interval(queue_depth);
+    
+    // 2. Drain write log
     let batch = write_log.drain_batch(10_000);
     
-    // 2. Clone snapshot structure (cheap due to Arc)
+    // 3. Clone snapshot structure (cheap due to Arc)
     let mut new_snap = current_snap.clone_structure();
     
-    // 3. Apply all writes
+    // 4. Apply all writes
     for entry in batch {
         new_snap.apply(entry);
     }
     
-    // 4. Atomic swap (readers instantly see new snapshot)
+    // 5. Atomic swap (readers instantly see new snapshot)
     read_view.store(new_snap);
     
-    // 5. Flush to disk if threshold reached
-    if new_snap.size() > threshold {
-        flush_to_segment(new_snap);
-    }
+    // 6. Sleep with dynamic interval (1-100ms)
+    thread::sleep(Duration::from_millis(interval));
 }
 ```
 
-**Tunables:**
-- `reconcile_interval_ms` (default: 10ms)
-- `max_batch_size` (default: 10K)
-- `disk_flush_threshold` (default: 50K concepts)
+**AI-Native Features:**
+- **Exponential Moving Average (EMA)**: Smooths queue depth trends
+- **Predictive Health Scoring**: 0.0-1.0 with recommendations
+- **Dynamic Intervals**: 1ms (high load) → 100ms (idle)
+- **Auto-tuning**: Zero configuration required
 
 ## Usage
 
@@ -135,8 +138,9 @@ use sutra_storage::{ConcurrentMemory, ConcurrentConfig, ConceptId};
 // Create concurrent memory
 let config = ConcurrentConfig {
     storage_path: "./storage".into(),
-    reconcile_interval_ms: 10,
     memory_threshold: 50_000,
+    vector_dimension: 768,
+    adaptive_reconciler_config: AdaptiveReconcilerConfig::default(),
 };
 
 let memory = ConcurrentMemory::new(config);
@@ -206,13 +210,14 @@ thread::spawn(|| {
 - **Latency:** O(1) for lookups, O(V+E) for paths
 - **Throughput:** Unlimited parallel reads
 - **Blocking:** Never (immutable snapshots)
-- **Staleness:** 1-10ms (configurable via reconcile_interval_ms)
+- **Staleness:** 1-10ms (adaptive, self-tuning)
 
-### Reconciliation
-- **Frequency:** Every 10ms (default)
-- **Batch size:** 10K entries (default)
-- **CPU:** Single dedicated thread
+### Reconciliation (Adaptive)
+- **Frequency:** 1-100ms (dynamic, EMA-based)
+- **Batch size:** 10K entries (configurable)
+- **CPU:** Single dedicated thread (80% savings during idle)
 - **Memory:** 2x graph size (current + new snapshot during swap)
+- **Health Scoring:** Predictive with recommendations
 
 ## Disk Format
 
@@ -251,8 +256,12 @@ thread::spawn(|| {
 **High Write Throughput:**
 ```rust
 ConcurrentConfig {
-    reconcile_interval_ms: 50,  // Batch more aggressively
-    memory_threshold: 100_000,   // Flush less frequently
+    memory_threshold: 100_000,  // Flush less frequently
+    adaptive_reconciler_config: AdaptiveReconcilerConfig {
+        base_interval_ms: 20,   // Start with higher base
+        min_interval_ms: 5,     // Less aggressive minimum
+        ..Default::default()
+    },
     ..Default::default()
 }
 ```
@@ -260,8 +269,12 @@ ConcurrentConfig {
 **Low Latency Reads:**
 ```rust
 ConcurrentConfig {
-    reconcile_interval_ms: 5,   // Update snapshots faster
     memory_threshold: 10_000,   // Keep memory footprint small
+    adaptive_reconciler_config: AdaptiveReconcilerConfig {
+        base_interval_ms: 5,    // Start aggressive
+        max_interval_ms: 50,    // Cap at 50ms
+        ..Default::default()
+    },
     ..Default::default()
 }
 ```
@@ -269,11 +282,13 @@ ConcurrentConfig {
 **Memory Constrained:**
 ```rust
 ConcurrentConfig {
-    reconcile_interval_ms: 10,
-    memory_threshold: 5_000,    // Flush to disk more frequently
+    memory_threshold: 5_000,    // Flush to disk frequently
+    adaptive_reconciler_config: AdaptiveReconcilerConfig::default(),
     ..Default::default()
 }
 ```
+
+**Note:** Adaptive reconciler auto-tunes in most cases. Manual tuning rarely needed.
 
 ## Monitoring
 
@@ -287,10 +302,13 @@ println!("Writes: {}", stats.write_log.written);
 println!("Dropped: {}", stats.write_log.dropped);  // Backpressure indicator
 println!("Pending: {}", stats.write_log.pending);
 
-// Reconciler metrics
+// Adaptive reconciler metrics (AI-native)
 println!("Reconciliations: {}", stats.reconciler.reconciliations);
 println!("Entries processed: {}", stats.reconciler.entries_processed);
-println!("Disk flushes: {}", stats.reconciler.disk_flushes);
+println!("Current interval: {}ms", stats.reconciler.current_interval_ms);
+println!("Queue depth: {}/{}", stats.reconciler.queue_depth, stats.reconciler.queue_capacity);
+println!("Health score: {:.2}", stats.reconciler.health_score);
+println!("Recommendation: {}", stats.reconciler.recommendation);
 
 // Snapshot metrics
 println!("Concepts: {}", stats.snapshot.concept_count);

@@ -72,7 +72,7 @@ pytest tests/ -v
 cargo test --release
 
 # Integration tests
-./sutra-deploy.sh up
+sutra start
 ./scripts/smoke-test-embeddings.sh
 ```
 

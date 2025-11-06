@@ -15,6 +15,7 @@ struct SemanticPatterns {
     temporal_before: Regex,
     temporal_during: Regex,
     temporal_between: Regex,
+    #[allow(dead_code)]
     temporal_at: Regex,
     
     // Rule patterns

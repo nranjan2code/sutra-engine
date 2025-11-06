@@ -56,7 +56,7 @@
 **Perfect for: Development, testing, demos, learning**
 
 ```bash
-./sutra-deploy.sh install
+sutra deploy
 
 # 7 containers deployed:
 # - storage-server
@@ -86,7 +86,7 @@
 # Get license from https://sutra.ai/pricing
 export SUTRA_EDITION="community"
 export SUTRA_LICENSE_KEY="your-license-key-here"
-./sutra-deploy.sh install
+sutra deploy
 
 # Same 7 containers as Simple, but with higher limits
 ```
@@ -114,7 +114,7 @@ export SUTRA_LICENSE_KEY="your-license-key-here"
 export SUTRA_EDITION="enterprise"
 export SUTRA_LICENSE_KEY="your-license-key-here"
 export SUTRA_SECURE_MODE="true"  # Required for enterprise
-./sutra-deploy.sh install
+sutra deploy
 
 # 16 containers deployed:
 # - 7 core services (same as Simple/Community)
@@ -163,17 +163,17 @@ All editions use the same Docker volumes for data storage. **Upgrades are seamle
 
 ```bash
 # Simple → Community (no data loss)
-./sutra-deploy.sh down
+sutra stop
 export SUTRA_EDITION="community"
 export SUTRA_LICENSE_KEY="your-license-key"
-./sutra-deploy.sh install
+sutra deploy
 
 # Community → Enterprise (no data loss)
-./sutra-deploy.sh down
+sutra stop
 export SUTRA_EDITION="enterprise"
 export SUTRA_LICENSE_KEY="your-enterprise-license-key"
 export SUTRA_SECURE_MODE="true"
-./sutra-deploy.sh install
+sutra deploy
 ```
 
 **Your data persists across edition changes.**
@@ -460,6 +460,6 @@ A: Custom adapter development, deployment assistance, performance tuning, traini
 ---
 
 **Get Started:**
-- Simple (Free): `./sutra-deploy.sh install`
+- Simple (Free): `sutra deploy`
 - Community/Enterprise: https://sutra.ai/pricing
 - Questions: support@sutra.ai

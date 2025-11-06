@@ -20,10 +20,10 @@ git clone https://github.com/yourusername/sutra-models.git
 cd sutra-models
 
 # Deploy all services (one command)
-./sutra-deploy.sh install
+sutra deploy
 
 # Check status
-./sutra-deploy.sh status
+sutra status
 ```
 
 Expected output:
@@ -84,17 +84,17 @@ Open your browser: **http://localhost:8080**
 
 ```bash
 # View logs
-./sutra-deploy.sh logs sutra-api
-./sutra-deploy.sh logs sutra-client
+sutra logs sutra-api
+sutra logs sutra-client
 
 # Restart a service
-./sutra-deploy.sh restart sutra-api
+sutra restart sutra-api
 
 # Stop all services
-./sutra-deploy.sh stop
+sutra stop
 
 # Update to latest version
-./sutra-deploy.sh update
+docker-compose -f .sutra/compose/production.yml up -d --build
 
 # Check health
 curl http://localhost:8000/health

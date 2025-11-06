@@ -214,7 +214,7 @@ This directory contains comprehensive security documentation for Sutra Models, i
 
 ```bash
 # One command - sets env vars but security NOT active yet
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
+SUTRA_SECURE_MODE=true sutra deploy
 
 # Verify security status
 docker logs sutra-storage | grep -E "(Authentication|TLS)"
@@ -226,10 +226,10 @@ docker logs sutra-storage | grep -E "(Authentication|TLS)"
 
 ```bash
 # Default mode - no authentication (local dev only)
-./sutra-deploy.sh install
+sutra deploy
 
 # Verify development mode
-./sutra-deploy.sh status
+sutra status
 # Expected: ⚠️  Development Mode (No Auth) ⚠️
 ```
 

@@ -4,9 +4,9 @@
 /// for zero memory overhead. Supports temporal constraints, causal chains,
 /// and domain-scoped search.
 
-use super::query::{SemanticFilter, TemporalConstraint, CausalFilter};
+use super::query::SemanticFilter;
 use super::types::*;
-use crate::read_view::{GraphSnapshot, ConceptNode};
+use crate::read_view::GraphSnapshot;
 use crate::types::ConceptId;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;

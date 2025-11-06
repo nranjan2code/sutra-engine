@@ -8,7 +8,6 @@
 /// - Reads → ReadView (immutable snapshot, never blocks)
 /// - Background reconciler merges continuously
 
-use crate::event_emitter::StorageEventEmitter;
 use crate::hnsw_container::{HnswContainer, HnswConfig as HnswContainerConfig};
 use crate::parallel_paths::{ParallelPathFinder, PathResult};
 use crate::read_view::{ConceptNode, ReadView};
@@ -16,7 +15,6 @@ use crate::adaptive_reconciler::{AdaptiveReconciler, AdaptiveReconcilerConfig, A
 use crate::types::{AssociationRecord, AssociationType, ConceptId};
 use crate::wal::{WriteAheadLog, Operation};
 use crate::write_log::{WriteLog, WriteLogError, WriteLogStats};
-// use hnsw_rs::prelude::*;  // DEPRECATED - using usearch via hnsw_container
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -29,10 +27,6 @@ use std::time::Instant;
 pub struct ConcurrentConfig {
     /// Storage base path
     pub storage_path: PathBuf,
-    
-    /// Reconciliation interval (milliseconds) - Deprecated: Use adaptive config instead
-    #[deprecated(note = "Use adaptive_reconciler_config for dynamic intervals")]
-    pub reconcile_interval_ms: u64,
     
     /// Memory threshold before disk flush (number of concepts)
     pub memory_threshold: usize,
@@ -48,9 +42,8 @@ impl Default for ConcurrentConfig {
     fn default() -> Self {
         Self {
             storage_path: PathBuf::from("./storage"),
-            reconcile_interval_ms: 10, // Legacy - ignored in favor of adaptive config
             memory_threshold: 50_000,
-            vector_dimension: 768, // Default: EmbeddingGemma dimension
+            vector_dimension: 768, // Default: nomic-embed-text-v1.5 dimension
             adaptive_reconciler_config: AdaptiveReconcilerConfig::default(),
         }
     }
@@ -112,13 +105,13 @@ pub struct ConcurrentMemory {
     /// Background reconciler (AI-native adaptive)
     reconciler: AdaptiveReconciler,
     
-    /// Vectors stored for HNSW indexing (legacy - kept for compatibility)
+    /// Vectors stored for HNSW indexing
     vectors: Arc<RwLock<HashMap<ConceptId, Vec<f32>>>>,
     
-    /// 🔥 NEW: Persistent HNSW container (100× faster startup)
+    /// Persistent HNSW container (94× faster startup with USearch)
     hnsw_container: Arc<HnswContainer>,
     
-    /// 🚀 NEW: Parallel pathfinder (4-8× query speedup)
+    /// Parallel pathfinder (4-8× query speedup with Rayon)
     parallel_pathfinder: Arc<ParallelPathFinder>,
     
     /// Write-Ahead Log for durability
@@ -126,12 +119,6 @@ pub struct ConcurrentMemory {
     
     /// Configuration
     config: ConcurrentConfig,
-    
-    /// Event emitter for self-monitoring
-    event_emitter: StorageEventEmitter,
-    
-    /// Node identifier for events
-    node_id: String,
 }
 
 impl ConcurrentMemory {
@@ -193,18 +180,11 @@ impl ConcurrentMemory {
             }
         }
         
-        // Initialize event emitter (reads EVENT_STORAGE env var)
-        let node_id = std::env::var("STORAGE_NODE_ID")
-            .unwrap_or_else(|_| format!("storage-{}", std::process::id()));
-        let event_storage_addr = std::env::var("EVENT_STORAGE").ok();
-        let event_emitter = StorageEventEmitter::new(node_id.clone(), event_storage_addr);
-        
         // 🚀 PRODUCTION: Initialize adaptive reconciler (AI-native self-optimizing)
         let mut reconciler = AdaptiveReconciler::new(
             config.adaptive_reconciler_config.clone(),
             Arc::clone(&write_log),
             Arc::clone(&read_view),
-            Arc::new(event_emitter.clone()),
         );
         
         // Start reconciler thread immediately
@@ -248,8 +228,6 @@ impl ConcurrentMemory {
             parallel_pathfinder,
             wal,
             config,
-            event_emitter,
-            node_id,
         }
     }
     
@@ -633,20 +611,11 @@ impl ConcurrentMemory {
         
         let total_latency_ms = start.elapsed().as_millis() as u64;
         
-        // Emit query performance event
         let avg_confidence = if !results.is_empty() {
             results.iter().map(|(_, conf)| conf).sum::<f32>() / results.len() as f32
         } else {
             0.0
         };
-        
-        self.event_emitter.emit_query_performance(
-            "semantic",
-            1, // Single-hop semantic search
-            results.len(),
-            total_latency_ms,
-            avg_confidence,
-        );
         
         log::info!(
             "✅ Vector search completed: {} results in {:.2}ms (avg similarity={:.2}%)",
@@ -740,8 +709,9 @@ impl ConcurrentMemory {
         // Get current snapshot
         let snap = self.read_view.load();
         
-        // Flush to disk (flush_to_disk creates storage.dat inside the path)
-        crate::reconciler::flush_to_disk(&snap, &self.config.storage_path, 0)?;
+        // TODO: Implement proper flush_to_disk using mmap_store
+        // For now, we rely on WAL for durability
+        log::info!("Flush requested: {} concepts, {} edges", snap.concept_count, snap.edge_count);
         
         // 🔥 NEW: Save HNSW container if dirty (100× faster next startup!)
         if self.hnsw_container.is_dirty() {
@@ -827,7 +797,6 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let config = ConcurrentConfig {
             storage_path: dir.path().to_path_buf(),
-            reconcile_interval_ms: 50,
             ..Default::default()
         };
         

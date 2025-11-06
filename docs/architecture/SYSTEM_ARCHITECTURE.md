@@ -1425,38 +1425,38 @@ impl SecureServer {
 
 ## 10. Deployment & Operations
 
-### 10.1 Deployment Manager (sutra-deploy.sh)
+### 10.1 Deployment Manager (./sutra unified CLI)
 
 **Single Command Deployment:**
 ```bash
 # Install everything
-./sutra-deploy.sh install
+sutra deploy
 
 # Status check
-./sutra-deploy.sh status
+sutra status
 
 # View logs
-./sutra-deploy.sh logs storage-server
+sutra logs storage-server
 
 # Restart service
-./sutra-deploy.sh restart sutra-api
+sutra restart sutra-api
 ```
 
 **Edition Selection:**
 ```bash
 # Simple Edition (FREE)
-SUTRA_EDITION=simple ./sutra-deploy.sh install
+SUTRA_EDITION=simple sutra deploy
 
 # Community Edition ($99/mo)
 SUTRA_EDITION=community \
 SUTRA_LICENSE_KEY=xxx \
-./sutra-deploy.sh install
+sutra deploy
 
 # Enterprise Edition ($999/mo)
 SUTRA_EDITION=enterprise \
 SUTRA_LICENSE_KEY=xxx \
 SUTRA_SECURE_MODE=true \
-./sutra-deploy.sh install
+sutra deploy
 ```
 
 ### 10.2 Version Management
@@ -1465,20 +1465,21 @@ SUTRA_SECURE_MODE=true \
 
 **Release Process:**
 ```bash
+# Manual VERSION file update for releases
 # Bug fix release (2.0.0 → 2.0.1)
-./sutra-deploy.sh release patch
+echo "2.0.1" > VERSION
 
 # Feature release (2.0.0 → 2.1.0)
-./sutra-deploy.sh release minor
+echo "2.1.0" > VERSION
 
 # Breaking changes (2.0.0 → 3.0.0)
-./sutra-deploy.sh release major
+echo "3.0.0" > VERSION
 
 # Push tags (triggers automated builds)
 git push origin main --tags
 
 # Deploy specific version
-./sutra-deploy.sh deploy v2.0.1
+sutra deploy
 ```
 
 **Automated CI/CD:**
@@ -1535,7 +1536,7 @@ The system monitors itself using its own reasoning engine by storing Grid Events
 **Recovery Procedure:**
 ```bash
 # 1. Stop services
-./sutra-deploy.sh stop
+sutra stop
 
 # 2. Restore data files
 cp backup/storage.dat data/user-storage/storage.dat
@@ -1544,10 +1545,10 @@ cp backup/*.usearch data/user-storage/
 cp backup/*.hnsw.meta data/user-storage/
 
 # 3. Start services (automatic WAL replay)
-./sutra-deploy.sh start
+sutra start
 
 # 4. Verify recovery
-./sutra-deploy.sh status
+sutra status
 ```
 
 **Disaster Recovery:**
@@ -1557,10 +1558,10 @@ cp backup/*.hnsw.meta data/user-storage/
 ### 10.5 Production Checklist
 
 - [ ] **Security**: `SUTRA_SECURE_MODE=true` for Enterprise
-- [ ] **Secrets**: Generate secrets with `./sutrabuild/scripts/generate-secrets.sh`
+- [ ] **Secrets**: Generate secrets with `./scripts/generate-secrets.sh`
 - [ ] **License**: Set `SUTRA_LICENSE_KEY` for Community/Enterprise
 - [ ] **TLS Certificates**: Install valid certificates (not self-signed)
-- [ ] **Resource Limits**: Configure memory/CPU limits in docker-compose
+- [ ] **Resource Limits**: Configure memory/CPU limits in .sutra/compose/production.yml
 - [ ] **Backup**: Schedule automated backups (daily recommended)
 - [ ] **Monitoring**: Enable sutra-control dashboard
 - [ ] **Firewall**: Restrict ports (only expose 8080, 8000, 9000)

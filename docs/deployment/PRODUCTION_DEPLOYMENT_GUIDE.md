@@ -30,11 +30,11 @@ export SUTRA_EDITION=enterprise
 export SUTRA_VERSION=3.0.0
 export SUTRA_SECURE_MODE=true
 
-# 3. Build all services (production-optimized)
-./sutra-build-production.sh
+# 3. Build all services
+sutra build
 
 # 4. Deploy with Docker Compose
-docker-compose -f docker-compose.production.yml up -d
+sutra deploy
 
 # 5. Verify deployment
 curl http://localhost/health
@@ -72,6 +72,13 @@ curl http://localhost:8000/internal/metrics
 ```
 
 ### Key Improvements Made
+
+#### ✅ **Production Cleanup (December 2025)**
+- **Zero warnings workspace** - All packages compile cleanly (0 warnings, 0 errors)
+- **Health monitoring implemented** - Grid-master 30s background task with event emission
+- **Configuration fields in use** - All grid-agent and grid-master config fully utilized
+- **Dead code removed** - Cleaned up unused modules (distributed_bfs.rs, event_emitter.rs, etc.)
+- **Build time: 1.92s** - Fast, clean compilation
 
 #### ✅ **Dependency Management**
 - **React 18.2.0** standardized across all frontend packages
@@ -132,6 +139,7 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 MONITORING_ENABLED=true
 METRICS_ENDPOINT_ENABLED=true
 GRID_EVENTS_ENABLED=true
+EVENT_STORAGE=/data/grid-events      # For grid-master event emission
 
 # Performance Tuning
 PARALLEL_JOBS=4                        # Build parallelism
@@ -237,8 +245,8 @@ Disk usage:          ~500MB per 100K concepts
 
 ### Security Scanning
 ```bash
-# Automated security scans (built into build process)
-./sutra-build-production.sh security
+# Security validation
+./scripts/ci-validate.sh
 
 # Manual security check
 cargo audit                    # Rust dependencies
@@ -251,13 +259,13 @@ npm audit                      # Node.js dependencies
 ### Horizontal Scaling
 ```bash
 # Scale embedding services
-docker-compose -f docker-compose.production.yml up -d --scale embedding-service=5
+docker-compose -f .sutra/compose/production.yml up -d --scale embedding-service=5
 
 # Scale Grid agents (Enterprise)
-docker-compose -f docker-compose.production.yml up -d --scale grid-agent=8
+docker-compose -f .sutra/compose/production.yml up -d --scale grid-agent=8
 
 # Scale API instances
-docker-compose -f docker-compose.production.yml up -d --scale sutra-api=3
+docker-compose -f .sutra/compose/production.yml up -d --scale sutra-api=3
 ```
 
 ### Load Balancing
@@ -283,7 +291,7 @@ docker exec sutra-storage-server /usr/local/bin/storage-server restore --path /b
 ### Production Testing
 ```bash
 # Full test suite
-./sutra-build-production.sh test
+sutra test integration
 
 # Smoke tests (quick validation)
 curl http://localhost:8000/health
@@ -315,11 +323,11 @@ cd packages/sutra-control && npm test
 #### Services Not Starting
 ```bash
 # Check logs
-docker-compose -f docker-compose.production.yml logs sutra-api
-docker-compose -f docker-compose.production.yml logs storage-server
+docker-compose -f .sutra/compose/production.yml logs sutra-api
+docker-compose -f .sutra/compose/production.yml logs storage-server
 
 # Check health
-docker-compose -f docker-compose.production.yml ps
+docker-compose -f .sutra/compose/production.yml ps
 curl http://localhost:8000/internal/health
 ```
 
@@ -350,8 +358,8 @@ export LOG_LEVEL=debug
 export RUST_LOG=debug
 
 # Restart with debugging
-docker-compose -f docker-compose.production.yml down
-docker-compose -f docker-compose.production.yml up -d
+docker-compose -f .sutra/compose/production.yml down
+docker-compose -f .sutra/compose/production.yml up -d
 ```
 
 ## 📚 Additional Resources

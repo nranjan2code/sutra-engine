@@ -18,10 +18,12 @@ pub struct EmbeddingConfig {
     pub service_url: String,
     /// Request timeout in seconds
     pub timeout_secs: u64,
-    /// Maximum retries on failure
+    /// Maximum retries on failure (exponential backoff)
     pub max_retries: usize,
-    /// Retry delay in milliseconds
+    /// Base retry delay in milliseconds (doubles each retry + jitter)
     pub retry_delay_ms: u64,
+    /// Maximum retry delay cap in milliseconds
+    pub max_retry_delay_ms: u64,
 }
 
 impl Default for EmbeddingConfig {
@@ -35,6 +37,7 @@ impl Default for EmbeddingConfig {
                 .unwrap_or(30),
             max_retries: 3,
             retry_delay_ms: 500,
+            max_retry_delay_ms: 10_000, // Cap at 10s
         }
     }
 }
@@ -51,6 +54,7 @@ struct EmbeddingRequest {
 struct EmbeddingResponse {
     embeddings: Vec<Vec<f32>>,
     dimension: u32,
+    #[allow(dead_code)]
     model: String,
     processing_time_ms: f64,
     cached_count: u32,
@@ -214,14 +218,32 @@ impl EmbeddingClient {
                     last_error = Some(e);
                     
                     if attempt < self.config.max_retries {
-                        let delay = Duration::from_millis(
-                            self.config.retry_delay_ms * (2_u64.pow(attempt as u32))
-                        );
+                        // Exponential backoff: base * 2^attempt, capped at max
+                        let exponential_delay = self.config.retry_delay_ms
+                            .saturating_mul(2_u64.pow(attempt as u32));
+                        let capped_delay = exponential_delay.min(self.config.max_retry_delay_ms);
+                        
+                        // Add jitter (±20%) to prevent thundering herd
+                        use std::collections::hash_map::RandomState;
+                        use std::hash::{BuildHasher, Hasher};
+                        let mut hasher = RandomState::new().build_hasher();
+                        hasher.write_u64(std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_nanos() as u64);
+                        let jitter_pct = (hasher.finish() % 40) as i64 - 20; // -20% to +20%
+                        let jitter = (capped_delay as i64 * jitter_pct) / 100;
+                        let final_delay = (capped_delay as i64 + jitter).max(0) as u64;
+                        
+                        let delay = Duration::from_millis(final_delay);
                         warn!(
-                            "Batch embedding failed (attempt {}/{}), retrying in {:?}: {}",
+                            "Batch embedding failed (attempt {}/{}), retrying in {:?} (base={}ms, exp={}ms, jitter={}%): {}",
                             attempt + 1,
                             self.config.max_retries + 1,
                             delay,
+                            self.config.retry_delay_ms,
+                            capped_delay,
+                            jitter_pct,
                             last_error.as_ref().unwrap()
                         );
                         tokio::time::sleep(delay).await;

@@ -162,33 +162,33 @@ Query → API → ReasoningEngine
 
 ### Single Command Install
 ```bash
-./sutra-deploy.sh install
+sutra deploy
 ```
 
 ### Edition Selection
 ```bash
 # Simple (FREE)
-SUTRA_EDITION=simple ./sutra-deploy.sh install
+SUTRA_EDITION=simple sutra deploy
 
 # Community ($99/mo)
-SUTRA_EDITION=community SUTRA_LICENSE_KEY=xxx ./sutra-deploy.sh install
+SUTRA_EDITION=community SUTRA_LICENSE_KEY=xxx sutra deploy
 
 # Enterprise ($999/mo)
-SUTRA_EDITION=enterprise SUTRA_LICENSE_KEY=xxx SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
+SUTRA_EDITION=enterprise SUTRA_LICENSE_KEY=xxx SUTRA_SECURE_MODE=true sutra deploy
 ```
 
 ### Version Management
 ```bash
 # Show version
-./sutra-deploy.sh version
+sutra version
 
-# Create release
-./sutra-deploy.sh release patch  # 2.0.0 → 2.0.1
-./sutra-deploy.sh release minor  # 2.0.0 → 2.1.0
-./sutra-deploy.sh release major  # 2.0.0 → 3.0.0
+# Create release (manual VERSION file update)
+echo "2.0.1" > VERSION  # Bug fix: 2.0.0 → 2.0.1
+echo "2.1.0" > VERSION  # Feature: 2.0.0 → 2.1.0
+echo "3.0.0" > VERSION  # Breaking: 2.0.0 → 3.0.0
 
 # Deploy version
-./sutra-deploy.sh deploy v2.0.1
+sutra deploy
 ```
 
 ---

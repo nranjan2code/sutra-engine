@@ -6,9 +6,9 @@
 //! - Role-based access control
 //! - Audit logging
 
-use crate::auth::{AuthManager, Claims, Role};
+use crate::auth::{AuthManager, Claims};
 use crate::tls::{TlsConfigBuilder, is_tls_enabled};
-use crate::tcp_server::{StorageRequest, StorageResponse, StorageServer, ShardedStorageServer};
+use crate::tcp_server::{StorageRequest, StorageResponse, StorageServer};
 use anyhow::{anyhow, Result};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -130,7 +130,7 @@ impl SecureStorageServer {
         stream.get_mut().0.set_nodelay(true)?;
         
         // 1. Authentication handshake
-        let claims = if let Some(ref auth) = self.auth_manager {
+        let claims = if let Some(ref _auth) = self.auth_manager {
             let auth_claims = self.perform_auth_handshake(&mut stream).await?;
             info!("✅ Authenticated: {} ({})", auth_claims.sub, peer_addr);
             Some(auth_claims)
@@ -158,7 +158,7 @@ impl SecureStorageServer {
         stream.set_nodelay(true)?;
         
         // Authentication handshake
-        let claims = if let Some(ref auth) = self.auth_manager {
+        let claims = if let Some(ref _auth) = self.auth_manager {
             let auth_claims = self.perform_auth_handshake(&mut stream).await?;
             info!("✅ Authenticated: {} ({})", auth_claims.sub, peer_addr);
             Some(auth_claims)
@@ -333,37 +333,6 @@ impl SecureStorageServer {
     }
 }
 
-/// Secure sharded storage server
-pub struct SecureShardedStorageServer {
-    inner: Arc<ShardedStorageServer>,
-    auth_manager: Option<Arc<AuthManager>>,
-    tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
-}
-
-impl SecureShardedStorageServer {
-    pub async fn new(
-        server: ShardedStorageServer,
-        auth_manager: Option<AuthManager>,
-    ) -> Result<Self> {
-        let tls_acceptor = if is_tls_enabled() {
-            info!("🔒 TLS enabled - loading certificates...");
-            let acceptor = TlsConfigBuilder::from_env()?.build()?;
-            Some(acceptor)
-        } else {
-            warn!("⚠️  TLS disabled - traffic will be unencrypted");
-            None
-        };
-        
-        Ok(Self {
-            inner: Arc::new(server),
-            auth_manager: auth_manager.map(Arc::new),
-            tls_acceptor,
-        })
-    }
-    
-    // Note: Implementation mirrors SecureStorageServer
-    // In production, would extract common trait
-}
 
 #[cfg(test)]
 mod tests {

@@ -13,9 +13,8 @@
 //! Accuracy: ~80% (vs 50% regex, 70% spaCy)
 //! Dependencies: None (uses existing HA embedding service)
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::collections::HashMap;
-use std::sync::Mutex;
 use tracing::{debug, info, warn};
 
 use crate::embedding_client::EmbeddingClient;
@@ -123,6 +122,7 @@ impl SemanticExtractor {
     }
     
     /// Lazily initialize relation embeddings if they're missing
+    #[allow(dead_code)]
     async fn ensure_relation_embeddings(&mut self) -> Result<()> {
         if !self.relation_embeddings.is_empty() {
             return Ok(()); // Already initialized

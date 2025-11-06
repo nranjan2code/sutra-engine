@@ -10,15 +10,15 @@
 /// - Per-shard statistics
 /// - Migration support for rebalancing
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use crate::concurrent_memory::{ConcurrentMemory, ConcurrentConfig, ConcurrentStats};
-use crate::transaction::{TransactionCoordinator, TxnOperation, TxnError};
+use crate::transaction::{TransactionCoordinator, TxnOperation};
 use crate::types::ConceptId;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::collections::hash_map::DefaultHasher;
 

@@ -12,7 +12,6 @@
 /// - Self-healing interval adjustment
 /// - Comprehensive telemetry via Grid event system
 
-use crate::event_emitter::StorageEventEmitter;
 use crate::read_view::{ConceptNode, GraphSnapshot, ReadView};
 use crate::write_log::{WriteEntry, WriteLog};
 use std::collections::VecDeque;
@@ -312,9 +311,6 @@ pub struct AdaptiveReconciler {
     
     /// Trend analyzer (shared with reconciliation thread)
     trend_analyzer: Arc<Mutex<TrendAnalyzer>>,
-    
-    /// Event emitter for self-monitoring
-    event_emitter: Arc<StorageEventEmitter>,
 }
 
 impl AdaptiveReconciler {
@@ -323,7 +319,6 @@ impl AdaptiveReconciler {
         config: AdaptiveReconcilerConfig,
         write_log: Arc<WriteLog>,
         read_view: Arc<ReadView>,
-        event_emitter: Arc<StorageEventEmitter>,
     ) -> Self {
         std::fs::create_dir_all(&config.storage_path).ok();
         
@@ -344,7 +339,6 @@ impl AdaptiveReconciler {
             disk_flushes: Arc::new(AtomicU64::new(0)),
             interval_adjustments: Arc::new(AtomicU64::new(0)),
             trend_analyzer,
-            event_emitter,
         }
     }
     
@@ -366,7 +360,6 @@ impl AdaptiveReconciler {
         let interval_adjustments = Arc::clone(&self.interval_adjustments);
         let current_interval_ms = Arc::clone(&self.current_interval_ms);
         let trend_analyzer = Arc::clone(&self.trend_analyzer);
-        let event_emitter = Arc::clone(&self.event_emitter);
         
         let handle = thread::spawn(move || {
             adaptive_reconcile_loop(
@@ -380,7 +373,6 @@ impl AdaptiveReconciler {
                 interval_adjustments,
                 current_interval_ms,
                 trend_analyzer,
-                event_emitter,
             );
         });
         
@@ -462,13 +454,12 @@ fn adaptive_reconcile_loop(
     running: Arc<AtomicBool>,
     reconciliations: Arc<AtomicU64>,
     entries_processed: Arc<AtomicU64>,
-    disk_flushes: Arc<AtomicU64>,
+    _disk_flushes: Arc<AtomicU64>,
     interval_adjustments: Arc<AtomicU64>,
     current_interval_ms: Arc<AtomicU64>,
     trend_analyzer: Arc<Mutex<TrendAnalyzer>>,
-    event_emitter: Arc<StorageEventEmitter>,
 ) {
-    let mut next_segment_id = 0u32;
+    let _storage_version = 0u32; // Reserved for future use
     let mut cycle_count = 0u64;
     let queue_capacity = 100_000; // From write_log.rs MAX_WRITE_LOG_SIZE
     
@@ -511,14 +502,11 @@ fn adaptive_reconcile_loop(
             reconciliations.fetch_add(1, Ordering::Relaxed);
             entries_processed.fetch_add(batch_size as u64, Ordering::Relaxed);
             
-            // Disk flush check
-            let snap = read_view.load();
-            if snap.concept_count >= config.disk_flush_threshold {
-                if crate::reconciler::flush_to_disk(&snap, &config.storage_path, next_segment_id).is_ok() {
-                    next_segment_id += 1;
-                    disk_flushes.fetch_add(1, Ordering::Relaxed);
-                }
-            }
+            // TODO: Disk flush is now handled by ConcurrentMemory::flush()
+            // Adaptive reconciler focuses on memory reconciliation only
+            // if snap.concept_count >= config.disk_flush_threshold {
+            //     disk_flushes.fetch_add(1, Ordering::Relaxed);
+            // }
         }
         
         let cycle_duration = cycle_start.elapsed();
@@ -558,12 +546,6 @@ fn adaptive_reconcile_loop(
             if cycle_count % 100 == 0 {
                 let health_score = analyzer.calculate_health_score(queue_capacity);
                 let predicted_queue = analyzer.predict_next_queue_depth();
-                
-                event_emitter.emit_reconciliation(
-                    entries_processed.load(Ordering::Relaxed),
-                    cycle_duration.as_millis() as u64,
-                    false,
-                );
                 
                 // Warning if approaching capacity
                 if queue_depth as f64 / queue_capacity as f64 > config.queue_warning_threshold {
@@ -710,7 +692,6 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let write_log = Arc::new(WriteLog::new());
         let read_view = Arc::new(ReadView::new());
-        let event_emitter = Arc::new(StorageEventEmitter::default());
         
         let config = AdaptiveReconcilerConfig {
             storage_path: dir.path().to_path_buf(),
@@ -721,7 +702,6 @@ mod tests {
             config,
             Arc::clone(&write_log),
             Arc::clone(&read_view),
-            event_emitter,
         );
         
         reconciler.start();

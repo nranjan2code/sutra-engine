@@ -154,6 +154,7 @@ pub mod builtin {
     /// File stream implementation
     pub struct FileStream {
         reader: BufReader<File>,
+        #[allow(dead_code)]
         separator: Option<Regex>,
         format: String,
         position: u64,

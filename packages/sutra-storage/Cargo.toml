@@ -6,11 +6,7 @@ authors = ["Sutra AI Team"]
 
 [lib]
 name = "sutra_storage"
-crate-type = ["cdylib", "rlib"]  # Both Python extension and Rust library
-
-[features]
-default = []
-python-bindings = ["pyo3", "numpy"]
+crate-type = ["rlib"]  # Rust library only
 
 [dependencies]
 # Core concurrency and collections
@@ -34,13 +30,8 @@ serde_json = "1.0"                 # JSON serialization
 # SIMD and math
 simd-json = "0.13"                 # Fast JSON with SIMD
 
-# Vector search (HNSW) - incremental updates, persistence
-# hnsw_rs = "0.3"                    # HNSW with incremental insert support (DEPRECATED - lifetime issues)
-usearch = "2.21"                   # USearch - production HNSW with true persistence
-
-# Python bindings (OPTIONAL - only for Python extension, not binary)
-pyo3 = { version = "0.20", features = ["extension-module", "abi3-py38"], optional = true }
-numpy = { version = "0.20", optional = true }     # NumPy integration
+# Vector search (HNSW)
+usearch = "2.21"                   # USearch: production HNSW with true mmap persistence
 
 # Utilities
 thiserror = "1.0"                  # Error handling

@@ -3,7 +3,7 @@
 **Production-grade knowledge graph storage engine designed for 10M+ concepts with real-time learning.**
 
 Version: 0.1.0  
-Language: Rust (14,242 LOC across 34 modules)  
+Language: Rust (17,500+ LOC across 37 modules)  
 License: MIT
 
 ---
@@ -135,14 +135,13 @@ MessagePack binary format for durability:
 | `quantization.rs` | - | Vector compression (PQ) |
 | `vectors.rs` | 630 | Vector storage |
 
-### Concurrent Memory System (7 modules)
+### Concurrent Memory System (6 modules)
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
 | `write_log.rs` | 388 | Lock-free append-only write buffer |
 | `read_view.rs` | - | Immutable read snapshots |
-| `reconciler.rs` | - | Background reconciliation (DEPRECATED) |
-| `adaptive_reconciler.rs` | 490 | 🔥 AI-native adaptive reconciliation |
+| `adaptive_reconciler.rs` | 490 | AI-native adaptive reconciliation (EMA-based) |
 | `concurrent_memory.rs` | 800+ | Main concurrent storage implementation |
 | `mmap_store.rs` | - | Memory-mapped persistent storage |
 | `parallel_paths.rs` | - | Parallel pathfinding with Rayon |
@@ -151,16 +150,16 @@ MessagePack binary format for durability:
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
-| `hnsw_container.rs` | - | USearch-based HNSW with true mmap |
+| `hnsw_container.rs` | 600+ | USearch-based HNSW with true mmap (94× faster startup) |
 | `sharded_storage.rs` | 400+ | Horizontal scaling with consistent hashing |
 | `storage_trait.rs` | - | LearningStorage trait for polymorphism |
-| `transaction.rs` | 500+ | 🔥 2PC coordinator for cross-shard atomicity |
+| `transaction.rs` | 500+ | 2PC coordinator for cross-shard atomicity |
 
 ### Unified Learning Pipeline (3 modules)
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
-| `embedding_client.rs` | - | HTTP client for embedding service |
+| `embedding_client.rs` | 320+ | HTTP client with circuit breaker (exp backoff + jitter) |
 | `semantic_extractor.rs` | - | NLP-based association extraction |
 | `learning_pipeline.rs` | - | Orchestrates embedding + extraction + storage |
 
@@ -172,7 +171,14 @@ MessagePack binary format for durability:
 | `tcp_server.rs` | 400+ | Production TCP server (custom binary protocol) |
 | `reasoning_store.rs` | - | Reasoning-specific storage API |
 
-**Total**: 34 modules, 14,242 LOC
+**Total**: 37 modules, 17,500+ LOC
+
+**Recent Cleanup (2025-11-05)**:
+- ✅ Removed deprecated `reconciler.rs` (replaced by `adaptive_reconciler.rs`)
+- ✅ Removed Python bindings (`python*.rs` files) - Use TCP client instead
+- ✅ Removed deprecated `hnsw_persistence.rs` (replaced by `hnsw_container.rs`)
+- ✅ Enhanced circuit breaker with exponential backoff + jitter
+- ✅ Cleaned up deprecated configuration fields
 
 ---
 

@@ -9,7 +9,6 @@
 /// - Lock-free concurrent reads
 /// - Temporal decay and evolution
 /// - Native vector storage with quantization
-/// - Python bindings via PyO3
 mod types;
 mod segment;
 mod manifest;
@@ -19,8 +18,6 @@ mod index;
 mod wal;
 mod quantization;
 mod vectors;
-// mod python;
-// mod python_concurrent;
 mod reasoning_store;
 
 // 🔥 NEW: Schema definitions for conversation-first UI
@@ -37,29 +34,24 @@ pub mod learning_pipeline;
 // New concurrent memory modules
 mod write_log;
 mod read_view;
-mod reconciler;
-mod adaptive_reconciler; // 🔥 NEW: AI-native adaptive reconciliation
+mod adaptive_reconciler; // AI-native adaptive reconciliation
 mod concurrent_memory;
 mod mmap_store;
 mod parallel_paths;
 
 // Scalability modules
-// mod hnsw_persistence;  // DEPRECATED - replaced by hnsw_container with USearch
 mod hnsw_container;
 mod sharded_storage;
 mod storage_trait;
 mod transaction; // 🔥 NEW: 2PC transaction coordinator for cross-shard atomicity
 
-// Self-monitoring module (eating our own dogfood)
-mod event_emitter;
-
 // Security and authentication
 pub mod auth;
 pub mod tls;
+mod rate_limiter;
 
-// Python bindings (OPTIONAL - conditional compilation)
-#[cfg(feature = "python-bindings")]
-mod python_concurrent;
+// Re-export rate limiter for auth module (internal use)
+pub use rate_limiter::{RateLimiter, RateLimiterConfig, RateLimiterStats, RateLimitError};
 
 // TCP server for distributed architecture
 pub mod tcp_server;
@@ -84,24 +76,15 @@ pub use reasoning_store::{ReasoningStore, ConceptData, AssociationData, Reasonin
 pub use concurrent_memory::{ConcurrentMemory, ConcurrentConfig, ConcurrentStats, SnapshotInfo, HnswStats};
 pub use write_log::{WriteLog, WriteEntry, WriteLogStats, WriteLogError};
 pub use read_view::{ReadView, GraphSnapshot, ConceptNode};
-pub use reconciler::{Reconciler, ReconcilerConfig, ReconcilerStats};
-pub use adaptive_reconciler::{AdaptiveReconciler, AdaptiveReconcilerConfig, AdaptiveReconcilerStats}; // 🔥 NEW
+pub use adaptive_reconciler::{AdaptiveReconciler, AdaptiveReconcilerConfig, AdaptiveReconcilerStats};
 pub use mmap_store::{MmapStore, MmapStats};
 pub use parallel_paths::{ParallelPathFinder, PathResult};
 
 // Scalability exports
-// pub use hnsw_persistence::{HnswPersistence, HnswConfig, HnswStats as HnswPersistenceStats, DistanceMetric};  // DEPRECATED
 pub use hnsw_container::{HnswContainer, HnswConfig, HnswContainerStats};
 pub use sharded_storage::{ShardedStorage, ShardConfig, ShardMap, ShardStats, AggregatedStats};
 pub use storage_trait::LearningStorage;
 pub use transaction::{TransactionCoordinator, TxnOperation, TxnState, TxnError, Transaction, TxnCoordinatorStats}; // 🔥 NEW
-
-// Self-monitoring exports
-pub use event_emitter::{StorageEventEmitter, StorageEvent};
-
-// Re-export Python bindings (conditional)
-#[cfg(feature = "python-bindings")]
-pub use python_concurrent::*;
 
 /// Version of the storage format
 pub const STORAGE_VERSION: u32 = 1;

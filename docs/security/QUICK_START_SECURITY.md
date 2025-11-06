@@ -10,7 +10,7 @@
 
 ```bash
 # One command - does everything
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
+SUTRA_SECURE_MODE=true sutra deploy
 ```
 
 This will:
@@ -25,7 +25,7 @@ This will:
 
 ```bash
 # Switch to secure mode
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh restart
+SUTRA_SECURE_MODE=true sutra restart
 ```
 
 ---
@@ -36,29 +36,29 @@ SUTRA_SECURE_MODE=true ./sutra-deploy.sh restart
 
 ```bash
 # Start without security (local dev only)
-./sutra-deploy.sh install
-./sutra-deploy.sh up
-./sutra-deploy.sh down
-./sutra-deploy.sh status
+sutra deploy
+sutra start
+sutra stop
+sutra status
 ```
 
 ### Production Mode (With Authentication)
 
 ```bash
 # Start with security enabled
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh install
+SUTRA_SECURE_MODE=true sutra deploy
 
 # Status check
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh status
+SUTRA_SECURE_MODE=true sutra status
 
 # Restart services
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh restart
+SUTRA_SECURE_MODE=true sutra restart
 
 # Stop services
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh down
+SUTRA_SECURE_MODE=true sutra stop
 
 # Full validation
-SUTRA_SECURE_MODE=true ./sutra-deploy.sh validate
+SUTRA_SECURE_MODE=true sutra validate
 ```
 
 ---
@@ -109,7 +109,7 @@ After running secure deployment, tokens are located in `.secrets/tokens/`:
 
 ```bash
 # The header will show security status
-./sutra-deploy.sh status
+sutra status
 
 # Output shows:
 # ╔═══════════════════════════════════════════════════════════════╗
@@ -221,9 +221,9 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/health  # Should SU
 1. **Never commit secrets** - The `.secrets/` directory is in `.gitignore`
 2. **Rotate secrets regularly** - Regenerate with `./scripts/generate-secrets.sh`
 3. **Development vs Production**:
-   - Development: `./sutra-deploy.sh` (no auth)
-   - Production: `SUTRA_SECURE_MODE=true ./sutra-deploy.sh` (full security)
-4. **Single-Path Philosophy**: Always use `sutra-deploy.sh` - never call `docker-compose` directly
+   - Development: `sutra` (no auth)
+   - Production: `SUTRA_SECURE_MODE=true sutra` (full security)
+4. **Single-Path Philosophy**: Always use `./sutra unified CLI` - never call `docker-compose` directly
 
 ---
 

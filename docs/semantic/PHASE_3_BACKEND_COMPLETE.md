@@ -283,7 +283,7 @@ SemanticQueryResponse
 
 ```bash
 # 1. Start services
-./sutra-deploy.sh up
+sutra start
 
 # 2. Test semantic path
 curl -X POST http://localhost:8000/sutra/semantic/path \
@@ -427,7 +427,7 @@ pip install -e packages/sutra-hybrid
 pip install -e packages/sutra-api
 
 # 3. Restart services
-./sutra-deploy.sh restart
+sutra restart
 
 # 4. Verify health
 curl http://localhost:8000/health
@@ -447,7 +447,7 @@ If issues occur:
 git checkout <previous-commit>
 
 # Restart services
-./sutra-deploy.sh restart
+sutra restart
 ```
 
 **Rollback Time:** < 2 minutes

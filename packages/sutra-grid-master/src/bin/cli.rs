@@ -1,16 +1,15 @@
 #!/usr/bin/env rust
 
 use clap::{Parser, Subcommand};
-
-mod grid {
-    tonic::include_proto!("grid");
-}
+use sutra_protocol::{GridMessage, GridResponse};
+use tokio::net::TcpStream;
+use anyhow::Result;
 
 #[derive(Parser)]
 #[command(name = "sutra-grid-cli")]
 #[command(about = "CLI for Sutra Grid Master", long_about = None)]
 struct Cli {
-    #[arg(short, long, default_value = "http://localhost:7002")]
+    #[arg(short, long, default_value = "localhost:7002")]
     master: String,
     
     #[command(subcommand)]
@@ -64,107 +63,166 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let cli = Cli::parse();
     
-    let mut client = grid::grid_master_client::GridMasterClient::connect(cli.master.clone()).await?;
+    // Connect to Grid Master via TCP
+    let mut stream = TcpStream::connect(&cli.master).await?;
     
     match cli.command {
         Commands::ListAgents => {
-            let response = client.list_agents(grid::Empty {}).await?;
-            let agents = response.into_inner();
+            // Send request
+            sutra_protocol::send_message(&mut stream, &GridMessage::ListAgents).await?;
             
-            println!("📋 Registered Agents ({}):", agents.agents.len());
-            println!();
+            // Receive response
+            let response: GridResponse = sutra_protocol::recv_message(&mut stream).await?;
             
-            for agent in agents.agents {
-                println!("🖥️  Agent: {}", agent.agent_id);
-                println!("   Hostname: {}", agent.hostname);
-                println!("   Platform: {}", agent.platform);
-                println!("   Status: {}", agent.status);
-                println!("   Storage Nodes: {}/{}", agent.current_storage_nodes, agent.max_storage_nodes);
-                println!("   Last Heartbeat: {} seconds ago", 
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)?
-                        .as_secs()
-                        .saturating_sub(agent.last_heartbeat)
-                );
-                
-                if !agent.storage_nodes.is_empty() {
-                    println!("   Active Nodes:");
-                    for node in agent.storage_nodes {
-                        println!("     - {} (PID: {}, Status: {}, Endpoint: {})", 
-                            node.node_id, node.pid, node.status, node.endpoint);
+            match response {
+                GridResponse::ListAgentsOk { agents } => {
+                    println!("📋 Registered Agents ({}):", agents.len());
+                    println!();
+                    
+                    for agent in agents {
+                        println!("🖥️  Agent: {}", agent.agent_id);
+                        println!("   Hostname: {}", agent.hostname);
+                        println!("   Platform: {}", agent.platform);
+                        println!("   Status: {}", agent.status);
+                        println!("   Storage Nodes: {}/{}", agent.current_storage_nodes, agent.max_storage_nodes);
+                        println!("   Last Heartbeat: {} seconds ago", 
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)?
+                                .as_secs()
+                                .saturating_sub(agent.last_heartbeat)
+                        );
+                        println!();
                     }
                 }
-                println!();
+                GridResponse::Error { message } => {
+                    eprintln!("❌ Error: {}", message);
+                }
+                _ => {
+                    eprintln!("❌ Unexpected response type");
+                }
             }
         }
         
         Commands::Status => {
-            let response = client.get_cluster_status(grid::Empty {}).await?;
-            let status = response.into_inner();
+            // Send request
+            sutra_protocol::send_message(&mut stream, &GridMessage::GetClusterStatus).await?;
             
-            println!("📊 Cluster Status");
-            println!("================");
-            println!("Total Agents: {}", status.total_agents);
-            println!("Healthy Agents: {}", status.healthy_agents);
-            println!("Total Storage Nodes: {}", status.total_storage_nodes);
-            println!("Running Storage Nodes: {}", status.running_storage_nodes);
-            println!("Overall Status: {}", status.status);
+            // Receive response
+            let response: GridResponse = sutra_protocol::recv_message(&mut stream).await?;
+            
+            match response {
+                GridResponse::GetClusterStatusOk { total_agents, healthy_agents, total_storage_nodes, running_storage_nodes, status } => {
+                    println!("📊 Cluster Status");
+                    println!("================");
+                    println!("Total Agents: {}", total_agents);
+                    println!("Healthy Agents: {}", healthy_agents);
+                    println!("Total Storage Nodes: {}", total_storage_nodes);
+                    println!("Running Storage Nodes: {}", running_storage_nodes);
+                    println!("Overall Status: {}", status);
+                }
+                GridResponse::Error { message } => {
+                    eprintln!("❌ Error: {}", message);
+                }
+                _ => {
+                    eprintln!("❌ Unexpected response type");
+                }
+            }
         }
         
         Commands::Spawn { agent, port, storage_path, memory } => {
             println!("📦 Spawning storage node on agent {}...", agent);
             
-            let response = client.spawn_storage_node(grid::SpawnRequest {
+            // Send request
+            sutra_protocol::send_message(&mut stream, &GridMessage::SpawnStorageNode {
                 agent_id: agent.clone(),
-                port,
                 storage_path,
                 memory_limit_mb: memory,
+                port,
             }).await?;
             
-            let result = response.into_inner();
+            // Receive response
+            let response: GridResponse = sutra_protocol::recv_message(&mut stream).await?;
             
-            if result.success {
-                println!("✅ Storage node spawned successfully!");
-                println!("   Node ID: {}", result.node_id);
-                println!("   Endpoint: {}", result.endpoint);
-            } else {
-                println!("❌ Failed to spawn storage node");
-                println!("   Error: {}", result.error_message);
+            match response {
+                GridResponse::SpawnStorageNodeOk { node_id, endpoint, success, error_message } => {
+                    if success {
+                        println!("✅ Storage node spawned successfully!");
+                        println!("   Node ID: {}", node_id);
+                        println!("   Endpoint: {}", endpoint);
+                    } else {
+                        println!("❌ Failed to spawn storage node");
+                        if let Some(err) = error_message {
+                            println!("   Error: {}", err);
+                        }
+                    }
+                }
+                GridResponse::Error { message } => {
+                    eprintln!("❌ Error: {}", message);
+                }
+                _ => {
+                    eprintln!("❌ Unexpected response type");
+                }
             }
         }
         
         Commands::Stop { node, agent } => {
             println!("🛑 Stopping storage node {}...", node);
             
-            let response = client.stop_storage_node(grid::StopRequest {
-                node_id: node.clone(),
+            // Send request
+            sutra_protocol::send_message(&mut stream, &GridMessage::StopStorageNode {
                 agent_id: agent,
+                node_id: node.clone(),
             }).await?;
             
-            let result = response.into_inner();
+            // Receive response
+            let response: GridResponse = sutra_protocol::recv_message(&mut stream).await?;
             
-            if result.success {
-                println!("✅ Storage node stopped successfully!");
-            } else {
-                println!("❌ Failed to stop storage node");
-                println!("   Error: {}", result.error_message);
+            match response {
+                GridResponse::StopStorageNodeOk { success, error_message } => {
+                    if success {
+                        println!("✅ Storage node stopped successfully!");
+                    } else {
+                        println!("❌ Failed to stop storage node");
+                        if let Some(err) = error_message {
+                            println!("   Error: {}", err);
+                        }
+                    }
+                }
+                GridResponse::Error { message } => {
+                    eprintln!("❌ Error: {}", message);
+                }
+                _ => {
+                    eprintln!("❌ Unexpected response type");
+                }
             }
         }
         
         Commands::NodeStatus { node } => {
-            let response = client.get_storage_node_status(grid::NodeId {
+            // Send request
+            sutra_protocol::send_message(&mut stream, &GridMessage::GetStorageNodeStatus {
                 node_id: node.clone(),
             }).await?;
             
-            let status = response.into_inner();
+            // Receive response
+            let response: GridResponse = sutra_protocol::recv_message(&mut stream).await?;
             
-            println!("📦 Storage Node: {}", status.node_id);
-            println!("   Status: {}", status.status);
-            println!("   PID: {}", status.pid);
-            println!("   Endpoint: {}", status.endpoint);
+            match response {
+                GridResponse::GetStorageNodeStatusOk { node_id, status, pid, endpoint } => {
+                    println!("📦 Storage Node: {}", node_id);
+                    println!("   Status: {}", status);
+                    println!("   PID: {}", pid);
+                    println!("   Endpoint: {}", endpoint);
+                }
+                GridResponse::Error { message } => {
+                    eprintln!("❌ Error: {}", message);
+                }
+                _ => {
+                    eprintln!("❌ Unexpected response type");
+                }
+            }
         }
     }
     

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use serde_json::Value as JsonValue;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Concept {
@@ -107,6 +107,7 @@ enum StorageResponse {
 struct StorageClientWrapper {
     // This will use the existing sutra-storage-client-tcp
     // For now, we'll simulate it
+    #[allow(dead_code)]
     connected: bool,
 }
 
@@ -137,7 +138,7 @@ impl TcpStorageClient {
     async fn try_connect(server_address: &str) -> Result<StorageClientWrapper> {
         // Simple connectivity check
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        if let Ok(mut stream) = TcpStream::connect(server_address).await {
+        if let Ok(stream) = TcpStream::connect(server_address).await {
             stream.set_nodelay(true)?;
             Ok(StorageClientWrapper { connected: true })
         } else {
@@ -148,7 +149,7 @@ impl TcpStorageClient {
     /// Batch learn concepts using unified learning API
     /// Storage server handles: embedding generation + association extraction + storage
     pub async fn batch_learn_concepts(&mut self, concepts: Vec<Concept>) -> Result<Vec<String>> {
-        if let Some(client) = &self.client {
+        if let Some(_client) = &self.client {
             // Real TCP storage communication with unified API
             self.batch_learn_real_v2(concepts).await
         } else {

@@ -126,16 +126,19 @@ impl PluginRegistry {
 }
 
 // Mock Python adapter for testing when PyO3 is not available
+#[cfg(feature = "python-plugins")]
 struct MockPythonAdapter {
     name: String,
 }
 
+#[cfg(feature = "python-plugins")]
 impl MockPythonAdapter {
     pub fn new(name: String) -> Self {
         Self { name }
     }
 }
 
+#[cfg(feature = "python-plugins")]
 #[async_trait::async_trait]
 impl crate::adapters::IngestionAdapter for MockPythonAdapter {
     fn name(&self) -> &str {
@@ -177,11 +180,13 @@ impl crate::adapters::IngestionAdapter for MockPythonAdapter {
 }
 
 // Mock data stream for testing
+#[cfg(feature = "python-plugins")]
 struct MockDataStream {
     count: u64,
     max_items: u64,
 }
 
+#[cfg(feature = "python-plugins")]
 impl MockDataStream {
     fn new() -> Self {
         Self {
@@ -191,6 +196,7 @@ impl MockDataStream {
     }
 }
 
+#[cfg(feature = "python-plugins")]
 #[async_trait::async_trait]
 impl crate::adapters::DataStream for MockDataStream {
     async fn next(&mut self) -> Option<Result<crate::adapters::DataItem>> {

@@ -84,7 +84,7 @@ eyJlZGl0aW9uIjoiY29tbXVuaXR5IiwiY3VzdG9tZXJfaWQiOiJBY21lIENvcnAiLCJpc3N1ZWQiOiIy
 Deployment:
   export SUTRA_EDITION="community"
   export SUTRA_LICENSE_KEY="eyJlZGl0aW9uIjoiY29tbXVuaXR5IiwiY3VzdG9tZXJfaWQiOiJBY21lIENvcnAiLCJpc3N1ZWQiOiIyMDI1LTAxLTI2VDEyOjAwOjAwIiwiZXhwaXJlcyI6IjIwMjYtMDEtMjZUMTI6MDA6MDAifQ==.e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  ./sutra-deploy.sh install
+  sutra deploy
 
 ================================================================================
 

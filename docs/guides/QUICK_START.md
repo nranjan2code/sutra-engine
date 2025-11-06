@@ -27,22 +27,22 @@ All deployment operations now use a single script:
 
 ```bash
 # First-time installation
-./sutra-deploy.sh install
+sutra deploy
 
 # Start all services
-./sutra-deploy.sh up
+sutra start
 
-# Stop all services  
-./sutra-deploy.sh down
+# Stop all services
+sutra stop
 
 # Check system status
-./sutra-deploy.sh status
+sutra status
 
 # View logs
-./sutra-deploy.sh logs
+sutra logs
 
 # Interactive maintenance
-./sutra-deploy.sh maintenance
+sutra maintenance
 ```
 
 **See [DEPLOYMENT.md](DEPLOYMENT.md) for complete documentation.**
@@ -50,8 +50,8 @@ All deployment operations now use a single script:
 ### Old Deployment Scripts (Archived)
 
 The following scripts have been archived to `archive/`:
-- `deploy-optimized.sh` → Use `./sutra-deploy.sh`
-- `build-images.sh` → Use `./sutra-deploy.sh build`
+- `deploy-optimized.sh` → Use `./sutra unified CLI`
+- `build-images.sh` → Use `./sutra unified CLI`
 
 ## 📋 File Structure
 

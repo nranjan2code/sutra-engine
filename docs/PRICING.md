@@ -43,7 +43,7 @@
 
 **Deploy:**
 ```bash
-./sutra-deploy.sh install
+sutra deploy
 # No credit card required
 # No license key needed
 ```
@@ -79,7 +79,7 @@
 ```bash
 export SUTRA_EDITION="community"
 export SUTRA_LICENSE_KEY="your-license-key"
-./sutra-deploy.sh install
+sutra deploy
 ```
 
 **Use Cases:**
@@ -154,7 +154,7 @@ export SUTRA_LICENSE_KEY="your-license-key"
 export SUTRA_EDITION="enterprise"
 export SUTRA_LICENSE_KEY="your-license-key"
 export SUTRA_SECURE_MODE="true"
-./sutra-deploy.sh install
+sutra deploy
 ```
 
 **Use Cases:**
@@ -266,14 +266,14 @@ Available for **Enterprise customers** only:
 **How to upgrade:**
 ```bash
 # 1. Stop services (no data loss!)
-./sutra-deploy.sh down
+sutra stop
 
 # 2. Get license from https://sutra.ai/pricing
 
 # 3. Set edition & restart
 export SUTRA_EDITION="community"
 export SUTRA_LICENSE_KEY="your-license-key"
-./sutra-deploy.sh install
+sutra deploy
 ```
 
 **Zero downtime:** Data persists across upgrades
@@ -292,7 +292,7 @@ export SUTRA_LICENSE_KEY="your-license-key"
 **How to upgrade:**
 ```bash
 # 1. Stop services (no data loss!)
-./sutra-deploy.sh down
+sutra stop
 
 # 2. Get Enterprise license
 
@@ -300,7 +300,7 @@ export SUTRA_LICENSE_KEY="your-license-key"
 export SUTRA_EDITION="enterprise"
 export SUTRA_LICENSE_KEY="your-enterprise-license"
 export SUTRA_SECURE_MODE="true"
-./sutra-deploy.sh install
+sutra deploy
 ```
 
 **Upgrade includes:** Architecture review + deployment assistance
@@ -429,7 +429,7 @@ A: Yes. Consultancies and system integrators get partner pricing. Contact partne
 ```bash
 git clone https://github.com/yourusername/sutra-models
 cd sutra-models
-./sutra-deploy.sh install
+sutra deploy
 ```
 
 ### Community Edition
