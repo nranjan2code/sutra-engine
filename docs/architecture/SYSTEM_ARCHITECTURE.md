@@ -2,6 +2,8 @@
 
 **Version 2.0.0** | Last Updated: October 27, 2025
 
+> **📊 NEW: [Embedding Service Scaling Strategy](./scaling/README.md)** - How to scale from 0.14 to 14+ concepts/sec for 1,000+ users (November 2025)
+
 ## Executive Summary
 
 Sutra AI is a production-grade, domain-specific explainable AI platform designed for regulated industries requiring complete audit trails and reasoning transparency. Unlike general-purpose LLMs, Sutra starts empty and learns exclusively from your proprietary data—medical protocols, legal precedents, financial regulations—with millisecond-level query responses and zero-loss crash recovery.
