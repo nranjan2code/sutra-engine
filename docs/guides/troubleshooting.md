@@ -16,7 +16,75 @@ curl -s http://localhost:8000/stats | jq '{concepts: .total_concepts, embeddings
 
 ## Common Issues
 
-### 1. Same Answer for All Questions ⭐ MOST COMMON
+### 1. Performance Issues (November 2025) ⚡ NEW
+
+**Symptoms:**
+- Very slow learning (>5 seconds per concept)
+- Async requests timing out
+- "Expected 768-dimensional embeddings, got 256" errors
+- `'NoneType' object has no attribute 'sendall'` errors
+- 0% success rate on concurrent tests
+
+**Quick Diagnosis:**
+```bash
+# Run stress test
+python3 scripts/stress_test.py --quick
+
+# Expected (healthy system):
+# Sequential: ~9 req/sec, 100% success
+# Async (5): ~8 req/sec, 100% success
+
+# Check dimension configuration
+docker exec sutra-works-storage env | grep VECTOR_DIMENSION
+docker exec sutra-works-hybrid env | grep VECTOR_DIMENSION
+# Should both show same value (256 or 768)
+```
+
+**Root Causes & Fixes:**
+
+**A. Dimension Mismatch (70× slowdown)**
+```bash
+# Symptom in logs:
+docker logs sutra-works-storage 2>&1 | grep "Expected 768"
+# Shows: "Expected 768-dimensional embeddings, got 256"
+
+# Fix: Set consistent dimension across all services
+export MATRYOSHKA_DIM=256
+SUTRA_EDITION=simple ./sutra build storage hybrid
+./sutra deploy
+```
+
+**B. TCP Connection Errors**
+```bash
+# Symptom in logs:
+docker logs sutra-works-hybrid 2>&1 | grep "NoneType"
+# Shows: "'NoneType' object has no attribute 'sendall'"
+
+# Fix: Rebuild with updated TCP client
+./sutra build api hybrid
+docker restart sutra-works-api sutra-works-hybrid
+```
+
+**C. Network Configuration**
+```bash
+# Verify service can reach storage
+docker exec sutra-works-api ping -c 2 storage-server
+# Should succeed
+
+# Check environment variables
+docker inspect sutra-works-api | grep STORAGE_SERVER
+# Should show: storage-server:50051 (NOT sutra-works-storage)
+```
+
+**Full Details:** [`docs/architecture/PERFORMANCE_OPTIMIZATION.md`](../architecture/PERFORMANCE_OPTIMIZATION.md)
+
+**Performance Benchmarks:**
+- After fixes: 9+ req/sec, <200ms latency, 100% success
+- Before fixes: 0.13 req/sec, 7500ms latency, 0% async success
+
+---
+
+### 2. Same Answer for All Questions ⭐ MOST COMMON
 
 **Status:** ✅ **FIXED** (2025-10-19) - Unified learning architecture prevents this bug
 

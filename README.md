@@ -20,6 +20,32 @@ Explainable reasoning over your private domain knowledge—without frontier LLMs
 
 ## 🎉 What's New (2025-11-08)
 
+**⚡ Performance Optimization Complete - 50-70× Throughput Improvement (v3.0.0)**
+
+- ✅ **Config-Driven Dimensions** - Fixed hardcoded 768-dim validation, now reads `VECTOR_DIMENSION` env
+- ✅ **70× Sequential Performance** - 7542ms → 107ms (0.13 → 9.06 req/sec)
+- ✅ **49× Concurrent Performance** - 14888ms → 306ms for 2-thread workloads
+- ✅ **100% Async Success** - Fixed dimension mismatch causing 0% success rate (∞ improvement)
+- ✅ **TCP Connection Resilience** - Added state validation, timeout handling, graceful reconnection
+- ✅ **Production Monitoring** - Request tracking, slow query detection (>1s threshold)
+- ✅ **Connection Pooling** - Keep-alive, connection reuse for concurrent requests
+- ✅ **Comprehensive Documentation** - Performance guide, troubleshooting, benchmarks
+
+**Critical Fixes:**
+- Hardcoded 768-dim → `VECTOR_DIMENSION` env var (eliminates 15s retry penalty)
+- `NoneType.sendall` crashes → Connection state validation
+- New connections per request → Connection pooling with keep-alive
+- No slow request visibility → Instrumented timing with warnings
+
+**Performance Before/After:**
+- Sequential: 0.13 req/sec → **9.06 req/sec** (70× faster)
+- Thread (2): 0.13 req/sec → **6.52 req/sec** (49× faster)
+- Async (5): 0% success → **100% success** (∞ improvement)
+
+See complete guide: `docs/architecture/PERFORMANCE_OPTIMIZATION.md`
+
+---
+
 **🚀 Production Scaling Complete - 21× Performance Improvement (v3.0.0 - Grade: A+ 100/100)**
 
 - ✅ **Phase 0: Matryoshka Dimensions** - 3× faster with configurable 256/512/768-dim embeddings

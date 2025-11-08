@@ -1,8 +1,10 @@
 # Sutra AI System Architecture
 
-**Version 2.0.0** | Last Updated: October 27, 2025
+**Version 3.0.0** | Last Updated: November 8, 2025
 
 > **📊 NEW: [Embedding Service Scaling Strategy](./scaling/README.md)** - How to scale from 0.14 to 14+ concepts/sec for 1,000+ users (November 2025)
+> 
+> **⚡ NEW: [Performance Optimization Guide](./PERFORMANCE_OPTIMIZATION.md)** - 50-70× throughput improvements and critical fixes (November 2025)
 
 ## Executive Summary
 

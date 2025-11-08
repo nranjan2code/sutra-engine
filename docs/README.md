@@ -2,13 +2,22 @@
 
 **Production-Ready Domain-Specific Reasoning Engine**
 
-**Version:** 2.0.1 | **Grade:** A+ (98/100) | **Status:** Production-Ready
+**Version:** 3.0.0 | **Grade:** A+ (98/100) | **Status:** Production-Ready
 
 ---
 
 ## 🎉 Production Readiness Complete (November 2025)
 
-**NEW: Production Validation & Quality Assurance (v2.0.1)**
+**NEW: Performance Optimization (v3.0.0) - November 8, 2025**
+- **50-70× Throughput Improvements**: 0.13 → 9.06 req/sec (Sequential)
+- **100% Async Success**: Fixed dimension mismatch causing 0% success rate
+- **Config-Driven Dimensions**: Matryoshka 256-dim support without hardcoded validation
+- **TCP Connection Resilience**: Eliminated connection crashes and retry penalties
+- **Production Monitoring**: Request tracking and slow query detection
+
+[**Performance Guide →**](architecture/PERFORMANCE_OPTIMIZATION.md) | [**Troubleshooting →**](guides/troubleshooting.md#1-performance-issues-november-2025-)
+
+**Production Validation & Quality Assurance (v2.0.1)**
 - **100% Dependency Pinning**: All Python (`==`) and JavaScript (exact) versions locked
 - **Automated Testing**: Smoke tests + integration tests + 70% coverage minimum
 - **React 18.2.0 Standardized**: Eliminated version conflicts across all packages

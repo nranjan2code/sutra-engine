@@ -1,0 +1,149 @@
+{
+  "summary": {
+    "companies_targeted": 8,
+    "companies_processed": 8,
+    "concepts_created": 0,
+    "concepts_failed": 64,
+    "total_time_seconds": 12.413287,
+    "concepts_per_second": 0.0,
+    "success_rate": 0.0,
+    "estimated_concepts": 64,
+    "achievement_rate": 0.0
+  },
+  "detailed_results": [
+    {
+      "company": "GOOGL",
+      "success_count": 0,
+      "failure_count": 8,
+      "concept_ids": [],
+      "errors": [
+        "2025-10-29: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-30: HTTP 404: {\"detail\":\"Not Found\"}",
+        "2025-10-31: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-03: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-04: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-05: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-06: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-07: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}"
+      ]
+    },
+    {
+      "company": "MSFT",
+      "success_count": 0,
+      "failure_count": 8,
+      "concept_ids": [],
+      "errors": [
+        "2025-10-29: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-30: HTTP 404: {\"detail\":\"Not Found\"}",
+        "2025-10-31: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-03: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-04: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-05: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-06: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-07: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}"
+      ]
+    },
+    {
+      "company": "AMZN",
+      "success_count": 0,
+      "failure_count": 8,
+      "concept_ids": [],
+      "errors": [
+        "2025-10-29: HTTP 404: {\"detail\":\"Not Found\"}",
+        "2025-10-30: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-31: HTTP 404: {\"detail\":\"Not Found\"}",
+        "2025-11-03: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-04: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-05: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-06: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-07: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}"
+      ]
+    },
+    {
+      "company": "AAPL",
+      "success_count": 0,
+      "failure_count": 8,
+      "concept_ids": [],
+      "errors": [
+        "2025-10-29: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-30: HTTP 404: {\"detail\":\"Not Found\"}",
+        "2025-10-31: HTTP 404: {\"detail\":\"Not Found\"}",
+        "2025-11-03: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-04: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-05: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-06: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-07: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}"
+      ]
+    },
+    {
+      "company": "TSM",
+      "success_count": 0,
+      "failure_count": 8,
+      "concept_ids": [],
+      "errors": [
+        "2025-10-29: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-30: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-31: HTTP 404: {\"detail\":\"Not Found\"}",
+        "2025-11-03: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-04: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-05: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-06: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-07: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}"
+      ]
+    },
+    {
+      "company": "NVDA",
+      "success_count": 0,
+      "failure_count": 8,
+      "concept_ids": [],
+      "errors": [
+        "2025-10-29: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-30: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-31: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-03: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-04: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-05: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-06: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-07: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}"
+      ]
+    },
+    {
+      "company": "TSLA",
+      "success_count": 0,
+      "failure_count": 8,
+      "concept_ids": [],
+      "errors": [
+        "2025-10-29: HTTP 404: {\"detail\":\"Not Found\"}",
+        "2025-10-30: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-31: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-03: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-04: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-05: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-06: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-07: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}"
+      ]
+    },
+    {
+      "company": "META",
+      "success_count": 0,
+      "failure_count": 8,
+      "concept_ids": [],
+      "errors": [
+        "2025-10-29: HTTP 404: {\"detail\":\"Not Found\"}",
+        "2025-10-30: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-10-31: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-03: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-04: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-05: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-06: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}",
+        "2025-11-07: HTTP 500: {\"error\":\"InternalServerError\",\"message\":\"An unexpected error occurred\",\"detail\":null}"
+      ]
+    }
+  ],
+  "performance_metrics": {
+    "avg_concepts_per_company": 0.0,
+    "processing_throughput": 38.66824314945751,
+    "error_rate": 0.0
+  },
+  "errors": []
+}

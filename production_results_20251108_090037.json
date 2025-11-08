@@ -1,0 +1,31 @@
+{
+  "summary": {
+    "companies_targeted": 1,
+    "companies_processed": 1,
+    "concepts_created": 2,
+    "concepts_failed": 0,
+    "total_time_seconds": 16.888654,
+    "concepts_per_second": 0.11842269964202003,
+    "success_rate": 100.0,
+    "estimated_concepts": 2,
+    "achievement_rate": 100.0
+  },
+  "detailed_results": [
+    {
+      "company": "AAPL",
+      "success_count": 2,
+      "failure_count": 0,
+      "concept_ids": [
+        "learned_1",
+        "learned_1"
+      ],
+      "errors": []
+    }
+  ],
+  "performance_metrics": {
+    "avg_concepts_per_company": 2.0,
+    "processing_throughput": 3.5526809892606006,
+    "error_rate": 0.0
+  },
+  "errors": []
+}

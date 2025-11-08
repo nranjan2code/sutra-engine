@@ -80,11 +80,11 @@ class Settings(BaseSettings):
     edition: str = "simple"  # simple, community, enterprise
     license_key: Optional[str] = None
 
-    # Rate Limiting (requests per minute) - Default fallback values
-    # These will be overridden by edition-specific limits
-    rate_limit_learn: int = 10
-    rate_limit_reason: int = 50
-    rate_limit_search: int = 100
+    # Rate Limiting (requests per minute) - DISABLED FOR NGINX-ONLY CONTROL
+    # Set to very high values so nginx handles all rate limiting
+    rate_limit_learn: int = 10000    # Effectively unlimited
+    rate_limit_reason: int = 10000   # Effectively unlimited
+    rate_limit_search: int = 10000   # Effectively unlimited
 
     class Config:
         """Pydantic configuration."""

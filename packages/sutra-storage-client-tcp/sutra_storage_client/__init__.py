@@ -46,15 +46,28 @@ class StorageClient:
     
     def _connect(self):
         """Establish TCP connection"""
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # Low latency
-        self.socket.connect(self.address)
+        try:
+            if self.socket:
+                try:
+                    self.socket.close()
+                except:
+                    pass
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # Low latency
+            self.socket.settimeout(30.0)  # 30s timeout for operations
+            self.socket.connect(self.address)
+        except Exception as e:
+            self.socket = None
+            raise ConnectionError(f"Failed to connect to {self.address}: {e}")
     
     def _send_request(self, variant_name: str, data: dict) -> dict:
         """Send request and receive response.
         
         Rust enum format: {variant_name: variant_data}
         """
+        if not self.socket:
+            raise ConnectionError("Not connected to storage server")
+            
         # Pack request as enum: {variant_name: data}
         request = {variant_name: data}
         packed = msgpack.packb(request)

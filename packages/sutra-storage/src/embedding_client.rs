@@ -24,6 +24,8 @@ pub struct EmbeddingConfig {
     pub retry_delay_ms: u64,
     /// Maximum retry delay cap in milliseconds
     pub max_retry_delay_ms: u64,
+    /// Expected embedding dimension (from VECTOR_DIMENSION env)
+    pub expected_dimension: usize,
 }
 
 impl Default for EmbeddingConfig {
@@ -38,6 +40,10 @@ impl Default for EmbeddingConfig {
             max_retries: 3,
             retry_delay_ms: 500,
             max_retry_delay_ms: 10_000, // Cap at 10s
+            expected_dimension: std::env::var("VECTOR_DIMENSION")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(768),
         }
     }
 }
@@ -76,8 +82,8 @@ impl EmbeddingClient {
             .context("Failed to create HTTP client")?;
             
         info!(
-            "Initialized EmbeddingClient: service_url={}, timeout={}s",
-            config.service_url, config.timeout_secs
+            "Initialized EmbeddingClient: service_url={}, timeout={}s, expected_dim={}",
+            config.service_url, config.timeout_secs, config.expected_dimension
         );
         
         Ok(Self { config, client })
@@ -133,19 +139,21 @@ impl EmbeddingClient {
                     return Err(anyhow::anyhow!("Received empty embedding response"));
                 }
                 
-                // Validate dimension consistency
-                if embedding_response.dimension != 768 {
+                // Validate dimension consistency (config-driven)
+                if embedding_response.dimension as usize != self.config.expected_dimension {
                     return Err(anyhow::anyhow!(
-                        "Expected 768-dimensional embeddings, got {}",
+                        "Expected {}-dimensional embeddings (VECTOR_DIMENSION), got {}",
+                        self.config.expected_dimension,
                         embedding_response.dimension
                     ));
                 }
                 
                 debug!(
-                    "Generated {} embeddings in {:.2}ms ({} cached)",
+                    "Generated {} embeddings in {:.2}ms ({} cached, dim={})",
                     embedding_response.embeddings.len(),
                     embedding_response.processing_time_ms,
-                    embedding_response.cached_count
+                    embedding_response.cached_count,
+                    embedding_response.dimension
                 );
                 
                 Ok(embedding_response.embeddings)

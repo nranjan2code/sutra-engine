@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "companies_targeted": 2,
+    "companies_processed": 2,
+    "concepts_created": 6,
+    "concepts_failed": 0,
+    "total_time_seconds": 48.660499,
+    "concepts_per_second": 0.12330329781451686,
+    "success_rate": 100.0,
+    "estimated_concepts": 6,
+    "achievement_rate": 100.0
+  },
+  "detailed_results": [
+    {
+      "company": "AAPL",
+      "success_count": 3,
+      "failure_count": 0,
+      "concept_ids": [
+        "learned_1",
+        "learned_1",
+        "learned_1"
+      ],
+      "errors": []
+    },
+    {
+      "company": "MSFT",
+      "success_count": 3,
+      "failure_count": 0,
+      "concept_ids": [
+        "learned_1",
+        "learned_1",
+        "learned_1"
+      ],
+      "errors": []
+    }
+  ],
+  "performance_metrics": {
+    "avg_concepts_per_company": 3.0,
+    "processing_throughput": 2.466065956290337,
+    "error_rate": 0.0
+  },
+  "errors": []
+}

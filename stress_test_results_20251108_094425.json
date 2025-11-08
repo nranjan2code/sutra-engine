@@ -1,0 +1,68 @@
+[
+  {
+    "test_name": "Sequential Baseline (simple)",
+    "total_requests": 10,
+    "successful_requests": 0,
+    "failed_requests": 10,
+    "total_time_seconds": 0.6218602657318115,
+    "requests_per_second": 0.0,
+    "average_latency_ms": 58.804893493652344,
+    "p95_latency_ms": 542.4058437347412,
+    "errors": [
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500"
+    ]
+  },
+  {
+    "test_name": "Thread Concurrent (2 threads, medium)",
+    "total_requests": 20,
+    "successful_requests": 0,
+    "failed_requests": 20,
+    "total_time_seconds": 0.053681135177612305,
+    "requests_per_second": 0.0,
+    "average_latency_ms": 5.075657367706299,
+    "p95_latency_ms": 9.584546089172363,
+    "errors": [
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500"
+    ]
+  },
+  {
+    "test_name": "Async Concurrent (5 parallel, medium)",
+    "total_requests": 25,
+    "successful_requests": 0,
+    "failed_requests": 25,
+    "total_time_seconds": 0.02822399139404297,
+    "requests_per_second": 0.0,
+    "average_latency_ms": 4.555234909057617,
+    "p95_latency_ms": 10.193657875061035,
+    "errors": [
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500",
+      "HTTP 500"
+    ]
+  }
+]

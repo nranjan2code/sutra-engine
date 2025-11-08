@@ -301,15 +301,20 @@ impl StorageServer {
     ) -> std::io::Result<()> {
         eprintln!("Client connected: {}", peer_addr);
 
-        // Configure for low latency
+        // Configure for low latency and better throughput
         stream.set_nodelay(true)?;
 
+        let mut request_count = 0u64;
+        
         loop {
+            let request_start = std::time::Instant::now();
+            
             // Read message length (4 bytes)
             let len = match stream.read_u32().await {
                 Ok(len) => len,
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     // Client disconnected
+                    eprintln!("Client {} disconnected after {} requests", peer_addr, request_count);
                     break;
                 }
                 Err(e) => return Err(e),
@@ -336,7 +341,7 @@ impl StorageServer {
             let request: StorageRequest = rmp_serde::from_slice(&buf)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
-            // Handle request
+            // Handle request (already async and non-blocking)
             let response = self.handle_request(request).await;
 
             // Serialize response (msgpack for Python clients)
@@ -347,6 +352,15 @@ impl StorageServer {
             stream.write_u32(response_bytes.len() as u32).await?;
             stream.write_all(&response_bytes).await?;
             stream.flush().await?;
+            
+            request_count += 1;
+            let request_duration = request_start.elapsed();
+            
+            // Log slow requests (> 1s)
+            if request_duration.as_millis() > 1000 {
+                eprintln!("⚠️  Slow request from {}: {}ms (total: {})", 
+                    peer_addr, request_duration.as_millis(), request_count);
+            }
         }
 
         eprintln!("Client disconnected: {}", peer_addr);
