@@ -63,7 +63,7 @@ services:
       - STORAGE_PATH=/data
       - STORAGE_HOST=0.0.0.0
       - STORAGE_PORT=50051
-      - VECTOR_DIMENSION=768
+      - VECTOR_DIMENSION=${MATRYOSHKA_DIM:-768}  # Phase 0: Match Matryoshka dimension
       # Edition Configuration
       - SUTRA_EDITION=${SUTRA_EDITION:-simple}
       - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
@@ -142,7 +142,7 @@ services:
       - STORAGE_PATH=/data
       - STORAGE_HOST=0.0.0.0
       - STORAGE_PORT=50051
-      - VECTOR_DIMENSION=768
+      - VECTOR_DIMENSION=${MATRYOSHKA_DIM:-768}  # Match Phase 0 dimension
       # Edition Configuration
       - SUTRA_EDITION=${SUTRA_EDITION:-simple}
       - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
@@ -164,6 +164,52 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+  
+  # Phase 1: Dedicated Sutra Storage Cache Shard (L2 cache for embeddings)
+  storage-cache-shard:
+    build:
+      context: ../..
+      dockerfile: ./packages/sutra-storage/Dockerfile
+    image: sutra-works-storage-server:${SUTRA_VERSION:-latest}
+    container_name: sutra-works-storage-cache
+    # SECURITY: Internal only
+    expose:
+      - "50052"  # Different port from main storage
+    volumes:
+      - storage-cache-data:/data
+    environment:
+      - RUST_LOG=info
+      - STORAGE_PATH=/data
+      - STORAGE_HOST=0.0.0.0
+      - STORAGE_PORT=50052
+      - VECTOR_DIMENSION=${MATRYOSHKA_DIM:-256}  # Match Phase 0
+      # Cache-Optimized Settings
+      - SUTRA_ROLE=cache_shard
+      - CACHE_MODE=true
+      - MAX_CONCEPTS=100000  # Large capacity for cache
+      - EVICTION_POLICY=lru
+      - DEFAULT_TTL_SECONDS=86400  # 24 hours
+      - MMAP_ENABLED=true  # Memory-mapped vectors (fast)
+      - WAL_SYNC_INTERVAL_MS=5000  # Less aggressive (cache can rebuild)
+      # Edition Configuration
+      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/50052' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2G  # Smaller than main storage
+        reservations:
+          memory: 1G
+    profiles:
+      - scaling  # Deploy with scaling profile
 
   # ============================================================================
   # GRID INFRASTRUCTURE
@@ -326,19 +372,62 @@ services:
   # ============================================================================
   
   # ML-Base Service (Centralized ML Inference Platform)
-  ml-base-service:
+  # ============================================================================
+  # PHASE 0+1+2 SCALING: ML-BASE SERVICES WITH LOAD BALANCING
+  # ============================================================================
+  
+  # Phase 2: HAProxy Load Balancer for ML-Base Replicas (3× horizontal scaling)
+  ml-base-lb:
+    build:
+      context: ../..
+      dockerfile: ./haproxy/Dockerfile
+    image: sutra-works-haproxy:${SUTRA_VERSION:-latest}
+    container_name: sutra-works-ml-base-lb
+    # SECURITY: Internal only
+    expose:
+      - "8887"  # Frontend
+      - "9999"  # Stats
+    networks:
+      - sutra-network
+    depends_on:
+      ml-base-1:
+        condition: service_healthy
+      ml-base-2:
+        condition: service_healthy
+      ml-base-3:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    profiles:
+      - scaling  # Deploy with: SUTRA_EDITION=simple docker-compose --profile scaling up
+  
+  # ML-Base Replica 1 (Phase 0: Matryoshka + Phase 2: Horizontal scaling)
+  ml-base-1:
     build:
       context: ../../packages/sutra-ml-base-service
       dockerfile: Dockerfile
     image: sutra-works-ml-base-service:${SUTRA_VERSION:-latest}
-    container_name: sutra-works-ml-base
-    # SECURITY: Internal only - ML inference backend
+    container_name: sutra-works-ml-base-1
     expose:
       - "8887"
     environment:
       - PYTHONUNBUFFERED=1
       - ML_BASE_PORT=8887
       - ML_BASE_HOST=0.0.0.0
+      - INSTANCE_ID=ml-base-1
+      # Phase 0: Matryoshka configuration (3× improvement)
+      - MATRYOSHKA_DIM=${MATRYOSHKA_DIM:-256}  # 256/512/768
+      - VECTOR_DIMENSION=${MATRYOSHKA_DIM:-256}
       # Edition Configuration
       - SUTRA_EDITION=${SUTRA_EDITION:-simple}
       - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
@@ -372,12 +461,165 @@ services:
           memory: 6G
         reservations:
           memory: 4G
+    profiles:
+      - scaling
+  
+  # ML-Base Replica 2
+  ml-base-2:
+    build:
+      context: ../../packages/sutra-ml-base-service
+      dockerfile: Dockerfile
+    image: sutra-works-ml-base-service:${SUTRA_VERSION:-latest}
+    container_name: sutra-works-ml-base-2
+    expose:
+      - "8887"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ML_BASE_PORT=8887
+      - ML_BASE_HOST=0.0.0.0
+      - INSTANCE_ID=ml-base-2
+      - MATRYOSHKA_DIM=${MATRYOSHKA_DIM:-256}
+      - VECTOR_DIMENSION=${MATRYOSHKA_DIM:-256}
+      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
+      - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
+      - ML_BASE_EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
+      - ML_BASE_NLG_MODEL=google/gemma-2-2b-it
+      - ML_BASE_CACHE_SIZE=10000
+      - ML_BASE_MODEL_CACHE_DIR=/models/cache
+      - ML_BASE_MAX_BATCH_SIZE=64
+      - ML_BASE_BATCH_TIMEOUT_MS=50
+      - ML_BASE_MODEL_UNLOAD_TIMEOUT=300
+      - ML_BASE_METRICS_ENABLED=true
+      - ML_BASE_LOG_LEVEL=INFO
+    volumes:
+      - ml-models-cache:/models/cache
+      - /var/log/sutra:/var/log/sutra
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8887/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 4G
+    profiles:
+      - scaling
+  
+  # ML-Base Replica 3
+  ml-base-3:
+    build:
+      context: ../../packages/sutra-ml-base-service
+      dockerfile: Dockerfile
+    image: sutra-works-ml-base-service:${SUTRA_VERSION:-latest}
+    container_name: sutra-works-ml-base-3
+    expose:
+      - "8887"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ML_BASE_PORT=8887
+      - ML_BASE_HOST=0.0.0.0
+      - INSTANCE_ID=ml-base-3
+      - MATRYOSHKA_DIM=${MATRYOSHKA_DIM:-256}
+      - VECTOR_DIMENSION=${MATRYOSHKA_DIM:-256}
+      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
+      - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
+      - ML_BASE_EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
+      - ML_BASE_NLG_MODEL=google/gemma-2-2b-it
+      - ML_BASE_CACHE_SIZE=10000
+      - ML_BASE_MODEL_CACHE_DIR=/models/cache
+      - ML_BASE_MAX_BATCH_SIZE=64
+      - ML_BASE_BATCH_TIMEOUT_MS=50
+      - ML_BASE_MODEL_UNLOAD_TIMEOUT=300
+      - ML_BASE_METRICS_ENABLED=true
+      - ML_BASE_LOG_LEVEL=INFO
+    volumes:
+      - ml-models-cache:/models/cache
+      - /var/log/sutra:/var/log/sutra
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8887/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 4G
+    profiles:
+      - scaling
+  
+  # Legacy ML-Base Service (Simple/Community - No scaling)
+  ml-base-service:
+    build:
+      context: ../../packages/sutra-ml-base-service
+      dockerfile: Dockerfile
+    image: sutra-works-ml-base-service:${SUTRA_VERSION:-latest}
+    container_name: sutra-works-ml-base
+    # SECURITY: Internal only - ML inference backend
+    expose:
+      - "8887"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ML_BASE_PORT=8887
+      - ML_BASE_HOST=0.0.0.0
+      # Phase 0: Matryoshka configuration
+      - MATRYOSHKA_DIM=${MATRYOSHKA_DIM:-768}  # Default to full unless overridden
+      - VECTOR_DIMENSION=${MATRYOSHKA_DIM:-768}
+      # Edition Configuration
+      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
+      - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
+      # Model Configuration
+      - ML_BASE_EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
+      - ML_BASE_NLG_MODEL=google/gemma-2-2b-it
+      - ML_BASE_CACHE_SIZE=10000
+      - ML_BASE_MODEL_CACHE_DIR=/models/cache
+      # Performance Configuration
+      - ML_BASE_MAX_BATCH_SIZE=64
+      - ML_BASE_BATCH_TIMEOUT_MS=50
+      - ML_BASE_MODEL_UNLOAD_TIMEOUT=300
+      # Monitoring
+      - ML_BASE_METRICS_ENABLED=true
+      - ML_BASE_LOG_LEVEL=INFO
+    volumes:
+      - ml-models-cache:/models/cache
+      - /var/log/sutra:/var/log/sutra
+    networks:
+      - sutra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8887/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 4G
+    profiles:
+      - simple
+      - community
 
   # ============================================================================
   # EMBEDDING SERVICES (Lightweight Clients)
   # ============================================================================
   
   # Single Embedding Service (Simple & Community Editions) - Lightweight Client
+  # With Phase 0 (Matryoshka) + Phase 1 (Sutra Cache) Support
   embedding-single:
     build:
       context: ../../packages/sutra-embedding-service
@@ -392,15 +634,19 @@ services:
       - EMBEDDING_PORT=8888
       - EMBEDDING_HOST=0.0.0.0
       # ML-Base Service Configuration
-      - ML_BASE_URL=http://ml-base-service:8887
+      # Use load balancer if scaling profile is active, otherwise single instance
+      - ML_BASE_URL=${ML_BASE_URL:-http://ml-base-service:8887}
       - ML_BASE_TIMEOUT=30
       - ML_BASE_MAX_RETRIES=3
       # Edition Configuration
       - SUTRA_EDITION=${SUTRA_EDITION:-simple}
       - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
-      # Cache Configuration
-      - EMBEDDING_CACHE_SIZE=1000
-      - EMBEDDING_CACHE_TTL=3600
+      # Phase 1: Sutra-Native Cache Configuration
+      - EMBEDDING_CACHE_SIZE=50000  # L1 cache size
+      - EMBEDDING_CACHE_TTL=86400  # 24 hours
+      - SUTRA_CACHE_ENABLED=${SUTRA_CACHE_ENABLED:-false}  # Enable with scaling profile
+      - SUTRA_CACHE_HOST=storage-cache-shard
+      - SUTRA_CACHE_PORT=50052
       # Instance Configuration
       - INSTANCE_ID=embedding-single
     depends_on:
@@ -418,9 +664,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 512M  # Increased for L1 cache
         reservations:
-          memory: 128M
+          memory: 256M
     profiles:
       - simple
       - community
@@ -753,7 +999,7 @@ services:
       - SUTRA_EMBEDDING_PROVIDER=service
       - SUTRA_EMBEDDING_SERVICE_URL=${SUTRA_EMBEDDING_URL:-http://embedding-single:8888}
       - SUTRA_EMBEDDING_MODEL=nomic-embed-text
-      - SUTRA_VECTOR_DIMENSION=768
+      - SUTRA_VECTOR_DIMENSION=${MATRYOSHKA_DIM:-768}  # Phase 0: Use Matryoshka dimension
       # NLG Configuration (always enabled)
       - SUTRA_NLG_ENABLED=true
       - SUTRA_NLG_MODE=${SUTRA_NLG_MODE:-hybrid}
@@ -966,6 +1212,10 @@ volumes:
   grid-event-data:
     driver: local
   user-storage-data:
+    driver: local
+  
+  # Phase 1: Cache storage shard data volume
+  storage-cache-data:
     driver: local
   agent1-data:
     driver: local

@@ -125,9 +125,12 @@ class EmbeddingServiceProvider(EmbeddingProvider):
             dimension = test_data.get("dimension", 0)
             model = test_data.get("model", "")
             
-            if dimension != 768:
+            # Get expected dimension from environment (Phase 0: Matryoshka support)
+            expected_dim = int(os.getenv("SUTRA_VECTOR_DIMENSION", "768"))
+            
+            if dimension != expected_dim:
                 raise ValueError(
-                    f"Service produces {dimension}-d embeddings, expected 768-d"
+                    f"Service produces {dimension}-d embeddings, expected {expected_dim}-d"
                 )
             
             if "nomic-embed-text-v1.5" not in model:
@@ -195,9 +198,12 @@ class EmbeddingServiceProvider(EmbeddingProvider):
             if "embeddings" not in result:
                 raise ValueError(f"Invalid response format: missing 'embeddings' field")
             
-            if result.get("dimension") != 768:
+            # Get expected dimension from environment (Phase 0: Matryoshka support)
+            expected_dim = int(os.getenv("SUTRA_VECTOR_DIMENSION", "768"))
+            
+            if result.get("dimension") != expected_dim:
                 raise ValueError(
-                    f"Service returned {result.get('dimension')}-d embeddings, expected 768-d"
+                    f"Service returned {result.get('dimension')}-d embeddings, expected {expected_dim}-d"
                 )
             
             embeddings = result["embeddings"]
@@ -212,9 +218,10 @@ class EmbeddingServiceProvider(EmbeddingProvider):
             embeddings_array = np.array(embeddings, dtype=np.float32)
             
             # Validate dimensions
-            if embeddings_array.shape[1] != 768:
+            expected_dim = int(os.getenv("SUTRA_VECTOR_DIMENSION", "768"))
+            if embeddings_array.shape[1] != expected_dim:
                 raise ValueError(
-                    f"Expected 768-dimensional embeddings, got {embeddings_array.shape[1]}-d"
+                    f"Expected {expected_dim}-dimensional embeddings, got {embeddings_array.shape[1]}-d"
                 )
             
             # Log performance metrics

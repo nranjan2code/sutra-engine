@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
 use std::collections::HashMap;
 use tracing::{info, warn, debug};
-use chrono::{DateTime, Utc, NaiveDate};
+use chrono::{NaiveDate, Datelike};
 
 /// Google Sheets API configuration
 #[derive(Debug, Clone, Deserialize)]
@@ -215,12 +215,13 @@ impl GoogleSheetsAdapter {
         );
         
         let response = self.client.get(&url).send().await?;
+        let status = response.status();
         
-        if !response.status().is_success() {
+        if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!(
                 "Google Sheets API error ({}): {}",
-                response.status(),
+                status,
                 error_text
             ));
         }
@@ -352,12 +353,13 @@ impl GoogleSheetsStream {
         debug!("Fetching data from: {}", url);
         
         let response = client.get(&url).send().await?;
+        let status = response.status();
         
-        if !response.status().is_success() {
+        if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!(
                 "Failed to fetch sheet data ({}): {}",
-                response.status(),
+                status,
                 error_text
             ));
         }

@@ -2,7 +2,7 @@
 # Provides horizontally scalable ML inference for all Sutra services
 
 ARG SUTRA_VERSION=latest
-FROM sutra-ml-base:${SUTRA_VERSION}
+FROM sutra-works-ml-base:${SUTRA_VERSION}
 
 ARG SUTRA_EDITION=simple
 

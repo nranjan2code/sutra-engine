@@ -244,9 +244,12 @@ class MLModelManager:
         )
     
     def _embed_texts_sync(self, model_info: Dict, texts: List[str], normalize: bool) -> List[List[float]]:
-        """Synchronous embedding generation"""
+        """Synchronous embedding generation with Matryoshka dimension support"""
         model = model_info["model"]
         tokenizer = model_info["tokenizer"]
+        
+        # Get Matryoshka dimension from environment (Phase 0: Scaling optimization)
+        matryoshka_dim = int(os.getenv("MATRYOSHKA_DIM", "768"))
         
         # Tokenize
         max_length = min(512, self.edition_manager.get_sequence_length_limit())
@@ -271,6 +274,17 @@ class MLModelManager:
             attention_mask = inputs['attention_mask']
             input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
             embeddings = torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+            
+            # Apply Matryoshka truncation if enabled (Phase 0: 3x performance improvement)
+            if matryoshka_dim < 768:
+                # Layer normalization before truncation for quality preservation
+                embeddings = torch.nn.functional.layer_norm(
+                    embeddings, 
+                    normalized_shape=(embeddings.shape[1],)
+                )
+                # Truncate to desired dimensions
+                embeddings = embeddings[:, :matryoshka_dim]
+                logger.debug(f"Applied Matryoshka truncation: 768 → {matryoshka_dim} dimensions")
             
             # Normalize if requested
             if normalize:

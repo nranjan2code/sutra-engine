@@ -2,8 +2,8 @@
 
 **Complete technical documentation for Sutra's production storage engine**
 
-> **Current Version**: 2.0.0 (October 2025)  
-> **Status**: Production-ready, battle-tested at scale
+> **Current Version**: 3.0.0 (November 2025)  
+> **Status**: Production-ready, battle-tested at scale, **cache-enabled**
 
 ---
 
@@ -14,9 +14,9 @@
 1. **[STORAGE_GUIDE.md](./STORAGE_GUIDE.md)** - **START HERE**
    - Complete architecture overview
    - Core components deep dive
-   - Configuration reference
+   - Configuration reference (including **cache shard configuration**)
    - Operations guide
-   - Performance characteristics
+   - Performance characteristics (with **cache performance metrics**)
    - **Audience**: Developers, operators, architects
 
 ### Architecture Deep Dives
@@ -26,6 +26,7 @@
    - Persistent vector index design
    - 100× faster startup (50ms vs 2-5s)
    - Incremental update strategies
+   - **Cache shard**: Dedicated port 50052 for L2 caching
 
 3. **[ADAPTIVE_RECONCILIATION_ARCHITECTURE.md](./ADAPTIVE_RECONCILIATION_ARCHITECTURE.md)**
    - AI-native self-tuning reconciler
@@ -38,12 +39,14 @@
    - Consistent hashing strategy
    - Two-phase commit for cross-shard atomicity
    - Parallel operations and aggregation
+   - **Cache shard**: Separate shard for L2 embedding cache (100K concepts)
 
 5. **[WAL_MSGPACK_MIGRATION.md](./WAL_MSGPACK_MIGRATION.md)**
    - Write-ahead log implementation
    - MessagePack binary format
    - Crash recovery protocols
    - Transaction support
+   - **Cache persistence**: WAL enables cache survival across restarts
 
 ### Implementation Details
 
@@ -83,10 +86,11 @@
 
 ## 🏗️ Architecture at a Glance
 
+### Main Storage Shards (Ports 7000+)
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Sutra Storage Server (Rust)                  │
-│                      TCP Binary Protocol (Port 7000)            │
+│                      TCP Binary Protocol (Ports 7000-7003)      │
 ├─────────────────────────────────────────────────────────────────┤
 │  Unified Learning Pipeline                                      │
 │  Semantic Analysis → Embedding → Associations → Storage         │
@@ -95,10 +99,45 @@
 │  │ Write Plane │  │ Read Plane  │  │  Vector Plane          │ │
 │  │ (WriteLog)  │  │ (ReadView)  │  │  (HnswContainer)       │ │
 │  │ Lock-free   │  │ Immutable   │  │  USearch Persistent    │ │
+│  │             │  │             │  │  Configurable dims:    │ │
+│  │             │  │             │  │  256/512/768 (Phase 0) │ │
 │  └─────────────┘  └─────────────┘  └────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────┤
 │  Adaptive Reconciler (AI-native self-tuning)                   │
 │  EMA smoothing • Predictive backpressure • Health scoring      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### NEW: Cache Shard (Port 50052) - Phase 1 Scaling
+```
+┌─────────────────────────────────────────────────────────────────┐
+│            Sutra Storage Cache Shard (Rust) - L2 Cache          │
+│                      TCP Binary Protocol (Port 50052)           │
+├─────────────────────────────────────────────────────────────────┤
+│  Purpose: Dedicated embedding cache for 85% hit rate            │
+│  Capacity: 100K concepts (LRU eviction)                         │
+│  TTL: 24 hours (configurable via SUTRA_CACHE_TTL)              │
+│  Dimension: 256 (matches Phase 0 Matryoshka truncation)        │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │  Vector Index: HNSW (USearch)                               ││
+│  │  • ~2ms lookup latency                                       ││
+│  │  • Memory-mapped persistence (.usearch + WAL)               ││
+│  │  • Automatic LRU eviction when capacity reached             ││
+│  └─────────────────────────────────────────────────────────────┘│
+├─────────────────────────────────────────────────────────────────┤
+│  Integration:                                                   │
+│  • Embedding service L2 cache (after L1 in-memory miss)        │
+│  • 17% additional hit rate (68% L1 + 17% L2 = 85% combined)    │
+│  • Zero Redis dependency (100% Sutra-native)                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Configuration Changes (v3.0.0):**
+- **MATRYOSHKA_DIM**: 256/512/768 (default 768) - Controls vector dimensions across all storage shards
+- **SUTRA_CACHE_ENABLED**: true/false (default true) - Enable/disable L2 cache shard
+- **SUTRA_CACHE_CAPACITY**: Integer (default 100000) - Max concepts in cache shard
+- **SUTRA_CACHE_TTL**: Seconds (default 86400) - Cache entry time-to-live
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐  │
 │  │  WAL (Disk)  │  │  HNSW Index  │  │  Graph Storage     │  │

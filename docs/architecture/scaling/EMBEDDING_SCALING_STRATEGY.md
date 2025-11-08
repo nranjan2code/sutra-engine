@@ -1,10 +1,17 @@
 # Embedding Service Scaling Strategy
 
+## 🎯 Sutra Philosophy
+
+**All caching uses Sutra Storage** - This document provides the comprehensive strategy using our own storage engine for caching, not Redis or other external dependencies. See [EMBEDDING_SCALING_SUTRA_NATIVE.md](./EMBEDDING_SCALING_SUTRA_NATIVE.md) for the recommended Sutra-native implementation.
+
+---
+
 ## Executive Summary
 
 **Current Bottleneck**: Embedding service is the performance limiter (60s timeouts, 0.14 concepts/sec)  
 **Target Scale**: 1,000+ concurrent users with high throughput  
-**Strategy**: Multi-tier optimization without breaking existing architecture
+**Strategy**: Multi-tier optimization without breaking existing architecture  
+**Monitoring**: Grid events (not Prometheus) - see [DevOps Self-Monitoring](../sutra-platform-review/DEVOPS_SELF_MONITORING.md)
 
 ---
 
@@ -67,10 +74,11 @@ EMBEDDING_CACHE_SIZE=50000           # 50K entries (~400MB)
 EMBEDDING_CACHE_TTL=86400            # 24 hours
 CACHE_STRATEGY=lru                   # LRU eviction
 
-# 2. Redis Cache (Shared Across Replicas)
-REDIS_CACHE_ENABLED=true
-REDIS_CACHE_SIZE=500MB               # Shared cache
-REDIS_CACHE_TTL=604800               # 7 days
+# 2. Sutra Storage Cache Shard (Shared Across Replicas)
+SUTRA_CACHE_ENABLED=true
+SUTRA_CACHE_HOST=storage-cache-shard  # Dedicated Sutra Storage shard
+SUTRA_CACHE_PORT=50052
+SUTRA_CACHE_TTL=604800               # 7 days (via concept metadata)
 
 # 3. Storage-Layer Cache (Persistent)
 VECTOR_INDEX_CACHE=true              # USearch HNSW cache
@@ -86,19 +94,19 @@ MMAP_VECTORS=true                    # Memory-mapped vectors
 ```python
 # packages/sutra-embedding-service/cache_manager.py
 
-import redis
+from sutra_storage_client_tcp import StorageClient, ConceptMetadata
 import hashlib
-import pickle
 from typing import Optional, List
+from datetime import datetime, timedelta
 
 class MultiTierCache:
     def __init__(self):
         # L1: In-memory LRU cache
         self.l1_cache = LRUCache(max_size=50000)
         
-        # L2: Redis distributed cache
-        self.redis = redis.Redis(
-            host='redis-cache',
+        # L2: Sutra Storage cache shard (dedicated for caching)
+        self.sutra_cache = StorageClient(
+            host='storage-cache-shard',
             port=6379,
             decode_responses=False
         )
@@ -113,10 +121,10 @@ class MultiTierCache:
         if result:
             return result
         
-        # L2 check (fast)
-        result = self.redis.get(cache_key)
-        if result:
-            embedding = pickle.loads(result)
+        # L2 check (Sutra Storage cache shard)
+        concept = self.sutra_cache.get_concept_by_id(cache_key)
+        if concept and concept.embedding:
+            embedding = concept.embedding
             self.l1_cache.set(cache_key, embedding)  # Promote to L1
             return embedding
         
@@ -127,7 +135,18 @@ class MultiTierCache:
         
         # Store in both layers
         self.l1_cache.set(cache_key, embedding)
-        self.redis.setex(cache_key, ttl, pickle.dumps(embedding))
+        
+        # Store in Sutra cache shard with TTL metadata
+        metadata = ConceptMetadata(
+            concept_type="embedding_cache",
+            expires_at=(datetime.now() + timedelta(seconds=ttl)).isoformat()
+        )
+        self.sutra_cache.store_concept(
+            concept_id=cache_key,
+            content=text[:200],
+            embedding=embedding,
+            metadata=metadata
+        )
     
     def _cache_key(self, text: str, model: str) -> str:
         return f"emb:{model}:{hashlib.sha256(text.encode()).hexdigest()[:16]}"
@@ -461,7 +480,9 @@ model = ORTModelForFeatureExtraction.from_pretrained(
                               └──────────┬───────────┘
                                          │
                               ┌──────────▼───────────┐
-                              │   Redis Cache        │
+                              │   Sutra Cache      │
+                              │   Storage Shard    │
+                              │   (HNSW + WAL)     │
                               │   (500MB L2 cache)   │
                               └──────────┬───────────┘
                                          │
@@ -485,7 +506,7 @@ model = ORTModelForFeatureExtraction.from_pretrained(
 
 ### Phase 1: Quick Wins (Week 1-2) - 5x improvement
 ```
-✓ Multi-tier caching (Redis + in-memory)
+✓ Multi-tier caching (Sutra Storage + in-memory)
 ✓ Dynamic batching optimization
 ✓ Batch size tuning per edition
 ✓ Connection pooling improvements
@@ -550,7 +571,7 @@ Estimated Load:
 
 Infrastructure (Recommended):
 - 3x GPU ML-Base (T4): $1,137/month ($379 each)
-- Redis cache: $50/month
+- Sutra cache shard: $30/month (dedicated storage instance)
 - Storage cluster (4 shards): $400/month
 - API replicas (3x): $300/month
 Total: $1,887/month
@@ -587,7 +608,7 @@ METRICS = {
     },
     "cache": {
         "l1_hit_rate": 0.85,  # 85% in-memory hits
-        "l2_hit_rate": 0.12,  # 12% Redis hits
+        "l2_hit_rate": 0.12,  # 12% Sutra cache shard hits
         "total_hit_rate": 0.97,  # 97% cached!
         "target": ">70%"
     },
@@ -604,41 +625,40 @@ METRICS = {
 }
 ```
 
-### Alerts & Thresholds
+### Alerts & Thresholds (Sutra Grid Events)
 
-```yaml
-# Prometheus alerts
-groups:
-  - name: embedding_service_alerts
-    rules:
-      # Latency alerts
-      - alert: HighEmbeddingLatency
-        expr: embedding_latency_p95 > 500
-        for: 5m
-        annotations:
-          summary: "Embedding P95 latency above 500ms"
-      
-      # Cache alerts  
-      - alert: LowCacheHitRate
-        expr: embedding_cache_hit_rate < 0.5
-        for: 10m
-        annotations:
-          summary: "Cache hit rate below 50%"
-      
-      # Capacity alerts
-      - alert: HighGPUUtilization
-        expr: gpu_utilization > 0.90
-        for: 5m
-        annotations:
-          summary: "GPU utilization above 90% - consider scaling"
-      
-      # Availability alerts
-      - alert: MLBaseServiceDown
-        expr: up{job="ml-base"} == 0
-        for: 1m
-        annotations:
-          summary: "ML-Base service instance is down"
+**Sutra monitors itself using Grid events - no external tools needed!**
+
+```python
+# Natural language queries via Sutra reasoning engine
+# No Prometheus, Grafana, or Datadog required
+
+# Latency monitoring
+"Show embedding requests with P95 latency > 500ms in last 5 minutes"
+"Which embeddings are slowest today?"
+
+# Cache monitoring  
+"Show cache hit rate for last hour"
+"Alert when cache hit rate drops below 50%"
+
+# Capacity monitoring
+"Show GPU utilization for ml-base replicas"
+"Which GPU is overloaded?"
+
+# Availability monitoring
+"Show ML-Base service health checks"
+"What caused ml-base-2 to go offline?"
 ```
+
+**Grid Event Types for Embedding Service:**
+- `EmbeddingLatency` - Track generation time per request
+- `CacheHitRate` - L1/L2 cache performance  
+- `MLBaseHealth` - Service health checks
+- `BatchProcessing` - Batch size and efficiency
+- `DimensionConfig` - Track dimension changes
+- `ModelLoading` - Model initialization events
+
+**See:** `docs/sutra-platform-review/DEVOPS_SELF_MONITORING.md` for complete self-monitoring architecture.
 
 ---
 
