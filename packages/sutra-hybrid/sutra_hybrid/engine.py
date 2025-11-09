@@ -71,7 +71,7 @@ class SutraAI:
         
         # Initialize ReasoningEngine with embedding service processor
         # This ensures QueryProcessor gets the right embedding processor from the start
-        self._core = ReasoningEngine(use_rust_storage=True)
+        self._core = ReasoningEngine()
         
         # Set the embedding processor BEFORE initialization completes
         self._core.embedding_processor = self.embedding_processor

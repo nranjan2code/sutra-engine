@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="sutra-storage-client",
+    name="sutra-storage-client-tcp",
     version="2.0.0",
     description="Storage client using custom binary protocol (replaces gRPC)",
     packages=find_packages(),

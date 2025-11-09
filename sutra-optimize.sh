@@ -735,7 +735,7 @@ test_optimized_images() {
 }
 
 deploy_optimized() {
-    log_header "🚀 Deploying Optimized Images (v3.0.0 - Phase 0+1+2 Scaling)"
+    log_header "🚀 Deploying Optimized Images (v${VERSION:-latest} - Phase 0+1+2 Scaling)"
     echo ""
     
     # Load production-optimized defaults if not explicitly set
@@ -829,7 +829,7 @@ deploy_optimized() {
         echo ""
         log_success "🎉 Deployment completed successfully!"
         echo ""
-        log_info "Sutra AI v3.0.0 - Production Scaling Active"
+        log_info "Sutra AI v${SUTRA_VERSION} - Production Scaling Active"
         log_info "Services are starting up. Check status with:"
         echo "  docker-compose -p sutra-works -f $COMPOSE_FILE $PROFILE_FLAGS ps"
         echo ""
