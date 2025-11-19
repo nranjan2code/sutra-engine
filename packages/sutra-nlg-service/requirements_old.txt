@@ -1,3 +1,0 @@
-# Service-specific dependencies for NLG models
-# Note: sutra-ml-base is already installed in the base image
-accelerate>=0.25.0  # Required for device mapping and optimization
