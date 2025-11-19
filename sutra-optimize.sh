@@ -202,10 +202,10 @@ build_service() {
     
     log_info "Building $service service (strategy: $strategy)"
     
-    # NEW ML SERVICES: Use shared ML foundation
+    # EXTERNAL ML SERVICES: Skip building (use external images)
     if [ "$service" = "embedding" ] || [ "$service" = "nlg" ]; then
-        build_ml_service "$service" "$strategy"
-        return $?
+        log_info "Skipping $service - using external image (ghcr.io)"
+        return 0
     fi
     
     # STORAGE SERVICE: Rust-based with special image naming
@@ -628,24 +628,13 @@ build_all_services() {
     log_header "🔨 Building All Services"
     echo ""
     
-    # Step 1: Build ML base foundation first (required by ML services)
-    log_info "Step 1: Building ML foundation"
-    if ! build_ml_base; then
-        log_error "Failed to build ML base - cannot continue with ML services"
-        return 1
-    fi
+    # ML services now use external images (ghcr.io/nranjan2code/sutra-embedder, sutraworks-model)
+    # No need to build ML base foundation or ML services locally
+    log_info "Using external ML services (sutra-embedder:v1.0.1, sutraworks-model:v1.0.0)"
     echo ""
 
-    # Step 1.5: Build ML-Base Service (depends on ML base foundation)
-    log_info "Step 1.5: Building ML-Base Service"
-    if ! build_ml_base_service; then
-        log_error "Failed to build ML-Base Service"
-        return 1
-    fi
-    echo ""
-
-    # Step 2: Core services for all editions
-    local services=(embedding nlg hybrid control api bulk-ingester storage client nginx-proxy)
+    # Core services for all editions
+    local services=(hybrid control api bulk-ingester storage client nginx-proxy)
     
     # Add community/enterprise services
     if [ "$EDITION" = "community" ] || [ "$EDITION" = "enterprise" ]; then
@@ -661,7 +650,7 @@ build_all_services() {
     fi
     
     local failed_services=()
-    local success_count=1  # ML base already built successfully
+    local success_count=0  # No ML services built locally
     
     log_info "Step 2: Building service images"
     for service in "${services[@]}"; do
