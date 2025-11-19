@@ -11,10 +11,12 @@
 
 **Architectural Reality:** Sutra AI comprises THREE independent projects, not one monorepo with embedded ML.
 
-**Three-Repo Architecture:**
-1. ✅ **sutra-memory** - Core platform (storage, APIs, Grid)
-2. ✅ **sutra-embedder** - Embedding service (separate repo, HTTP API)
-3. ✅ **sutraworks-model** - NLG service (separate repo, HTTP API)
+**Three-Repo Architecture (All Private Repos):**
+1. ✅ **sutra-memory** - Core platform (storage, APIs, Grid) - https://github.com/nranjan2code/sutra-memory
+2. ✅ **sutra-embedder** - Embedding service (separate repo, HTTP API) - https://github.com/nranjan2code/sutra-embedder
+3. ✅ **sutraworks-model** - NLG service (separate repo, HTTP API) - https://github.com/nranjan2code/sutraworks-model
+
+**Current Status:** Repos exist but need syncing with monorepo packages.
 
 **Why NOT Embedded:**
 - ❌ Storage must stay self-contained (infrastructure, not ML)
@@ -29,9 +31,9 @@
 - ✅ Clear separation of concerns (storage vs ML)
 
 **Investment:**
-- **Phase 1 (Extraction):** $12K (80 hours @ $150/hr) - Extract to separate repos
+- **Phase 1 (Sync & Publish):** $7.5K (50 hours @ $150/hr) - Sync existing repos & publish to ghcr.io
 - **Phase 2 (Optimization):** $15K (100 hours @ $150/hr) - Performance improvements
-- **Total:** $27K over 6 weeks
+- **Total:** $22.5K over 6 weeks (repos already exist, reduced effort)
 
 **Performance Targets:**
 - Embedding latency: 50ms → 25ms (2× improvement via optimization)
@@ -74,7 +76,7 @@
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ Repository 2: sutra-embedder                                │
+│ Repository 2: sutra-embedder (PRIVATE - EXISTS)             │
 │ https://github.com/nranjan2code/sutra-embedder              │
 ├─────────────────────────────────────────────────────────────┤
 │ Embedding Service (Standalone):                             │
@@ -90,7 +92,7 @@
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ Repository 3: sutraworks-model                              │
+│ Repository 3: sutraworks-model (PRIVATE - EXISTS)           │
 │ https://github.com/nranjan2code/sutraworks-model            │
 ├─────────────────────────────────────────────────────────────┤
 │ NLG Service (Standalone):                                   │
@@ -226,32 +228,39 @@ nlg-ha, nlg-1/2/3:              # ✅ Using sutraworks-model:v1.0.0
 
 ---
 
-## 3. Phase 1: Repository Extraction
+## 3. Phase 1: Repository Sync & Publishing
 
-### 3.1 Extract sutra-embedder Repository
+### 3.1 Sync sutra-embedder Repository
 
-**Goal:** Create standalone embedding service in separate GitHub repo.
+**Goal:** Sync existing private repo with monorepo and publish to ghcr.io.
 
-**Step 1: Create Repository Structure**
+**Current State:** Repository exists at https://github.com/nranjan2code/sutra-embedder (Private)
+
+**Step 1: Clone and Review Existing Repository**
 ```bash
-# Create new repo
-mkdir sutra-embedder
+# Clone existing repo
+git clone https://github.com/nranjan2code/sutra-embedder.git
 cd sutra-embedder
 
-# Initialize
-git init
-git remote add origin https://github.com/nranjan2code/sutra-embedder
+# Review current state
+git log --oneline -10
+ls -la
 ```
 
-**Step 2: Copy Service Code**
+**Step 2: Compare and Sync with Monorepo**
 ```bash
-# From sutra-memory/packages/sutra-embedding-service/
-cp -r main.py sutra-embedder/
-cp -r sutra_cache_client.py sutra-embedder/
-cp -r requirements.txt sutra-embedder/
-cp -r Dockerfile sutra-embedder/
-cp -r download_model.py sutra-embedder/
-cp -r models/ sutra-embedder/
+# Compare with monorepo source
+cd /path/to/sutra-memory
+diff -r packages/sutra-embedding-service/ ../sutra-embedder/
+
+# Sync any updated files
+cd ../sutra-embedder
+# Copy updated files as needed
+cp ../sutra-memory/packages/sutra-embedding-service/main.py .
+cp ../sutra-memory/packages/sutra-embedding-service/requirements.txt .
+# etc.
+
+git commit -am "Sync with monorepo packages/sutra-embedding-service"
 ```
 
 **Step 3: Create Standalone Structure**
@@ -274,14 +283,18 @@ sutra-embedder/
 └── docker-compose.yml          # Standalone testing
 ```
 
-**Step 4: Update Imports (Make Standalone)**
-```python
-# BEFORE (in monorepo):
-from sutra_core.storage import TcpStorageAdapter  # ❌ Monorepo dependency
+**Step 4: Verify Standalone Operation**
+```bash
+# Check for monorepo dependencies
+grep -r "from sutra_core" .
+grep -r "from sutra_storage" .
 
-# AFTER (standalone):
-# No dependencies on sutra-memory
-# Pure embedding service with HTTP API
+# Should have NO dependencies on sutra-memory monorepo
+# Pure embedding service with HTTP API only
+
+# Test imports
+python -c "import main"
+pip install -r requirements.txt
 ```
 
 **Step 5: GitHub Actions CI/CD**
@@ -317,20 +330,26 @@ git push origin main --tags
 # ghcr.io/nranjan2code/sutra-embedder:v1.0.0
 ```
 
-### 3.2 Extract sutraworks-model Repository
+### 3.2 Sync sutraworks-model Repository
 
-**Same process as sutra-embedder:**
+**Same sync process as sutra-embedder:**
+
+**Current State:** Repository exists at https://github.com/nranjan2code/sutraworks-model (Private)
 
 ```bash
-# Create repo
-mkdir sutraworks-model
+# Clone existing repo
+git clone https://github.com/nranjan2code/sutraworks-model.git
 cd sutraworks-model
 
-# Copy from packages/sutra-nlg-service/
-cp -r main.py sutraworks-model/
-cp -r requirements.txt sutraworks-model/
-cp -r Dockerfile sutraworks-model/
+# Compare with monorepo source
+diff -r ../sutra-memory/packages/sutra-nlg-service/ .
+
+# Sync updated files as needed
+cp ../sutra-memory/packages/sutra-nlg-service/main.py .
+cp ../sutra-memory/packages/sutra-nlg-service/requirements.txt .
 # ... etc
+
+git commit -am "Sync with monorepo packages/sutra-nlg-service"
 
 # Publish v1.0.0
 git tag v1.0.0
@@ -662,31 +681,35 @@ Savings: 4.4GB (42% less memory)
 
 ## 6. Implementation Timeline
 
-### 6.1 Phase 1: Repository Extraction (3 weeks)
+### 6.1 Phase 1: Repository Sync & Publishing (3 weeks)
 
-**Week 1: Extract sutra-embedder**
-- Day 1-2: Create repo structure, copy code
-- Day 3: Remove monorepo dependencies, make standalone
-- Day 4: Add CI/CD (GitHub Actions)
-- Day 5: Publish v1.0.0 to GitHub Container Registry
+**Week 1: Sync sutra-embedder**
+- Day 1: Clone repo, review current state, compare with monorepo
+- Day 2: Sync latest code from packages/sutra-embedding-service
+- Day 3: Update/add CI/CD, verify standalone operation
+- Day 4: Test and publish v1.0.0 to GitHub Container Registry
+- Day 5: Buffer/documentation
 
-**Week 2: Extract sutraworks-model**
-- Day 6-7: Create repo structure, copy code
-- Day 8: Remove monorepo dependencies, make standalone
-- Day 9: Add CI/CD (GitHub Actions)
-- Day 10: Publish v1.0.0 to GitHub Container Registry
+**Week 2: Sync sutraworks-model**
+- Day 6: Clone repo, review current state, compare with monorepo
+- Day 7: Sync latest code from packages/sutra-nlg-service
+- Day 8: Update/add CI/CD, verify standalone operation
+- Day 9: Test and publish v1.0.0 to GitHub Container Registry
+- Day 10: Buffer/documentation
 
-**Week 3: Update sutra-memory**
-- Day 11-12: Update docker-compose.yml to use external images
-- Day 13: Delete extracted packages (sutra-embedding-service, sutra-nlg-service)
+**Week 3: Update sutra-memory to use external images**
+- Day 11: Update docker-compose.yml to use ghcr.io images
+- Day 12: Test deployment with external images (all editions)
+- Day 13: Delete monorepo packages after validation
 - Day 14: Update documentation (README, architecture docs)
-- Day 15: Test all three editions (simple, community, enterprise)
+- Day 15: Final testing and validation
 
 **Deliverables:**
-- ✅ sutra-embedder:v1.0.0 published to ghcr.io
-- ✅ sutraworks-model:v1.0.0 published to ghcr.io
-- ✅ sutra-memory updated to use external images
-- ✅ All 79 E2E tests passing
+- ✅ sutra-embedder repo synced and v1.0.0 published to ghcr.io (private registry)
+- ✅ sutraworks-model repo synced and v1.0.0 published to ghcr.io (private registry)
+- ✅ sutra-memory updated to use external images from ghcr.io
+- ✅ Monorepo packages deleted after validation
+- ✅ All E2E tests passing with external images
 
 ### 6.2 Phase 2: Service Optimization (3 weeks)
 
@@ -806,20 +829,22 @@ Total: 6 minutes (4× faster)
 
 | Phase | Task | Hours | Rate | Cost |
 |-------|------|-------|------|------|
-| **Phase 1: Extraction** | | | | |
-| | Extract sutra-embedder | 40 | $150/hr | $6,000 |
-| | Extract sutraworks-model | 30 | $150/hr | $4,500 |
+| **Phase 1: Sync & Publish** | | | | |
+| | Sync sutra-embedder | 20 | $150/hr | $3,000 |
+| | Sync sutraworks-model | 20 | $150/hr | $3,000 |
 | | Update sutra-memory | 10 | $150/hr | $1,500 |
 | **Phase 2: Optimization** | | | | |
 | | Embedding optimization | 40 | $150/hr | $6,000 |
 | | NLG optimization | 30 | $150/hr | $4,500 |
 | | Integration & testing | 30 | $150/hr | $4,500 |
 
-**Total: $27,000 (180 hours @ $150/hr)**
+**Total: $22,500 (150 hours @ $150/hr)**
+
+**Savings vs Original Plan:** $4,500 (repos already exist, reduced from 180 to 150 hours)
 
 ### 8.2 ROI Analysis
 
-**One-Time Investment:** $27K  
+**One-Time Investment:** $22.5K (reduced from $27K - repos exist)  
 
 **Annual Savings:**
 - **Infrastructure:** $8K/year (42% less memory = smaller instances)
@@ -828,20 +853,20 @@ Total: 6 minutes (4× faster)
 
 **Total Annual Savings:** $28K/year
 
-**Payback Period:** 11.6 months  
-**5-Year NPV:** $113K savings
+**Payback Period:** 9.6 months (vs 11.6 months - 17% faster ROI)  
+**5-Year NPV:** $117.5K savings (vs $113K - additional $4.5K saved)
 
 ### 8.3 Risk Assessment
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| **Repo extraction fails** | Low | Medium | Test extraction on feature branch first |
-| **Image publishing blocked** | Very Low | High | Set up GitHub Container Registry access early |
+| **Repos out of sync** | Medium | Low | Use diff to compare before syncing |
+| **Image publishing blocked** | Very Low | High | Verify ghcr.io access and authentication early |
 | **Performance regression** | Low | High | Benchmark before/after, rollback if needed |
 | **HA failover issues** | Low | Medium | Comprehensive HA testing (kill replicas) |
 | **Breaking changes** | Very Low | High | Keep API contracts identical (v1.0.0) |
 
-**Overall Risk:** Low (25/100) - Extraction is low-risk, optimization is incremental.
+**Overall Risk:** Very Low (15/100) - Repos exist, sync is straightforward, optimization is incremental.
 
 ---
 
@@ -899,25 +924,33 @@ Percentage impact:
 **Current State:**
 ```
 sutra-memory (monorepo with embedded ML services)
+  ├── packages/sutra-embedding-service/ (builds locally)
+  └── packages/sutra-nlg-service/ (builds locally)
+
+sutra-embedder (private repo, may be out of sync)
+sutraworks-model (private repo, may be out of sync)
 ↓
-Deployed as: 40 containers (17 ML services built locally)
+Deployed as: 40 containers (17 ML services built from monorepo)
 ```
 
 **Target State:**
 ```
-sutra-memory (references external ML images)
-sutra-embedder (separate repo, ghcr.io/...)
-sutraworks-model (separate repo, ghcr.io/...)
+sutra-memory (references external ML images only)
+sutra-embedder (synced, published to ghcr.io - private)
+sutraworks-model (synced, published to ghcr.io - private)
 ↓
-Deployed as: 31 containers (8 ML services pulled externally)
+Deployed as: 31 containers (8 ML services pulled from ghcr.io)
 ```
 
 **Migration Steps:**
 
-**Step 1: Create External Repos (No Impact)**
+**Step 1: Sync External Repos (No Impact)**
 ```bash
-# Week 1-2: Extract repos, publish v1.0.0
+# Week 1-2: Clone existing repos, sync with monorepo, publish v1.0.0
 # sutra-memory continues using local builds (unchanged)
+git clone https://github.com/nranjan2code/sutra-embedder.git
+git clone https://github.com/nranjan2code/sutraworks-model.git
+# ... sync and publish
 ```
 
 **Step 2: Parallel Testing (No Impact)**
@@ -1006,14 +1039,15 @@ git revert <commit>  # Restore local packages
 
 ### A. Repository URLs
 
-**Production Repositories:**
+**Production Repositories (All Private):**
 - sutra-memory: https://github.com/nranjan2code/sutra-memory
-- sutra-embedder: https://github.com/nranjan2code/sutra-embedder (to be created)
-- sutraworks-model: https://github.com/nranjan2code/sutraworks-model (to be created)
+- sutra-embedder: https://github.com/nranjan2code/sutra-embedder (EXISTS - needs sync)
+- sutraworks-model: https://github.com/nranjan2code/sutraworks-model (EXISTS - needs sync)
 
-**Container Registry:**
+**Container Registry (Private):**
 - Embedder: ghcr.io/nranjan2code/sutra-embedder:v1.0.0
 - NLG: ghcr.io/nranjan2code/sutraworks-model:v1.0.0
+- Authentication: Requires GitHub personal access token with `read:packages` scope
 
 ### B. API Contracts
 
@@ -1068,7 +1102,7 @@ Response: {"status": "healthy", "model_loaded": true, "version": "v1.0.0"}
 ---
 
 **Document Status:** ✅ READY FOR REVIEW & APPROVAL  
-**Next Steps:** Phase 1 execution (repository extraction)  
+**Next Steps:** Phase 1 execution (repository sync & publishing)  
 **Timeline:** 6 weeks total  
-**Investment:** $27K  
-**Expected ROI:** 11.6 month payback
+**Investment:** $22.5K (reduced - repos already exist)  
+**Expected ROI:** 9.6 month payback (17% faster than original estimate)

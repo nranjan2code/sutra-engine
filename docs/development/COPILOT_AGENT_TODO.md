@@ -1,9 +1,10 @@
 # Sutra AI - GitHub Copilot Agent Development TODO
 
-**Version:** 1.0.0  
-**Date:** November 19, 2025  
+**Version:** 1.1.0  
+**Date:** November 19, 2025 (Updated after deep review)  
 **Status:** PRODUCTION-READY DEVELOPMENT WORKFLOW  
 **Philosophy:** No TODOs, no mocks, no stubs - all production-grade code  
+**Timeline Note:** Phase 1 may require 4 weeks (not 3) due to unknown repo sync effort  
 
 ---
 
@@ -13,8 +14,8 @@
 1. Read this TODO document
 2. Check current system status: `sutra status`
 3. Review recent changes: `git log --oneline -10`
-4. **UNDERSTAND THE PRIORITY:** Self-monitoring completion (Phase 0) is THE killer feature
-5. Identify the current task from Phase 0 roadmap below
+4. **UNDERSTAND THE STRATEGY:** Build stable production architecture FIRST, then monitor it comprehensively
+5. Identify the current task from roadmap below (Phase 1 → Phase 2 → Phase 3 → Phase 4)
 6. Execute with production-grade code (no TODOs, no mocks)
 
 ---
@@ -33,113 +34,65 @@
 - ✅ **E2E Testing:** 3 continuous learning tests, web-based automation
 - ✅ **Release System:** Automated builds, semantic versioning
 
-**What Needs Work:**
-- 🔨 **Self-Monitoring Expansion:** 26 event types defined, only 4 actively emitted (AgentOffline, AgentDegraded, NodeCrashed, NodeRestarted) - need to emit remaining 22
-- 🔨 **ML Services Architecture:** Services work perfectly but embedded in monorepo (architectural cleanliness, not urgent)
-- 🔨 **Documentation Gaps:** Self-monitoring case study complete, financial intelligence needs advanced queries
-- 🔨 **Performance Opportunities:** Embedding 50ms → 25ms (via ONNX quantization), NLG 85ms → 60ms (via GPU)
+**What Needs Work (Priority Order):**
+- 🔨 **ML Services Architecture:** Extract to standalone repos for production-grade architecture (Phase 1)
+- 🔨 **ML Performance Optimization:** Embedding 50ms → 25ms (ONNX), NLG 85ms → 60ms (GPU) (Phase 2)
+- 🔨 **Enterprise HA Validation:** Chaos testing and failover scenarios (Phase 3)
+- 🔨 **Self-Monitoring Completion:** Emit all 26 event types on final production system (Phase 4)
+- 🔨 **Documentation & Scale:** Complete docs, 10M+ concept validation (Phases 5-6)
 
 ---
 
 ## 🗺️ Development Roadmap (Priority Order)
 
-### PHASE 0: Complete Self-Monitoring (ACTUAL Priority - Week 1-2) 🔥
-**Objective:** Emit all 26 Grid event types to prove "eating our own dogfood" thesis  
-**Why This Matters:** This is Sutra's KILLER FEATURE - monitoring distributed systems without Prometheus/Grafana/Datadog  
-**Current Status:** 26 event types defined (1659 LOC in sutra-grid-events), only 4 actively emitted  
-**Market Impact:** $20B DevOps observability market - we need production proof
+### PHASE 1: ML Service Architecture (Week 1-4)
+**Objective:** Extract ML services to separate repos for production-grade architecture  
+**Why First:** Stable foundation before optimization and monitoring  
+**Reference:** See `docs/architecture/ML_INFERENCE_THREE_REPO_STRATEGY.md` for complete strategy  
+**Market Impact:** Independent scaling, reduced deployment time (20min → 10min)  
+**Timeline:** 4 weeks (60-80 hours) - buffered for unknown sync effort
 
-#### Task 0.1: Emit All Agent Lifecycle Events ⏳
-**Status:** Partially Complete (2/6 events emitted)  
-**Effort:** 10 hours  
-**Files:** `packages/sutra-grid-master/src/main.rs`
-
-**Current Emissions:**
-- ✅ AgentOffline (line 130)
-- ✅ AgentDegraded (line 146)
-
-**Missing Emissions:**
-- [ ] AgentRegistered (on register_agent)
-- [ ] AgentHeartbeat (on heartbeat received)
-- [ ] AgentRecovered (when degraded/offline → healthy)
-- [ ] AgentUnregistered (on unregister_agent)
+#### Phase 1 Prerequisites (COMPLETE BEFORE STARTING) ⚠️
+**Effort:** 2 hours  
+**Critical:** These must be done first to avoid blocking issues
 
 **Checklist:**
-- [ ] Add AgentRegistered emission in register_agent() handler
-- [ ] Add AgentHeartbeat emission in heartbeat() handler
-- [ ] Add AgentRecovered emission in health_check_loop() when status changes to Healthy
-- [ ] Add AgentUnregistered emission in unregister_agent() handler
-- [ ] Test with grid-master running: `docker logs sutra-grid-master | grep "AgentRegistered"`
-- [ ] Query via natural language: "Show all agent registrations today"
-
-#### Task 0.2: Emit All Storage Node Lifecycle Events ⏳
-**Status:** Partially Complete (2/9 events emitted)  
-**Effort:** 15 hours  
-**Files:** `packages/sutra-grid-agent/src/main.rs`
-
-**Current Emissions:**
-- ✅ NodeCrashed (line 332)
-- ✅ NodeRestarted (line 366)
-
-**Missing Emissions:**
-- [ ] SpawnRequested (on spawn_storage_node call)
-- [ ] SpawnSucceeded (after successful spawn)
-- [ ] SpawnFailed (on spawn error)
-- [ ] StopRequested (on stop_storage_node call)
-- [ ] StopSucceeded (after successful stop)
-- [ ] StopFailed (on stop error)
-- [ ] NodeHealthy (periodic health checks)
-
-**Checklist:**
-- [ ] Add SpawnRequested/Succeeded/Failed emissions in spawn_storage_node()
-- [ ] Add StopRequested/Succeeded/Failed emissions in stop_storage_node()
-- [ ] Add NodeHealthy emission in monitor_nodes() health check loop
-- [ ] Test spawn workflow: spawn node → check events
-- [ ] Test crash recovery: kill node → verify NodeCrashed + NodeRestarted
-- [ ] Query: "Show all node crashes in the last hour"
-
-#### Task 0.3: Emit Performance & Operational Events ⏳
-**Status:** Not Started  
-**Effort:** 20 hours  
-**Files:** `packages/sutra-storage/src/`, `packages/sutra-embedding-service/main.py`
-
-**Missing Emissions (15 event types):**
-- [ ] StorageMetrics (concept count, throughput, latency)
-- [ ] QueryPerformance (query latency, result count)
-- [ ] EmbeddingLatency (embedding generation time, batch size)
-- [ ] HnswIndexBuilt (index build time, vector count)
-- [ ] PathfindingMetrics (MPPA traversal stats)
-- [ ] ReconciliationComplete (shard reconciliation)
-- [ ] ... (and 9 more)
-
-**Checklist:**
-- [ ] Add EventEmitter to storage-server main.rs
-- [ ] Emit StorageMetrics every 60 seconds
-- [ ] Emit QueryPerformance on every graph query
-- [ ] Emit EmbeddingLatency from embedding service
-- [ ] Create monitoring dashboard query: "Show slowest queries today"
-- [ ] Validate: Query "What caused high latency at 2pm?"
+- [ ] **Step 1:** Set up GitHub Container Registry authentication (30 min)
+  - [ ] Go to: https://github.com/settings/tokens
+  - [ ] Click "Generate new token (classic)"
+  - [ ] Select scopes: `write:packages`, `read:packages`, `delete:packages`
+  - [ ] Save token securely (1Password, etc.)
+  - [ ] Test Docker login: `echo $GITHUB_PAT | docker login ghcr.io -u nranjan2code --password-stdin`
+  - [ ] Verify: `docker pull ghcr.io/nranjan2code/test:latest` (should authenticate, even if 404)
+  
+- [ ] **Step 2:** Clone and assess external repos (1 hour)
+  - [ ] Clone sutra-embedder: `cd ~/tmp && git clone https://github.com/nranjan2code/sutra-embedder.git`
+  - [ ] Check last commit: `cd sutra-embedder && git log -1 --date=short`
+  - [ ] Check CI/CD exists: `ls -la .github/workflows/`
+  - [ ] Clone sutraworks-model: `cd ~/tmp && git clone https://github.com/nranjan2code/sutraworks-model.git`
+  - [ ] Check last commit: `cd sutraworks-model && git log -1 --date=short`
+  - [ ] Check CI/CD exists: `ls -la .github/workflows/`
+  
+- [ ] **Step 3:** Assess sync effort (30 min)
+  - [ ] If last commit > 30 days: Add 10-20 hours to Phase 1 estimate
+  - [ ] If last commit > 90 days: Add 30-40 hours (consider rewrite)
+  - [ ] If .github/workflows/ missing: Add 5-10 hours per repo
+  - [ ] Document findings in session notes
 
 **Success Criteria:**
-- ✅ All 26 event types emitted in production
-- ✅ Natural language queries working: "Show cluster health", "What caused the crash?"
-- ✅ Complete audit trail: every state change captured
-- ✅ Zero external tools: no Prometheus, Grafana, Datadog
-- ✅ Production case study complete with real metrics
+- ✅ ghcr.io authentication working (can push/pull)
+- ✅ Both repos cloned and assessed
+- ✅ Realistic sync effort estimated
+- ✅ No blockers identified
 
 ---
 
-### PHASE 1: ML Service Architecture (Optional Cleanup - Week 3-5)
-**Objective:** Extract ML services to separate repos for architectural cleanliness  
-**Why Optional:** Services work perfectly, extraction is about clean architecture not urgency  
-**Reference:** See `docs/architecture/ML_INFERENCE_THREE_REPO_STRATEGY.md` for complete strategy  
-**Note:** This is NOT blocking self-monitoring or any customer features
-
 #### Task 1.1: Sync & Publish sutra-embedder Repository ⏳
 **Status:** Not Started  
-**Effort:** 20 hours  
+**Effort:** 20-30 hours (depends on repo state)  
 **Repository:** https://github.com/nranjan2code/sutra-embedder (ALREADY EXISTS - Private)  
 **Current State:** Repo exists but may be out of sync with monorepo's `packages/sutra-embedding-service/`  
+**Last Monorepo Update:** Nov 8, 2025 (check repo sync in prerequisites)  
 **Reference:** See `ML_INFERENCE_THREE_REPO_STRATEGY.md` Section 3.1 for detailed workflow
 
 **Files to Update:**
@@ -170,6 +123,10 @@
   - [ ] Verify `requirements.txt` has no monorepo packages
   - [ ] Test imports locally: `python -c "import main"`
   - [ ] Verify dependencies: `pip install -r requirements.txt`
+  - [ ] **Verify Dockerfile has no ../ references:** `grep -n "../" Dockerfile`
+  - [ ] **Test Docker build:** `docker build -t sutra-embedder:validation .`
+  - [ ] **Check image size:** `docker images | grep sutra-embedder:validation` (expect ~1.2GB)
+  - [ ] **If size > 2GB:** Check for accidentally copied monorepo files in image
   
 - [ ] **Step 4:** Update/create production README.md
   - [ ] Update service description (if outdated)
@@ -231,9 +188,10 @@ curl -X POST http://localhost:8888/embed \
 
 #### Task 1.2: Sync & Publish sutraworks-model Repository ⏳
 **Status:** Not Started  
-**Effort:** 20 hours  
+**Effort:** 20-30 hours (depends on repo state)  
 **Repository:** https://github.com/nranjan2code/sutraworks-model (ALREADY EXISTS - Private)  
 **Current State:** Repo exists but may be out of sync with monorepo's `packages/sutra-nlg-service/`  
+**Last Monorepo Update:** Nov 2, 2025 (check repo sync in prerequisites)  
 **Reference:** See `ML_INFERENCE_THREE_REPO_STRATEGY.md` Section 3.2 for detailed workflow
 
 **Files to Update:**
@@ -262,6 +220,10 @@ curl -X POST http://localhost:8888/embed \
   - [ ] Verify `requirements.txt` has no monorepo packages
   - [ ] Test imports locally: `python -c "import main"`
   - [ ] Verify dependencies: `pip install -r requirements.txt`
+  - [ ] **Verify Dockerfile has no ../ references:** `grep -n "../" Dockerfile`
+  - [ ] **Test Docker build:** `docker build -t sutraworks-model:validation .`
+  - [ ] **Check image size:** `docker images | grep sutraworks-model:validation` (expect ~2.5GB)
+  - [ ] **If size > 4GB:** Check for accidentally copied monorepo files in image
   
 - [ ] **Step 4:** Update/create production README.md
   - [ ] Update service description (RWKV-7 NLG)
@@ -437,8 +399,9 @@ npm run test:e2e
 
 ---
 
-### PHASE 2: ML Service Optimization (Week 4-6)
+### PHASE 2: ML Service Optimization (Week 6-8)
 **Objective:** Achieve 2× performance improvement through ONNX optimization  
+**Priority:** Sequential after Phase 1 - required for production-grade performance targets  
 **Reference:** See `ML_INFERENCE_THREE_REPO_STRATEGY.md` Section 4 for optimization details
 
 #### Task 2.1: ONNX Model Quantization (Embedding) ⏳
@@ -603,8 +566,9 @@ python benchmarks/latency_test.py --iterations 1000
 
 ---
 
-### PHASE 3: Enterprise HA Validation (Week 7-8)
+### PHASE 3: Enterprise HA Validation (Week 9-10)
 **Objective:** Validate true high availability with independent services  
+**Priority:** Sequential after Phase 2 - required for enterprise production deployments  
 **Reference:** See `ML_INFERENCE_THREE_REPO_STRATEGY.md` Section 5 for HA architecture
 
 #### Task 3.1: HAProxy Configuration for Embeddings ⏳
@@ -731,10 +695,101 @@ done
 
 ---
 
-### PHASE 4: Documentation & Case Studies (Week 9-10)
-**Objective:** Complete production-grade documentation for all systems
+### PHASE 4: Complete Self-Monitoring (Week 9-10) 🔥
+**Objective:** Emit all 26 Grid event types on production-ready system  
+**Why After Architecture:** Monitor the FINAL system - no rework needed after changes  
+**Current Status:** 26 event types defined (1659 LOC), only 4 actively emitted  
+**Market Impact:** $20B DevOps observability market - proves "eating own dogfood" thesis
 
-#### Task 4.1: Complete ML Architecture Documentation ⏳
+#### Task 4.1: Emit All Agent Lifecycle Events ⏳
+**Status:** Partially Complete (2/6 events emitted)  
+**Effort:** 10 hours  
+**Files:** `packages/sutra-grid-master/src/main.rs` (or external repo if extracted)
+
+**Current Emissions:**
+- ✅ AgentOffline (line 130)
+- ✅ AgentDegraded (line 146)
+
+**Missing Emissions:**
+- [ ] AgentRegistered (on register_agent)
+- [ ] AgentHeartbeat (on heartbeat received)
+- [ ] AgentRecovered (when degraded/offline → healthy)
+- [ ] AgentUnregistered (on unregister_agent)
+
+**Checklist:**
+- [ ] Add AgentRegistered emission in register_agent() handler
+- [ ] Add AgentHeartbeat emission in heartbeat() handler
+- [ ] Add AgentRecovered emission in health_check_loop() when status changes to Healthy
+- [ ] Add AgentUnregistered emission in unregister_agent() handler
+- [ ] Test with grid-master running: `docker logs sutra-grid-master | grep "AgentRegistered"`
+- [ ] Query via natural language: "Show all agent registrations today"
+
+#### Task 4.2: Emit All Storage Node Lifecycle Events ⏳
+**Status:** Partially Complete (2/9 events emitted)  
+**Effort:** 15 hours  
+**Files:** `packages/sutra-grid-agent/src/main.rs` (or external repo if extracted)
+
+**Current Emissions:**
+- ✅ NodeCrashed (line 332)
+- ✅ NodeRestarted (line 366)
+
+**Missing Emissions:**
+- [ ] SpawnRequested (on spawn_storage_node call)
+- [ ] SpawnSucceeded (after successful spawn)
+- [ ] SpawnFailed (on spawn error)
+- [ ] StopRequested (on stop_storage_node call)
+- [ ] StopSucceeded (after successful stop)
+- [ ] StopFailed (on stop error)
+- [ ] NodeHealthy (periodic health checks)
+
+**Checklist:**
+- [ ] Add SpawnRequested/Succeeded/Failed emissions in spawn_storage_node()
+- [ ] Add StopRequested/Succeeded/Failed emissions in stop_storage_node()
+- [ ] Add NodeHealthy emission in monitor_nodes() health check loop
+- [ ] Test spawn workflow: spawn node → check events
+- [ ] Test crash recovery: kill node → verify NodeCrashed + NodeRestarted
+- [ ] Query: "Show all node crashes in the last hour"
+
+#### Task 4.3: Emit Performance & Operational Events ⏳
+**Status:** Not Started  
+**Effort:** 20 hours  
+**Files:** `packages/sutra-storage/src/`, external embedder/NLG services
+
+**Missing Emissions (15 event types):**
+- [ ] StorageMetrics (concept count, throughput, latency)
+- [ ] QueryPerformance (query latency, result count)
+- [ ] EmbeddingLatency (embedding generation time, batch size) - from optimized external service
+- [ ] HnswIndexBuilt (index build time, vector count)
+- [ ] PathfindingMetrics (MPPA traversal stats)
+- [ ] ReconciliationComplete (shard reconciliation)
+- [ ] ... (and 9 more)
+
+**Checklist:**
+- [ ] Add EventEmitter to storage-server main.rs
+- [ ] Emit StorageMetrics every 60 seconds
+- [ ] Emit QueryPerformance on every graph query
+- [ ] Add EventEmitter to external embedding service (sutra-embedder)
+- [ ] Emit EmbeddingLatency from optimized embedding service
+- [ ] Create monitoring dashboard query: "Show slowest queries today"
+- [ ] Validate: Query "What caused high latency at 2pm?"
+- [ ] Test HA failover monitoring: "Show embedding service failover events"
+
+**Success Criteria:**
+- ✅ All 26 event types emitted in production
+- ✅ Natural language queries working: "Show cluster health", "What caused the crash?"
+- ✅ Monitors optimized system (25ms embeddings, 60ms NLG)
+- ✅ Monitors HA architecture (failover events, recovery)
+- ✅ Complete audit trail: every state change captured
+- ✅ Zero external tools: no Prometheus, Grafana, Datadog
+- ✅ Production case study complete with real metrics from final architecture
+
+---
+
+### PHASE 5: Documentation & Case Studies (Week 11-12)
+**Objective:** Complete production-grade documentation for all systems  
+**Priority:** Sequential after Phase 4 - required for customer onboarding and adoption
+
+#### Task 5.1: Complete ML Architecture Documentation ⏳
 **Status:** Not Started  
 **Effort:** 20 hours  
 
@@ -750,7 +805,7 @@ done
 - ✅ HA configuration examples
 - ✅ Troubleshooting guide
 
-#### Task 4.2: Financial Intelligence Case Study Completion ⏳
+#### Task 5.2: Financial Intelligence Case Study Completion ⏳
 **Status:** Partially Complete  
 **Effort:** 10 hours  
 
@@ -764,7 +819,7 @@ done
 - ✅ Performance benchmarks (100+ companies)
 - ✅ Cost analysis vs traditional systems
 
-#### Task 4.3: DevOps Self-Monitoring Blog Post ⏳
+#### Task 5.3: DevOps Self-Monitoring Blog Post ⏳
 **Status:** Draft Complete  
 **Effort:** 5 hours  
 
@@ -780,10 +835,11 @@ done
 
 ---
 
-### PHASE 5: Performance & Scalability (Week 11-12)
-**Objective:** Validate 10M+ concept scale and optimize for production workloads
+### PHASE 6: Performance & Scalability (Week 13-14)
+**Objective:** Validate 10M+ concept scale and optimize for production workloads  
+**Priority:** Sequential after Phase 5 - required for production scale validation
 
-#### Task 5.1: Large-Scale Ingestion Test ⏳
+#### Task 6.1: Large-Scale Ingestion Test ⏳
 **Status:** Not Started  
 **Effort:** 30 hours  
 
@@ -805,7 +861,7 @@ done
 - ✅ Memory per shard: <8GB
 - ✅ Complete scaling documentation
 
-#### Task 5.2: Distributed Grid Load Testing ⏳
+#### Task 6.2: Distributed Grid Load Testing ⏳
 **Status:** Not Started  
 **Effort:** 20 hours  
 
@@ -825,10 +881,11 @@ done
 
 ---
 
-### PHASE 6: Production Hardening (Week 13-14)
-**Objective:** Production-grade security, monitoring, and deployment automation
+### PHASE 7: Production Hardening (Week 15-16)
+**Objective:** Production-grade security, monitoring, and deployment automation  
+**Priority:** Final phase - required for customer production deployments
 
-#### Task 6.1: Security Audit & Hardening ⏳
+#### Task 7.1: Security Audit & Hardening ⏳
 **Status:** Not Started  
 **Effort:** 30 hours  
 
@@ -847,7 +904,7 @@ done
 - ✅ Zero high-severity vulnerabilities
 - ✅ Security documentation complete
 
-#### Task 6.2: Production Monitoring Dashboard ⏳
+#### Task 7.2: Production Monitoring Dashboard ⏳
 **Status:** Not Started  
 **Effort:** 20 hours  
 
@@ -865,7 +922,7 @@ done
 - ✅ Historical analysis (7 days)
 - ✅ Accessible at :8090
 
-#### Task 6.3: Kubernetes Deployment ⏳
+#### Task 7.3: Kubernetes Deployment ⏳
 **Status:** Not Started  
 **Effort:** 40 hours  
 
@@ -947,35 +1004,43 @@ git push origin main --tags
 - ✅ Financial intelligence: 100% success rate (v3.0.1)
 - ✅ Performance optimization: 50-70× improvements (v3.0.1)
 
-### Target Version: v3.1.0 (Self-Monitoring Complete) 🎯 **TOP PRIORITY**
-**Timeline:** 2 weeks (Phase 0: Week 1-2)  
-**Effort:** 45 hours (10h agent lifecycle + 15h node lifecycle + 20h performance events)  
-**Dependencies:** None (infrastructure exists, just emit events)  
-**Market Impact:** Proves $20B DevOps observability thesis with production data
-
-**Why v3.1.0 Before v3.2.0 (ML Extraction):**
-- Self-monitoring IS the killer demo (eating own dogfood)
-- Immediate customer value (zero observability tools needed)
-- Infrastructure already exists (just emit remaining 22 events)
-- ML services work perfectly (extraction is architectural cleanup, not urgent)
-
-### Target Version: v3.2.0 (ML Service Extraction - Optional)
-**Timeline:** 3 weeks (Phase 1: Week 3-5) - IF NEEDED  
+### Target Version: v3.2.0 (ML Service Extraction) 🎯 **PHASE 1 PRIORITY**
+**Timeline:** 3 weeks (Phase 1: Week 1-3)  
 **Effort:** 80 hours  
-**Dependencies:** None (repos exist, services work)  
-**Note:** This is architectural cleanliness, not blocking any features
+**Dependencies:** None - foundation work  
+**Market Impact:** Clean architecture, independent scaling, 20min → 10min deployment
 
-### Target Version: v3.3.0 (ML Service Optimization - Optional)
-**Timeline:** 3 weeks (Phase 2: Week 6-8) - IF PURSUED  
+### Target Version: v3.3.0 (ML Service Optimization)
+**Timeline:** 3 weeks (Phase 2: Week 4-6)  
 **Effort:** 100 hours  
 **Dependencies:** v3.2.0 complete (external repos must exist)  
-**Note:** 2× performance is nice-to-have, not customer-critical
+**Market Impact:** 2× performance improvement - 50ms → 25ms embeddings, 85ms → 60ms NLG
 
 ### Target Version: v4.0.0 (Enterprise HA Validation)
-**Timeline:** 2 weeks (Phase 3: Week 9-10)  
+**Timeline:** 2 weeks (Phase 3: Week 7-8)  
 **Effort:** 30 hours  
-**Dependencies:** Full event emission (v3.1.0) to monitor HA failover scenarios  
-**Note:** HA works, needs chaos testing with self-monitoring observability
+**Dependencies:** v3.3.0 complete (optimized services for HA testing)  
+**Market Impact:** Production-grade high availability with automatic failover
+
+### Target Version: v4.1.0 (Self-Monitoring Complete) 🔥 **KILLER FEATURE**
+**Timeline:** 2 weeks (Phase 4: Week 9-10)  
+**Effort:** 45 hours (10h agent lifecycle + 15h node lifecycle + 20h performance events)  
+**Dependencies:** v4.0.0 complete (final architecture ready)  
+**Market Impact:** Proves $20B DevOps observability thesis - monitors optimized, distributed, HA system
+
+**Why Build Architecture First, Then Monitor:**
+- Avoid rework: Monitor the FINAL system, not one in transition
+- Better demo: Self-monitoring is MORE impressive on optimized, distributed, HA system
+- Event quality: Performance events (EmbeddingLatency) more meaningful AFTER optimization
+- HA events: Failover/recovery events only relevant AFTER HA architecture complete
+- Stable foundation: Emit all 26 events once, on production-ready architecture
+
+**Sequential Execution (All Required):**
+- v3.2.0 (Weeks 1-3): ML service extraction → Clean architecture foundation
+- v3.3.0 (Weeks 4-6): ML optimization → Performance targets (2× faster)
+- v4.0.0 (Weeks 7-8): HA validation → Production-grade availability
+- v4.1.0 (Weeks 9-10): Complete self-monitoring → Monitor final system, prove thesis
+- v4.2.0+ (Weeks 11-16): Documentation + Scale + Production hardening
 
 ---
 
@@ -1109,12 +1174,12 @@ git push origin main --tags
 ---
 
 **Last Updated:** November 19, 2025  
-**Next Review:** After v3.1.0 release (self-monitoring complete)  
+**Next Review:** After v3.2.0 release (ML service extraction complete)  
 **Maintainer:** Nisheetsh Ranjan (@nranjan2code)
 
 ---
 
-## 🎯 **STRATEGIC PRIORITY: EATING OUR OWN DOGFOOD**
+## 🎯 **STRATEGIC PRIORITY: BUILD STABLE ARCHITECTURE, THEN MONITOR IT**
 
 **The Killer Feature:** Sutra monitors itself using its own reasoning engine.
 
@@ -1122,16 +1187,20 @@ git push origin main --tags
 - ✅ 26 Grid event types DEFINED (1659 LOC)
 - ✅ EventEmitter infrastructure BUILT and INTEGRATED
 - ⏳ Only 4/26 event types ACTIVELY EMITTED
-- 🎯 Need 22 more emissions to prove production thesis
+- 🎯 Will emit all 26 events on FINAL production architecture (Phase 4)
 
-**Why This Matters:**
-1. **$20B Market:** DevOps observability (Datadog, New Relic, Splunk)
-2. **Zero Competition:** No one else uses semantic reasoning for observability
-3. **Perfect Demo:** "Show me what caused the 2am crash" → complete causal chain
-4. **Credibility:** We prove Sutra's value by monitoring Sutra with Sutra
-5. **Cost Story:** 96% savings ($46K → $1.8K/year) vs traditional stack
+**Why Monitor After Architecture Work:**
+1. **Avoid Rework:** Don't emit events twice (before and after ML extraction)
+2. **Better Demo:** Self-monitoring is MORE impressive on optimized HA system
+3. **Event Quality:** Performance events meaningful AFTER optimization (25ms embeddings)
+4. **HA Monitoring:** Failover events only relevant AFTER HA architecture complete
+5. **Stable Foundation:** Emit all 26 events once on production-ready system
 
-**ML Extraction (Phase 1):** Important for architecture, but NOT urgent. Services work perfectly in monorepo.
+**Strategic Sequence:**
+- **Phase 1 (Weeks 1-3):** ML service extraction → Clean architecture foundation
+- **Phase 2 (Weeks 4-6):** ML optimization → 2× performance targets
+- **Phase 3 (Weeks 7-8):** HA validation → Production-grade availability
+- **Phase 4 (Weeks 9-10):** Complete self-monitoring → Monitor final system, prove $20B thesis
 
 ---
 
@@ -1145,6 +1214,31 @@ git push origin main --tags
 
 ### Session 2 (November 19, 2025)
 - Deep review of TODO and architecture
-- Corrected priority: Self-monitoring (Phase 0) is the killer feature, not ML extraction
-- Updated roadmap: Phase 0 (self-monitoring) → Phase 1 (ML extraction optional)
+- Corrected priority: Self-monitoring (Phase 0) is the killer feature and first priority
+- Updated roadmap: All phases required, executed sequentially based on priority
 - Focus: Complete Grid event emissions to prove $20B DevOps observability thesis
+
+### Session 3 (November 19, 2025)
+- Removed all "optional" language from TODO document
+- Clarified: ALL phases are REQUIRED for production-grade system
+- Phases are PRIORITIZED (sequential execution), not optional vs required
+- Aligned with production philosophy: "No TODOs, no mocks, no stubs - all production-grade code"
+
+### Session 4 (November 19, 2025)
+- **Strategic reorganization:** Move self-monitoring (Phase 0) to AFTER architecture work (now Phase 4)
+- **Rationale:** Monitor the FINAL production system, not one in transition - avoids rework
+- **New sequence:** ML extraction → Optimization → HA validation → Self-monitoring (Phases 1-4)
+- **Benefits:** Better demo (monitor optimized HA system), no rework on event emissions, events more meaningful
+- **Self-monitoring remains KILLER FEATURE** - just smarter timing for implementation
+- **Version targets updated:** v3.2.0 (ML extraction) → v3.3.0 (optimization) → v4.0.0 (HA) → v4.1.0 (monitoring)
+
+### Session 5 (November 19, 2025) - Deep Review & Critical Fixes
+- **Document Version:** Updated to v1.1.0
+- **Phase 1 Prerequisites Added:** ghcr.io auth setup, repo assessment (2 hours upfront work)
+- **Timeline Adjustment:** Phase 1 extended to 4 weeks (60-80 hours) with buffer for unknown sync effort
+- **Task 1.2 Fixed:** Removed duplicate sutra-embedder content, now correctly references sutraworks-model
+- **Docker Validation Added:** Both Task 1.1 and 1.2 now validate Dockerfile has no ../ references
+- **Image Size Checks:** Added validation for unexpected image bloat (1.2GB for embedder, 2.5GB for NLG)
+- **Repo State Tracking:** Added last monorepo update dates (Nov 8 for embedder, Nov 2 for NLG)
+- **Risk Mitigation:** Added steps to assess external repo sync effort before starting work
+- **Success:** Grade A+ on deep review - production-ready with minor fixes applied

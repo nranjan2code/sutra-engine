@@ -170,24 +170,51 @@ pub enum StorageRequest {
 - 2PC coordinator for atomic writes across shards
 - Parallel vector search queries all shards simultaneously
 
-### Self-Monitoring with Grid Events (Revolutionary Innovation)
+### Self-Monitoring with Grid Events (Revolutionary Innovation - Eating Our Own Dogfood) 🔥
 System monitors itself using its own reasoning engine - **NO external tools (Prometheus, Grafana, Datadog)**:
 
 **Architecture:**
 ```
 Grid Components → EventEmitter (Rust) → Sutra Storage (TCP) → Natural Language Queries
+                      ↓
+              USES SUTRA'S OWN REASONING ENGINE
 ```
 
-**26 Production Event Types:**
-- Agent Lifecycle: AgentRegistered, AgentHeartbeat, AgentDegraded, AgentOffline, AgentRecovered, AgentUnregistered
-- Node Lifecycle: SpawnRequested, SpawnSucceeded, SpawnFailed, StopRequested, StopSucceeded, StopFailed, NodeCrashed, NodeRestarted
-- Performance: StorageMetrics, QueryPerformance, EmbeddingLatency, HnswIndexBuilt, PathfindingMetrics, ReconciliationComplete
+**Why This Is Revolutionary:**
+- ✅ **Eating Own Dogfood:** We use Sutra to monitor Sutra (zero external dependencies)
+- ✅ **Temporal Reasoning:** "What happened before the crash?" (not just logs)
+- ✅ **Causal Analysis:** "Why did node-abc123 fail?" (automatic root cause discovery)
+- ✅ **Natural Language:** No PromQL, Lucene, SQL - just English
+- ✅ **Complete Audit Trail:** Every state change captured as semantic concept
+- ✅ **Cost Efficiency:** 96% savings vs Datadog/New Relic ($46K → $1.8K/year)
 
-**Natural Language Queries:**
+**Implementation Status (v3.0.1):**
+- ✅ **Event Library:** 26 event types defined (1659 LOC in `sutra-grid-events`)
+- ✅ **Event Emitter:** TCP-based async emitter with background worker
+- ✅ **Integrated:** Grid Master + Grid Agent use EventEmitter
+- 🔨 **Partial Emission:** 4/26 event types actively emitted (AgentOffline, AgentDegraded, NodeCrashed, NodeRestarted)
+- 🔨 **TODO:** Emit remaining 22 event types for complete observability
+
+**26 Event Types (Defined in `packages/sutra-grid-events/src/events.rs`):**
+```rust
+// Agent Lifecycle (2/6 emitted)
+AgentRegistered, AgentHeartbeat, AgentDegraded ✅, AgentOffline ✅, AgentRecovered, AgentUnregistered
+
+// Node Lifecycle (2/9 emitted)
+SpawnRequested, SpawnSucceeded, SpawnFailed, StopRequested, StopSucceeded, StopFailed,
+NodeCrashed ✅, NodeRestarted ✅, NodeHealthy
+
+// Performance (0/11 emitted - TODO)
+StorageMetrics, QueryPerformance, EmbeddingLatency, CacheHit, CacheMiss,
+HnswIndexBuilt, PathfindingMetrics, ReconciliationComplete, GridRebalance,
+ShardSplit, ShardMerge
+```
+
+**Natural Language Queries (Ready, Waiting for Events):**
 ```python
 # Operational queries
-"Show cluster status"
-"What caused the 2am crash?"  # Returns complete causal chain in ~30ms
+"Show cluster status"  # Once all events emitted
+"What caused the 2am crash?"  # Complete causal chain in ~30ms
 "Which agents went offline this week?"
 "Show all spawn failures today"
 
@@ -197,16 +224,18 @@ Grid Components → EventEmitter (Rust) → Sutra Storage (TCP) → Natural Lang
 "Which node has the highest restart count?"
 
 # Performance analysis
-"Which storage node is slowest?"
-"Show embedding cache hit rate trends"
-"Compare query latency across shards"
+"Which storage node is slowest?"  # Once StorageMetrics emitted
+"Show embedding cache hit rate trends"  # Once EmbeddingLatency emitted
+"Compare query latency across shards"  # Once QueryPerformance emitted
 ```
 
-**Production Metrics:**
+**Production Targets (When All 26 Events Emitted):**
 - Event volume: 30 events/sec sustained, 100+ burst
 - Query latency: 12-34ms (faster than Elasticsearch)
 - Storage overhead: <0.1% (for 16M concepts)
 - Cost savings: 96% vs. traditional stack ($46K → $1.8K/year)
+
+**Current Priority:** Emit all 26 event types to prove "eating own dogfood" thesis at production scale
 
 **Key Files:**
 - Event library: `packages/sutra-grid-events/src/events.rs` (26 event types, 500+ LOC)
@@ -471,8 +500,10 @@ MAJOR.MINOR.PATCH
 - **Don't skip release docs:** See `docs/release/` for complete release workflow
 - **Don't use removed scripts:** Use `sutra` command as single entry point, not external scripts
 - **Don't position as "regulated industries only":** Use cases span 20+ industries ($200B+ market)
-- **Don't ignore self-monitoring capabilities:** We already have production proof (Grid events)
 - **Don't forget temporal/causal reasoning:** This is the core differentiator vs. vector databases
+- **Don't treat self-monitoring as "nice to have":** This is THE killer feature - Sutra monitoring Sutra (eating own dogfood)
+- **Don't add external observability tools:** We prove our value by NOT using Prometheus/Grafana/Datadog
+- **Don't emit events to external systems:** All Grid events → Sutra Storage → queryable via natural language
 
 ## Scale Targets
 
@@ -484,20 +515,33 @@ MAJOR.MINOR.PATCH
 
 - **Narrow (old):** "Compliance tool for healthcare/finance/legal" ($10B market)
 - **Broad (correct):** "Explainable reasoning for knowledge-intensive industries" ($200B+ market)
-- **Immediate opportunity:** DevOps observability ($20B) - we already have proof (self-monitoring)
+- **KILLER DEMO:** Self-monitoring ($20B DevOps observability market) - Sutra monitors itself without Prometheus/Grafana/Datadog
+- **Eating Own Dogfood:** Grid events → Sutra Storage → Natural language queries ("What caused the 2am crash?")
+- **Current Status:** 26 event types defined (1659 LOC), 4 actively emitted, 22 to complete
 - **Financial Intelligence:** Production-grade system for market data analysis with 100% success rate (November 2025)
 
 ## Real-World Production Systems
 
-**1. DevOps Self-Monitoring (October 2025):**
-- 26 event types, 30 events/sec sustained, 12-34ms query latency
-- 96% cost savings vs traditional stack ($46K → $1.8K/year)
-- Natural language queries: "What caused the 2am crash?" returns complete causal chain
+**1. DevOps Self-Monitoring (October 2025 - FLAGSHIP "EATING OWN DOGFOOD"):**
+- **Status:** Foundation complete, partial implementation (4/26 events)
+- **Architecture:** 1659 LOC (sutra-grid-events) defining 26 event types
+- **Active Emissions:** AgentOffline, AgentDegraded, NodeCrashed, NodeRestarted
+- **Target Emissions:** All 26 types → 30 events/sec sustained → 12-34ms query latency
+- **Proof Point:** 96% cost savings vs traditional stack ($46K → $1.8K/year)
+- **Killer Demo:** "What caused the 2am crash?" returns complete causal chain (when complete)
+- **Market:** $20B DevOps observability - proving Sutra monitors Sutra WITHOUT Prometheus/Grafana
+- **CURRENT PRIORITY:** Emit remaining 22 event types to complete production proof
 
-**2. Financial Intelligence (November 2025):**
+**2. Financial Intelligence (November 2025 - PRODUCTION COMPLETE):**
 - Google Finance integration for 100+ AI/tech companies
 - E2E system: ingestion → storage → semantic queries (76 tests, 100% success)
 - Temporal/causal relationships: "Why did NVIDIA stock drop after earnings?"
 - Production deployment with WAL persistence and real-time monitoring
+- **Status:** ✅ COMPLETE AND VALIDATED
 
-When working on this codebase, prioritize explainability, audit trails, and domain-specific accuracy over general AI capabilities. Every reasoning path should be traceable for compliance requirements AND operational understanding.
+**Development Philosophy:**
+When working on this codebase, prioritize:
+1. **Self-Monitoring First:** This proves our thesis - Sutra monitoring Sutra is the killer demo
+2. **Explainability Always:** Every reasoning path must be traceable (compliance + operational understanding)
+3. **Eating Own Dogfood:** Use Sutra's capabilities to build/monitor/validate Sutra itself
+4. **Domain-Specific Accuracy:** Start empty, learn from YOUR data, not general AI slop
