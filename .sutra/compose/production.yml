@@ -613,43 +613,32 @@ services:
       - community
 
   # ============================================================================
-  # EMBEDDING SERVICES (Lightweight Clients)
+  # ADVANCED EMBEDDING SERVICES (External - 4x Performance)
   # ============================================================================
   
-  # Single Embedding Service (Simple & Community Editions) - Lightweight Client
-  # With Phase 0 (Matryoshka) + Phase 1 (Sutra Cache) Support
-  embedding-single:
-    build:
-      context: ../../packages/sutra-embedding-service
-      dockerfile: Dockerfile
-    image: sutra-works-embedding-service:${SUTRA_VERSION:-latest}
+  # Single Advanced Embedding Service (Simple & Community Editions)
+  # Uses external ghcr.io/nranjan2code/sutra-embedder:v1.0.0 (4x faster Rust implementation)
+  sutra-works-embedding-single:
+    image: ghcr.io/nranjan2code/sutra-embedder:v1.0.0
     container_name: sutra-works-embedding-single
-    # SECURITY: Internal only - embedding service backend
+    # SECURITY: Internal only - advanced embedding service backend
     expose:
       - "8888"
     environment:
-      - PYTHONUNBUFFERED=1
+      - RUST_LOG=info
       - EMBEDDING_PORT=8888
       - EMBEDDING_HOST=0.0.0.0
-      # ML-Base Service Configuration
-      # Use load balancer if scaling profile is active, otherwise single instance
-      - ML_BASE_URL=${ML_BASE_URL:-http://ml-base-service:8887}
-      - ML_BASE_TIMEOUT=30
-      - ML_BASE_MAX_RETRIES=3
-      # Edition Configuration
-      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
-      - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
-      # Phase 1: Sutra-Native Cache Configuration
-      - EMBEDDING_CACHE_SIZE=50000  # L1 cache size
-      - EMBEDDING_CACHE_TTL=86400  # 24 hours
-      - SUTRA_CACHE_ENABLED=${SUTRA_CACHE_ENABLED:-false}  # Enable with scaling profile
-      - SUTRA_CACHE_HOST=storage-cache-shard
-      - SUTRA_CACHE_PORT=50052
+      # Advanced Configuration
+      - MODEL_PATH=/models/nomic-embed-text-v1.5
+      - VECTOR_DIMENSION=${MATRYOSHKA_DIM:-768}
+      - CACHE_SIZE=50000
+      - BATCH_SIZE=256
+      # Performance Optimization
+      - SIMD_ACCELERATION=true
+      - GPU_ACCELERATION=auto
+      - QUANTIZATION=int8
       # Instance Configuration
       - INSTANCE_ID=embedding-single
-    depends_on:
-      ml-base-service:
-        condition: service_healthy
     networks:
       - sutra-network
     restart: unless-stopped
@@ -662,36 +651,39 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M  # Increased for L1 cache
+          memory: 2G  # Optimized Rust implementation
         reservations:
-          memory: 256M
+          memory: 1G
     profiles:
       - simple
       - community
   
   # ============================================================================
-  # EMBEDDING SERVICE HA (Enterprise Edition Only)
+  # ADVANCED EMBEDDING SERVICE HA (Enterprise Edition Only)
   # ============================================================================
   
-  # Embedding Service Replica 1
+  # Advanced Embedding Service Replica 1
   embedding-1:
-    image: sutra-works-embedding-service:latest
+    image: ghcr.io/nranjan2code/sutra-embedder:v1.0.0
     container_name: sutra-works-embedding-1
     environment:
       - RUST_LOG=info
       - EMBEDDING_PORT=8888
+      - EMBEDDING_HOST=0.0.0.0
       - MODEL_PATH=/models/nomic-embed-text-v1.5
-      - CACHE_SIZE=10000
-      - BATCH_SIZE=32
-      - EVENT_STORAGE=grid-event-storage:50051
+      - VECTOR_DIMENSION=768
+      - CACHE_SIZE=50000
+      - BATCH_SIZE=256
       - INSTANCE_ID=embedding-1
-    volumes:
-      - ../../packages/sutra-embedding-service/models:/models:ro
+      # Advanced Performance Features
+      - SIMD_ACCELERATION=true
+      - GPU_ACCELERATION=auto
+      - QUANTIZATION=int8
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health').read()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -705,25 +697,28 @@ services:
     profiles:
       - enterprise
   
-  # Embedding Service Replica 2
+  # Advanced Embedding Service Replica 2
   embedding-2:
-    image: sutra-works-embedding-service:latest
+    image: ghcr.io/nranjan2code/sutra-embedder:v1.0.0
     container_name: sutra-works-embedding-2
     environment:
       - RUST_LOG=info
       - EMBEDDING_PORT=8888
+      - EMBEDDING_HOST=0.0.0.0
       - MODEL_PATH=/models/nomic-embed-text-v1.5
-      - CACHE_SIZE=10000
-      - BATCH_SIZE=32
-      - EVENT_STORAGE=grid-event-storage:50051
+      - VECTOR_DIMENSION=768
+      - CACHE_SIZE=50000
+      - BATCH_SIZE=256
       - INSTANCE_ID=embedding-2
-    volumes:
-      - ../../packages/sutra-embedding-service/models:/models:ro
+      # Advanced Performance Features
+      - SIMD_ACCELERATION=true
+      - GPU_ACCELERATION=auto
+      - QUANTIZATION=int8
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health').read()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -737,25 +732,28 @@ services:
     profiles:
       - enterprise
   
-  # Embedding Service Replica 3
+  # Advanced Embedding Service Replica 3
   embedding-3:
-    image: sutra-works-embedding-service:latest
+    image: ghcr.io/nranjan2code/sutra-embedder:v1.0.0
     container_name: sutra-works-embedding-3
     environment:
       - RUST_LOG=info
       - EMBEDDING_PORT=8888
+      - EMBEDDING_HOST=0.0.0.0
       - MODEL_PATH=/models/nomic-embed-text-v1.5
-      - CACHE_SIZE=10000
-      - BATCH_SIZE=32
-      - EVENT_STORAGE=grid-event-storage:50051
+      - VECTOR_DIMENSION=768
+      - CACHE_SIZE=50000
+      - BATCH_SIZE=256
       - INSTANCE_ID=embedding-3
-    volumes:
-      - ../../packages/sutra-embedding-service/models:/models:ro
+      # Advanced Performance Features
+      - SIMD_ACCELERATION=true
+      - GPU_ACCELERATION=auto
+      - QUANTIZATION=int8
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health').read()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -769,66 +767,39 @@ services:
     profiles:
       - enterprise
   
-  # HAProxy Load Balancer for Embedding Services
-  embedding-ha:
-    image: haproxy:2.8-alpine
-    container_name: sutra-works-embedding-ha
-    # SECURITY: Internal only - HAProxy load balancer (stats also internal)
-    expose:
-      - "8888"  # Embedding service endpoint
-      - "8404"  # HAProxy stats
-    volumes:
-      - ./docker/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
-    depends_on:
-      - embedding-1
-      - embedding-2
-      - embedding-3
-    networks:
-      - sutra-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    profiles:
-      - enterprise
+  # NOTE: HAProxy load balancer temporarily removed for external service integration
+  # Will be re-added once external services are proven to work
+  # embedding-ha:
+  #   Configuration moved to future phase
   
 
   # ============================================================================
-  # NLG SERVICES
+  # ADVANCED NLG SERVICES (External - Enterprise AI Framework)
   # ============================================================================
   
-  # NLG Service (Simple/Community Edition) - Lightweight Client
-  nlg-single:
-    build:
-      context: ../../packages/sutra-nlg-service
-      dockerfile: Dockerfile
-    image: sutra-works-nlg-service:${SUTRA_VERSION:-latest}
+  # Advanced NLG Service (Simple/Community Edition)
+  # Uses external ghcr.io/nranjan2code/sutraworks-model:v1.0.0 (Enterprise AI with RWKV/Mamba)
+  sutra-works-nlg-single:
+    image: ghcr.io/nranjan2code/sutraworks-model:v1.0.0
     container_name: sutra-works-nlg-single
-    # SECURITY: Internal only - NLG service backend
+    # SECURITY: Internal only - advanced NLG service backend
     expose:
       - "8003"
     environment:
-      - PYTHONUNBUFFERED=1
+      - RUST_LOG=info
       - NLG_PORT=8003
       - NLG_HOST=0.0.0.0
-      # ML-Base Service Configuration
-      - ML_BASE_URL=http://ml-base-service:8887
-      - ML_BASE_TIMEOUT=60
-      - ML_BASE_MAX_RETRIES=3
-      # Edition Configuration
-      - SUTRA_EDITION=${SUTRA_EDITION:-simple}
-      - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
-      # Cache Configuration
-      - NLG_CACHE_SIZE=500
-      - NLG_CACHE_TTL=1800
+      # Advanced AI Configuration
+      - MODEL_TYPE=rwkv  # Default to RWKV model
+      - MAX_TOKENS=512
+      - TEMPERATURE=0.7
+      - WARMUP=true
+      # Enterprise Features
+      - REQUEST_TRACKING=true
+      - METRICS_ENABLED=true
+      - PERFORMANCE_MONITORING=true
       # Instance Configuration
       - INSTANCE_ID=nlg-single
-    depends_on:
-      ml-base-service:
-        condition: service_healthy
     networks:
       - sutra-network
     restart: "on-failure:3"  # NLG is optional - stop after 3 failed attempts
@@ -837,42 +808,44 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 60s  # Longer startup for model loading
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 4G  # Enterprise AI requires more memory
         reservations:
-          memory: 128M
+          memory: 2G
     profiles:
       - simple
       - community
   
   # ============================================================================
-  # NLG SERVICE HA (Enterprise Edition Only)
+  # ADVANCED NLG SERVICE HA (Enterprise Edition Only)
   # ============================================================================
   
-  # NLG Service Replica 1
-  nlg-ha-1:
-    build:
-      context: ../../packages/sutra-nlg-service
-      dockerfile: Dockerfile
-    image: sutra-works-nlg-service:${SUTRA_VERSION:-latest}
+  # Advanced NLG Service Replica 1
+  nlg-1:
+    image: ghcr.io/nranjan2code/sutraworks-model:v1.0.0
     container_name: sutra-works-nlg-1
-    env_file:
-      - .env
     environment:
-      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-3-270m-it}
+      - RUST_LOG=info
+      - NLG_PORT=8003
+      - NLG_HOST=0.0.0.0
+      # Advanced AI Configuration
+      - MODEL_TYPE=rwkv  # RWKV model for replica 1
+      - MAX_TOKENS=512
+      - TEMPERATURE=0.7
+      - WARMUP=true
       - INSTANCE_ID=nlg-1
-      - PORT=8889
-      - HF_TOKEN=${HF_TOKEN}
-    volumes:
-      - ../../packages/sutra-nlg-service/models:/app/models:ro
+      # Enterprise Features
+      - REQUEST_TRACKING=true
+      - METRICS_ENABLED=true
+      - PERFORMANCE_MONITORING=true
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8889/health').read()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -880,30 +853,35 @@ services:
     deploy:
       resources:
         limits:
-          memory: 5G
+          memory: 4G
         reservations:
-          memory: 3G
+          memory: 2G
     profiles:
-      - nlg-hybrid  # Optional: Enable with SUTRA_NLG_ENABLED=true
+      - enterprise
   
-  # NLG Service Replica 2
+  # Advanced NLG Service Replica 2
   nlg-2:
-    image: sutra-works-nlg-service:latest
+    image: ghcr.io/nranjan2code/sutraworks-model:v1.0.0
     container_name: sutra-works-nlg-2
-    env_file:
-      - .env
     environment:
-      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-3-270m-it}
+      - RUST_LOG=info
+      - NLG_PORT=8003
+      - NLG_HOST=0.0.0.0
+      # Advanced AI Configuration
+      - MODEL_TYPE=mamba  # Mamba model for replica 2 (diversity)
+      - MAX_TOKENS=512
+      - TEMPERATURE=0.7
+      - WARMUP=true
       - INSTANCE_ID=nlg-2
-      - PORT=8889
-      - HF_TOKEN=${HF_TOKEN}
-    volumes:
-      - ../../packages/sutra-nlg-service/models:/app/models:ro
+      # Enterprise Features
+      - REQUEST_TRACKING=true
+      - METRICS_ENABLED=true
+      - PERFORMANCE_MONITORING=true
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8889/health').read()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -911,30 +889,35 @@ services:
     deploy:
       resources:
         limits:
-          memory: 5G
+          memory: 4G
         reservations:
-          memory: 3G
+          memory: 2G
     profiles:
       - enterprise
   
-  # NLG Service Replica 3
+  # Advanced NLG Service Replica 3
   nlg-3:
-    image: sutra-works-nlg-service:latest
+    image: ghcr.io/nranjan2code/sutraworks-model:v1.0.0
     container_name: sutra-works-nlg-3
-    env_file:
-      - .env
     environment:
-      - NLG_MODEL=${SUTRA_NLG_MODEL:-google/gemma-3-270m-it}
+      - RUST_LOG=info
+      - NLG_PORT=8003
+      - NLG_HOST=0.0.0.0
+      # Advanced AI Configuration
+      - MODEL_TYPE=auto  # Auto-selection for replica 3
+      - MAX_TOKENS=512
+      - TEMPERATURE=0.7
+      - WARMUP=true
       - INSTANCE_ID=nlg-3
-      - PORT=8889
-      - HF_TOKEN=${HF_TOKEN}
-    volumes:
-      - ../../packages/sutra-nlg-service/models:/app/models:ro
+      # Enterprise Features
+      - REQUEST_TRACKING=true
+      - METRICS_ENABLED=true
+      - PERFORMANCE_MONITORING=true
     networks:
       - sutra-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8889/health').read()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -942,37 +925,16 @@ services:
     deploy:
       resources:
         limits:
-          memory: 5G
+          memory: 4G
         reservations:
-          memory: 3G
+          memory: 2G
     profiles:
       - enterprise
   
-  # HAProxy Load Balancer for NLG Services
-  nlg-ha:
-    image: haproxy:2.8-alpine
-    container_name: sutra-works-nlg-ha
-    # SECURITY: Internal only - HAProxy load balancer for NLG
-    expose:
-      - "8889"  # NLG service endpoint
-      - "8405"  # HAProxy stats (different from embedding)
-    volumes:
-      - ./docker/haproxy-nlg.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
-    depends_on:
-      - nlg-1
-      - nlg-2
-      - nlg-3
-    networks:
-      - sutra-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    profiles:
-      - enterprise
+  # NOTE: NLG HAProxy load balancer temporarily removed for external service integration
+  # Will be re-added once external services are proven to work
+  # nlg-ha:
+  #   Configuration moved to future phase
 
   # Sutra Hybrid (Semantic Embeddings API + NLG)
   sutra-hybrid:
@@ -994,13 +956,13 @@ services:
       # Semantic Embeddings
       - SUTRA_USE_SEMANTIC_EMBEDDINGS=true
       - SUTRA_EMBEDDING_PROVIDER=service
-      - SUTRA_EMBEDDING_SERVICE_URL=${SUTRA_EMBEDDING_URL:-http://embedding-single:8888}
+      - SUTRA_EMBEDDING_SERVICE_URL=${SUTRA_EMBEDDING_URL:-http://sutra-works-embedding-single:8888}
       - SUTRA_EMBEDDING_MODEL=nomic-embed-text
       - SUTRA_VECTOR_DIMENSION=${MATRYOSHKA_DIM:-768}  # Phase 0: Use Matryoshka dimension
       # NLG Configuration (always enabled)
       - SUTRA_NLG_ENABLED=true
       - SUTRA_NLG_MODE=${SUTRA_NLG_MODE:-hybrid}
-      - SUTRA_NLG_SERVICE_URL=${SUTRA_NLG_URL:-http://nlg-single:8889}
+      - SUTRA_NLG_SERVICE_URL=${SUTRA_NLG_URL:-http://sutra-works-nlg-single:8003}
     depends_on:
       - storage-server
     networks:
@@ -1178,7 +1140,7 @@ services:
       - SUTRA_LICENSE_KEY=${SUTRA_LICENSE_KEY}
       # Service Configuration
       - SUTRA_STORAGE_SERVER=storage-server:50051
-      - SUTRA_EMBEDDING_SERVICE_URL=${SUTRA_EMBEDDING_URL:-http://embedding-single:8888}
+      - SUTRA_EMBEDDING_SERVICE_URL=${SUTRA_EMBEDDING_URL:-http://sutra-works-embedding-single:8888}
       - SUTRA_GRID_MASTER=${SUTRA_GRID_MASTER_URL:-}
       # Worker configuration (set by feature flags based on edition)
       - INGESTER_WORKERS=${SUTRA_INGEST_WORKERS:-2}
