@@ -125,9 +125,11 @@ pub enum Role {
 }
 
 pub enum ChatAction {
-    SendMessage(String),
-    LearnConcept(String),
-    QueryConcept(String),
+    Query(String),      // Search knowledge
+    Learn(String),      // Teach new knowledge
+    Help,               // Show help message
+    Clear,              // Clear chat history
+    Stats,              // Show statistics
 }
 ```
 
@@ -145,13 +147,61 @@ pub enum ChatAction {
 - Send button with gradient fill
 - Typing indicator (3 animated dots)
 
+### Slash Commands
+
+Modern command interface with intelligent autocomplete:
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `/learn <text>` | `/l` | Teach new knowledge |
+| `/search <query>` | `/s`, `/find` | Search knowledge |
+| `/help` | `/h`, `/?` | Show all commands |
+| `/clear` | `/c` | Clear chat history |
+| `/stats` | `/status` | Show statistics |
+
+### Autocomplete Dropdown
+
+Triggered when typing `/` in the input field:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ ⌨️ Commands                    ↑↓  Enter  Esc       │
+├─────────────────────────────────────────────────────┤
+│ ▌/learn     /l          Teach new knowledge        │
+│  /search    /s          Search knowledge           │
+│  /help      /h          Show all commands          │
+│  /clear     /c          Clear chat history         │
+│  /stats     /status     Show statistics            │
+└─────────────────────────────────────────────────────┘
+```
+
+**Interaction:**
+- `↑`/`↓` arrows: Navigate between options
+- `Enter`: Accept selected command
+- `Esc`: Close dropdown
+- Mouse click: Select option
+- Mouse hover: Highlight option
+
+**Visual indicators:**
+- Purple left border on selected item
+- Highlighted background on hover/selection
+- Auto-selects first item when dropdown opens
+
 ### Usage Patterns
 
 ```
-# Learning (prefix with "learn:")
-learn: Python was created by Guido van Rossum in 1991
+# Learning (slash command - recommended)
+/learn Python was created by Guido van Rossum in 1991
+/l The capital of France is Paris
 
-# Querying (any other message)
+# Learning (legacy format - still supported)
+learn: Machine learning is a subset of AI
+
+# Searching (slash command)
+/search programming languages
+/s capital of France
+
+# Querying (natural language)
 Who created Python?
 What programming languages do you know about?
 ```
@@ -488,8 +538,11 @@ fn ui(&mut self, ui: &mut egui::Ui) -> Option<Action> {
 fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
     if let Some(action) = self.chat.ui(ui) {
         match action {
-            ChatAction::LearnConcept(c) => self.learn(c),
-            ChatAction::QueryConcept(q) => self.query(q),
+            ChatAction::Learn(content) => self.learn(content),
+            ChatAction::Query(query) => self.query(query),
+            ChatAction::Help => {}, // Handled in ChatPanel
+            ChatAction::Clear => self.clear_chat(),
+            ChatAction::Stats => self.show_stats(),
         }
     }
 }

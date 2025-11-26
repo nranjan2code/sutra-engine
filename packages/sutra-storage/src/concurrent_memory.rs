@@ -660,6 +660,80 @@ impl ConcurrentMemory {
         Ok(self.vector_search(&query_vector, top_k, 50))
     }
     
+    /// Text-based keyword search (for use without embeddings)
+    /// 
+    /// Searches concepts using keyword matching with stop word filtering.
+    /// Returns concepts ranked by number of matching keywords.
+    /// 
+    /// This is used by Desktop Edition which doesn't have embedding service.
+    pub fn text_search(&self, query: &str, limit: usize) -> Vec<(ConceptId, String, f32)> {
+        // Common stop words to filter out
+        const STOP_WORDS: &[&str] = &[
+            "what", "is", "the", "a", "an", "of", "in", "to", "for", "on",
+            "with", "by", "at", "from", "as", "are", "was", "were", "be",
+            "been", "being", "have", "has", "had", "do", "does", "did",
+            "will", "would", "could", "should", "may", "might", "can",
+            "this", "that", "these", "those", "it", "its", "my", "your",
+            "his", "her", "their", "our", "which", "who", "whom", "whose",
+            "where", "when", "why", "how", "all", "any", "both", "each",
+            "tell", "me", "about", "please", "give", "show", "explain",
+        ];
+        
+        // Extract keywords from query (filter stop words, min length 2)
+        let keywords: Vec<String> = query
+            .to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty() && w.len() > 1 && !STOP_WORDS.contains(w))
+            .map(String::from)
+            .collect();
+        
+        // If all words filtered out, use original words
+        let keywords = if keywords.is_empty() {
+            query
+                .to_lowercase()
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|w| !w.is_empty() && w.len() > 1)
+                .map(String::from)
+                .collect()
+        } else {
+            keywords
+        };
+        
+        if keywords.is_empty() {
+            return Vec::new();
+        }
+        
+        let snapshot = self.read_view.load();
+        let mut scored_results: Vec<(ConceptId, String, usize)> = Vec::new();
+        
+        for node in snapshot.all_concepts() {
+            if let Ok(content) = std::str::from_utf8(&node.content) {
+                let content_lower = content.to_lowercase();
+                
+                // Score = number of matching keywords
+                let score: usize = keywords
+                    .iter()
+                    .filter(|kw| content_lower.contains(kw.as_str()))
+                    .count();
+                
+                if score > 0 {
+                    scored_results.push((node.id, content.to_string(), score));
+                }
+            }
+        }
+        
+        // Sort by score descending
+        scored_results.sort_by(|a, b| b.2.cmp(&a.2));
+        
+        // Convert score to normalized confidence (0.0 - 1.0)
+        let max_score = keywords.len() as f32;
+        scored_results
+            .into_iter()
+            .take(limit)
+            .map(|(id, content, score)| (id, content, score as f32 / max_score))
+            .collect()
+    }
+    
     /// Get read snapshot for external use
     pub fn get_snapshot(&self) -> Arc<crate::read_view::GraphSnapshot> {
         self.read_view.load()

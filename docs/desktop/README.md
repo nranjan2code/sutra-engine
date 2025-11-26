@@ -176,25 +176,66 @@ All data is stored in:
 
 ## Usage
 
+### Slash Commands (Recommended)
+
+The modern way to interact with Sutra Desktop with **intelligent autocomplete**:
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `/learn <text>` | `/l` | Teach new knowledge |
+| `/search <query>` | `/s`, `/find` | Search knowledge base |
+| `/help` | `/h`, `/?` | Show all commands |
+| `/clear` | `/c` | Clear chat history |
+| `/stats` | `/status` | Show knowledge statistics |
+
+### Autocomplete
+
+When you type `/`, an autocomplete dropdown appears with:
+- **Keyboard navigation**: Use `↑`/`↓` arrows to navigate
+- **Quick select**: Press `Enter` to accept selection
+- **Mouse support**: Click any option or hover to highlight
+- **Dismiss**: Press `Esc` to close
+- **Visual feedback**: Selected item highlighted with purple accent
+
+**Examples:**
+```
+/learn The capital of France is Paris
+/l Python was created by Guido van Rossum in 1991
+/search capital of France
+/s programming languages
+/stats
+/help
+```
+
 ### Learning Concepts
 
-In the Chat view, prefix messages with `learn:` to teach Sutra:
+Use `/learn` or the legacy `learn:` prefix:
 
 ```
-learn: The capital of France is Paris
-learn: Python is a programming language created by Guido van Rossum
+/learn The capital of France is Paris
+/learn Python is a programming language created by Guido van Rossum
 learn: Machine learning is a subset of artificial intelligence
 ```
 
 ### Querying Knowledge
 
-Ask questions naturally:
+Use `/search` or just ask naturally:
 
 ```
+/search capital of France
 What is the capital of France?
 Tell me about Python
 What do you know about machine learning?
 ```
+
+### Keyword-Based Search
+
+Sutra Desktop uses intelligent keyword matching:
+- Stop words are filtered (what, is, the, etc.)
+- Results ranked by keyword overlap
+- Relevance percentage shown for each result
+
+Example: "What is the capital of India?" matches concepts containing "capital" and "india".
 
 ### Browsing Knowledge
 

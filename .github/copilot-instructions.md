@@ -59,6 +59,25 @@ cd desktop && ./scripts/build-macos.sh
 - 📦 **Self-Contained**: Single binary, ~20MB
 - 🎨 **Modern UI**: Premium dark theme with animations
 - 🧠 **Full Storage Engine**: Reuses `sutra-storage` crate (no code duplication)
+- 💬 **Slash Commands**: Modern `/learn`, `/search`, `/help`, `/stats` interface with autocomplete
+- 🔍 **Keyword Search**: Intelligent text search with stop word filtering (shared with enterprise)
+- ⌨️ **Autocomplete**: Type `/` for intelligent command suggestions with keyboard navigation
+
+**Slash Commands:**
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `/learn <text>` | `/l` | Teach new knowledge |
+| `/search <query>` | `/s`, `/find` | Search knowledge base |
+| `/help` | `/h`, `/?` | Show all commands |
+| `/clear` | `/c` | Clear chat history |
+| `/stats` | `/status` | Show knowledge statistics |
+
+**Autocomplete (Type `/` to trigger):**
+- `↑`/`↓` arrows to navigate
+- `Enter` to accept selection
+- `Esc` to close
+- Click or hover with mouse
+- Auto-selects first option
 
 **Data Location:** `~/Library/Application Support/ai.sutra.SutraDesktop/`
 
@@ -75,6 +94,7 @@ cd desktop && ./scripts/build-macos.sh
 - Binary TCP protocol for low-latency communication
 - USearch HNSW vector indexing with persistent mmap (94x faster startup)
 - Cross-shard 2PC transactions, adaptive reconciliation
+- **`text_search()` method** - Keyword-based search with stop word filtering (shared by Desktop & Enterprise)
 
 **Reasoning Engine (Python):**
 - `sutra-core` - Graph traversal with Multi-Path Plan Aggregation (MPPA)

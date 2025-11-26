@@ -193,9 +193,11 @@ Components return **actions** rather than mutating state directly:
 ```rust
 // In chat.rs
 pub enum ChatAction {
-    SendMessage(String),
-    LearnConcept(String),
-    QueryConcept(String),
+    Query(String),      // Search knowledge
+    Learn(String),      // Teach new knowledge  
+    Help,               // Show help
+    Clear,              // Clear chat
+    Stats,              // Show statistics
 }
 
 impl ChatPanel {
@@ -203,7 +205,7 @@ impl ChatPanel {
         // ... render UI ...
         
         if send_button_clicked {
-            Some(ChatAction::SendMessage(self.input.clone()))
+            self.parse_command(&self.input)
         } else {
             None
         }
@@ -211,17 +213,18 @@ impl ChatPanel {
 }
 
 // In app.rs
-fn render_chat(&mut self, ui: &mut egui::Ui) {
-    if let Some(action) = self.chat.ui(ui) {
-        match action {
-            ChatAction::LearnConcept(content) => {
-                self.learn_concept(&content);
-            }
-            ChatAction::QueryConcept(query) => {
-                self.query_concept(&query);
-            }
-            // ...
+fn handle_chat_action(&mut self, action: ChatAction) {
+    match action {
+        ChatAction::Learn(content) => {
+            self.storage.learn_concept(...);
         }
+        ChatAction::Query(query) => {
+            // Uses shared text_search from sutra-storage
+            let results = self.storage.text_search(&query, 5);
+        }
+        ChatAction::Help => {}, // Handled in ChatPanel
+        ChatAction::Clear => { /* clear messages */ }
+        ChatAction::Stats => { /* show stats */ }
     }
 }
 ```
@@ -254,24 +257,28 @@ fn learn_concept(&mut self, content: &str) {
 
 ### Querying Concepts
 
+Desktop uses the **shared `text_search()` method** from `sutra-storage` - the same method available to the enterprise edition. This ensures no code duplication.
+
 ```rust
-fn query_concept(&mut self, query: &str) -> Option<String> {
-    // Simple text matching (no embeddings in desktop mode)
-    let snapshot = self.storage.get_snapshot();
-    let concepts = snapshot.all_concepts();
+fn handle_query(&mut self, query: &str) {
+    // Uses ConcurrentMemory::text_search() - shared with enterprise
+    // Filters stop words, ranks by keyword overlap, returns relevance scores
+    let results = self.storage.text_search(&query, 5);
     
-    // Find best match
-    let query_lower = query.to_lowercase();
-    for concept in concepts {
-        let content = String::from_utf8_lossy(&concept.content);
-        if content.to_lowercase().contains(&query_lower) {
-            return Some(content.to_string());
-        }
+    // Results: Vec<(ConceptId, String content, f32 relevance)>
+    for (id, content, relevance) in results {
+        println!("{}: {} ({}%)", id.to_hex(), content, relevance * 100.0);
     }
-    
-    None
 }
 ```
+
+**How text_search works:**
+1. Extracts keywords from query (filters stop words like "what", "is", "the")
+2. Searches all concepts for keyword matches
+3. Scores by number of matching keywords
+4. Returns results sorted by relevance (0.0 - 1.0)
+
+Example: Query "What is the capital of India?" → Keywords: ["capital", "india"] → Matches "Delhi is capital of India" with 100% relevance.
 
 ### Browsing All Concepts
 

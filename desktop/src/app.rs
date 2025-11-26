@@ -145,17 +145,17 @@ impl SutraApp {
             ChatAction::Query(query) => {
                 self.chat.is_processing = true;
                 
-                // Search using storage's methods
-                let results = self.search_concepts(&query, 5);
+                // Use ConcurrentMemory's text_search (shared with enterprise)
+                let results = self.storage.text_search(&query, 5);
                 
                 if results.is_empty() {
                     self.chat.add_response(
-                        "🤔 I don't have knowledge about that yet.\n\nTeach me by typing: `learn: <your knowledge>`".to_string()
+                        "🤔 I don't have knowledge about that yet.\n\nTeach me with: `/learn <your knowledge>`".to_string()
                     );
                 } else {
                     let mut response = String::from("Based on my knowledge:\n\n");
-                    for (i, content) in results.iter().enumerate() {
-                        response.push_str(&format!("{}. {}\n", i + 1, content));
+                    for (i, (_id, content, confidence)) in results.iter().enumerate() {
+                        response.push_str(&format!("{}. {} (relevance: {:.0}%)\n", i + 1, content, confidence * 100.0));
                     }
                     self.chat.add_response(response);
                 }
@@ -164,31 +164,36 @@ impl SutraApp {
                 self.status_bar.set_activity(format!("Searched: {}", preview));
                 self.chat.is_processing = false;
             }
-        }
-    }
-    
-    /// Search concepts using storage engine
-    fn search_concepts(&self, query: &str, limit: usize) -> Vec<String> {
-        let query_lower = query.to_lowercase();
-        let mut results = Vec::new();
-        
-        // Get snapshot and search all concepts
-        let snapshot = self.storage.get_snapshot();
-        
-        for node in snapshot.all_concepts() {
-            if results.len() >= limit {
-                break;
+            
+            ChatAction::Help => {
+                // Help is handled directly in ChatPanel::parse_command
             }
             
-            // Convert content bytes to string
-            if let Ok(content) = std::str::from_utf8(&node.content) {
-                if content.to_lowercase().contains(&query_lower) {
-                    results.push(content.to_string());
-                }
+            ChatAction::Clear => {
+                self.chat.messages.clear();
+                self.chat.add_response("🧹 Chat cleared. Ready for new conversations!".to_string());
+                self.status_bar.set_activity("Chat cleared");
+            }
+            
+            ChatAction::Stats => {
+                let stats = self.storage.stats();
+                let hnsw_stats = self.storage.hnsw_stats();
+                self.chat.add_response(format!(
+                    "📊 **Knowledge Statistics**\n\n\
+                    • **Concepts:** {}\n\
+                    • **Connections:** {}\n\
+                    • **Vectors indexed:** {}\n\
+                    • **Vector dimension:** {}\n\
+                    • **Data path:** {}",
+                    stats.snapshot.concept_count,
+                    stats.snapshot.edge_count,
+                    hnsw_stats.indexed_vectors,
+                    hnsw_stats.dimension,
+                    self.settings.data_path
+                ));
+                self.status_bar.set_activity("Stats displayed");
             }
         }
-        
-        results
     }
     
     /// Handle knowledge panel actions
@@ -200,18 +205,17 @@ impl SutraApp {
                 let concepts = if query.is_empty() {
                     self.load_all_concepts(100)
                 } else {
-                    let snapshot = self.storage.get_snapshot();
-                    let query_lower = query.to_lowercase();
+                    // Use ConcurrentMemory's text_search (shared with enterprise)
+                    let results = self.storage.text_search(&query, 50);
                     
-                    snapshot.all_concepts()
+                    // Convert to ConceptInfo
+                    results
                         .into_iter()
-                        .filter(|node| {
-                            std::str::from_utf8(&node.content)
-                                .map(|s| s.to_lowercase().contains(&query_lower))
-                                .unwrap_or(false)
+                        .filter_map(|(concept_id, _, _)| {
+                            let snapshot = self.storage.get_snapshot();
+                            snapshot.get_concept(&concept_id)
+                                .map(|node| node_to_concept_info(&node, &self.storage))
                         })
-                        .take(50)
-                        .map(|node| node_to_concept_info(&node, &self.storage))
                         .collect()
                 };
                 

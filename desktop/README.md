@@ -68,9 +68,28 @@ cargo build -p sutra-desktop --release
 
 ## Usage
 
-### Learning Knowledge
+### Slash Commands (Recommended)
 
-Type in the chat interface to teach Sutra:
+Use modern slash commands with **autocomplete support**:
+
+```
+/learn The capital of France is Paris
+/l Machine learning is a subset of artificial intelligence
+/search capital of France
+/s machine learning
+/help
+/stats
+```
+
+When you type `/`, an autocomplete dropdown appears:
+- **↑/↓**: Navigate options
+- **Enter**: Accept selection
+- **Esc**: Close dropdown
+- **Click**: Select with mouse
+
+### Legacy Learning Format
+
+Also supports the `learn:` prefix:
 
 ```
 learn: The capital of France is Paris
@@ -80,9 +99,10 @@ learn: Water boils at 100 degrees Celsius at sea level
 
 ### Querying Knowledge
 
-Ask questions about what you've taught:
+Ask questions naturally or use `/search`:
 
 ```
+/search capital of France
 What is the capital of France?
 Tell me about machine learning
 At what temperature does water boil?
