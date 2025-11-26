@@ -71,6 +71,11 @@ pub enum AppMessage {
     TemporalEventsLoaded {
         events: Vec<TimelineEvent>,
     },
+    ConceptDeleted {
+        concept_id: String,
+        success: bool,
+        error: Option<String>,
+    },
 }
 
 /// Concept info for UI display

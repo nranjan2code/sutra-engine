@@ -435,5 +435,4 @@ impl QuickLearnPanel {
 #[derive(Debug, Clone)]
 pub enum QuickLearnAction {
     Learn(String),
-    BatchLearn(String),
-}
+    BatchLearn(String),    Delete(String),}

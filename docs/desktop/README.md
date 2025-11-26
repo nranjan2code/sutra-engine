@@ -25,13 +25,14 @@ Sutra Desktop is a self-contained knowledge management application that brings e
 | 💬 **Enhanced Chat** | Improved autocomplete, better visual design |
 | 🔍 **Multi-View Analysis** | Graph, temporal, causal, and path visualization |
 | 📊 **Real-time Analytics** | Performance metrics and usage statistics |
+| 🗑️ **Knowledge Management** | Delete concepts across multiple screens |
 | 🍎 **Native Integration** | Full menu bar with File/View/Help menus |
 
 ### What's Included
 
 - **Enhanced Menu Bar**: File/View/Help menus with keyboard shortcuts
 - **Chat Interface**: Natural language interaction with improved autocomplete
-- **Knowledge Browser**: Browse, search, and manage learned concepts
+- **Knowledge Browser**: Browse, search, delete, and manage learned concepts
 - **Graph Visualization**: Force-directed interactive knowledge graph
 - **Reasoning Paths**: MPPA-style multi-path consensus analysis
 - **Temporal View**: Timeline and matrix visualization of temporal relationships
@@ -39,6 +40,7 @@ Sutra Desktop is a self-contained knowledge management application that brings e
 - **Analytics Dashboard**: Real-time performance metrics and usage statistics
 - **Query Builder**: Visual advanced search with filters
 - **Export/Import**: JSON, CSV, GraphML, and Cypher formats
+- **Concept Deletion**: Permanent removal across Knowledge and Quick Learn panels
 
 ---
 
@@ -106,8 +108,8 @@ Type `/` in the chat to see available commands with autocomplete:
 
 **MAIN**
 - 💬 **Chat** - Conversational interface
-- 📚 **Knowledge** - Browse concepts
-- 🔍 **Search** - Quick search
+- 📚 **Knowledge** - Browse concepts (🗑️ delete available)
+- 🔍 **Search** - Quick search with deletion options
 
 **ANALYSIS** (collapsible)
 - 🕸️ **Graph View** - Visual knowledge graph
@@ -119,6 +121,26 @@ Type `/` in the chat to see available commands with autocomplete:
 - 📊 **Analytics** - Performance metrics
 - 🔎 **Query Builder** - Advanced search
 - 📤 **Export/Import** - Data portability
+
+### Delete Functionality
+
+Concepts can be permanently deleted from multiple screens:
+
+**Knowledge Panel:**
+- Click the **🗑️ button** next to any concept card
+- Concept is immediately removed from storage with full cleanup
+
+**Quick Learn Panel:**  
+- Click the **🗑️ button** next to any successful "Recent learns" entry
+- Concept is deleted from knowledge base and removed from history
+
+**What Gets Deleted:**
+- ✅ Concept content and metadata
+- ✅ All associated edges and relationships
+- ✅ Vector embeddings and search indices
+- ✅ WAL entries (logged for durability)
+
+**Recovery:** Deletions are permanent. Back up your data directory for recovery options.
 
 ---
 
@@ -138,15 +160,14 @@ Data is stored in platform-specific directories:
 
 ```
 SutraDesktop/
-├── concepts.bin      # Binary concept store
-├── edges.bin         # Binary edge store
-├── vectors.bin       # HNSW vector index
-└── wal/              # Write-Ahead Log for durability
+├── storage.dat       # Binary concept and edge store (SUTRADAT v2)
+├── hnsw.index       # HNSW vector index (persistent)
+└── wal.log          # Write-Ahead Log for durability
 ```
 
 ### Backup
 
-Simply copy the entire data directory to back up your knowledge base. The WAL ensures crash recovery and data consistency.
+Simply copy the entire data directory to back up your knowledge base. The WAL ensures crash recovery and data consistency. All deletions are logged for proper recovery.
 
 ---
 

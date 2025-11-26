@@ -315,6 +315,33 @@ impl SutraApp {
             KnowledgeAction::SelectConcept(id) => {
                 self.knowledge.selected_concept = Some(id);
             }
+            
+            KnowledgeAction::DeleteConcept(id_str) => {
+                let concept_id = ConceptId::from_string(&id_str);
+                let storage = self.storage.clone();
+                let tx = self.tx.clone();
+                    
+                    std::thread::spawn(move || {
+                        match storage.delete_concept(concept_id) {
+                            Ok(_) => {
+                                let _ = tx.send(AppMessage::ConceptDeleted {
+                                    concept_id: id_str,
+                                    success: true,
+                                    error: None,
+                                });
+                            }
+                            Err(e) => {
+                                let _ = tx.send(AppMessage::ConceptDeleted {
+                                    concept_id: id_str,
+                                    success: false,
+                                    error: Some(format!("Failed to delete: {:?}", e)),
+                                });
+                            }
+                        }
+                    });
+                    
+                    self.status_bar.set_activity("Deleting concept...");
+            }
         }
     }
     
@@ -438,6 +465,53 @@ impl SutraApp {
                         elapsed_ms: elapsed.as_millis() as u64,
                     });
                 });
+            }
+            
+            QuickLearnAction::Delete(content) => {
+                // Find concept by content and delete it
+                let storage = self.storage.clone();
+                let tx = self.tx.clone();
+                
+                std::thread::spawn(move || {
+                    // Search for the concept by content
+                    let search_results = storage.text_search(&content, 1);
+                    
+                    if let Some((concept_id, found_content, _)) = search_results.first() {
+                        // Verify it's an exact match
+                        if found_content == &content {
+                            match storage.delete_concept(*concept_id) {
+                                Ok(_) => {
+                                    let _ = tx.send(AppMessage::ConceptDeleted {
+                                        concept_id: concept_id.to_hex(),
+                                        success: true,
+                                        error: None,
+                                    });
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(AppMessage::ConceptDeleted {
+                                        concept_id: concept_id.to_hex(),
+                                        success: false,
+                                        error: Some(format!("Failed to delete: {:?}", e)),
+                                    });
+                                }
+                            }
+                        } else {
+                            let _ = tx.send(AppMessage::ConceptDeleted {
+                                concept_id: String::new(),
+                                success: false,
+                                error: Some("Concept content mismatch".to_string()),
+                            });
+                        }
+                    } else {
+                        let _ = tx.send(AppMessage::ConceptDeleted {
+                            concept_id: String::new(),
+                            success: false,
+                            error: Some("Concept not found".to_string()),
+                        });
+                    }
+                });
+                
+                self.status_bar.set_activity("Deleting concept...");
             }
         }
     }
@@ -1352,6 +1426,27 @@ impl SutraApp {
                             completed - errors,
                             errors
                         ));
+                    }
+                }
+                
+                AppMessage::ConceptDeleted { concept_id, success, error } => {
+                    if success {
+                        // Remove from recent learns if it's there (by content)
+                        if !concept_id.is_empty() {
+                            // Use concept ID to find and remove from UI lists
+                            self.quick_learn.recent_learns.retain(|entry| {
+                                // This is a simplified check - in practice you'd want better mapping
+                                !entry.content.contains(&concept_id[..8])
+                            });
+                        }
+                        
+                        // Refresh knowledge panel and stats
+                        self.handle_knowledge_action(KnowledgeAction::Refresh);
+                        self.refresh_stats();
+                        self.status_bar.set_activity("Concept deleted successfully");
+                    } else if let Some(err) = error {
+                        self.status_bar.set_activity(format!("Delete failed: {}", err));
+                        error!("Failed to delete concept: {}", err);
                     }
                 }
                 

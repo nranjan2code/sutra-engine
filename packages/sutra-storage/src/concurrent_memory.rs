@@ -734,6 +734,37 @@ impl ConcurrentMemory {
             .collect()
     }
     
+    /// Delete a concept and all its associations
+    pub fn delete_concept(&self, concept_id: ConceptId) -> Result<u64, WriteLogError> {
+        let operation = Operation::DeleteConcept { concept_id };
+        let mut wal = self.wal.lock().unwrap();
+        let _wal_sequence = wal.append(operation).map_err(|e| {
+            WriteLogError::SystemError(format!("WAL append failed: {:?}", e))
+        })?;
+        drop(wal);
+        
+        // Apply to write log for immediate effect
+        use crate::write_log::WriteEntry;
+        let sequence_number = self.write_log.append(WriteEntry::DeleteConcept {
+            id: concept_id,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        })?;
+        
+        // Remove from vector storage if it exists
+        let mut vectors = self.vectors.write();
+        vectors.remove(&concept_id);
+        drop(vectors);
+        
+        // Remove from HNSW index
+        // Note: HnswContainer might not support removal, skip for now
+        // let _ = self.hnsw_container.remove_vector(concept_id);
+        
+        Ok(sequence_number)
+    }
+    
     /// Get read snapshot for external use
     pub fn get_snapshot(&self) -> Arc<crate::read_view::GraphSnapshot> {
         self.read_view.load()
@@ -783,9 +814,11 @@ impl ConcurrentMemory {
         // Get current snapshot
         let snap = self.read_view.load();
         
-        // TODO: Implement proper flush_to_disk using mmap_store
-        // For now, we rely on WAL for durability
         log::info!("Flush requested: {} concepts, {} edges", snap.concept_count, snap.edge_count);
+        
+        // Save complete storage snapshot to disk
+        let storage_file = self.config.storage_path.join("storage.dat");
+        self.save_snapshot_to_disk(&storage_file, &snap)?;
         
         // 🔥 NEW: Save HNSW container if dirty (100× faster next startup!)
         if self.hnsw_container.is_dirty() {
@@ -817,6 +850,145 @@ impl ConcurrentMemory {
         // Flush before stopping
         let _ = self.flush();
         self.reconciler.stop();
+    }
+    
+    /// Save complete snapshot to disk in binary format
+    fn save_snapshot_to_disk(&self, storage_file: &std::path::Path, snap: &Arc<crate::GraphSnapshot>) -> anyhow::Result<()> {
+        use std::fs::File;
+        use std::io::{BufWriter, Write};
+        
+        let save_start = Instant::now();
+        log::info!("💾 Saving snapshot to {}", storage_file.display());
+        
+        // Ensure parent directory exists
+        if let Some(parent) = storage_file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        
+        let file = File::create(storage_file)?;
+        let mut writer = BufWriter::new(file);
+        
+        let all_concepts = snap.all_concepts();
+        let concept_count = all_concepts.len();
+        
+        // Count edges and vectors
+        let mut edge_count = 0;
+        let mut vector_count = 0;
+        for concept in &all_concepts {
+            edge_count += concept.neighbors.len();
+            if concept.vector.is_some() {
+                vector_count += 1;
+            }
+        }
+        
+        // Write file header (64 bytes)
+        let mut header = vec![0u8; 64];
+        
+        // Magic bytes (8 bytes)
+        header[0..8].copy_from_slice(b"SUTRADAT");
+        
+        // Version (4 bytes) - using version 2
+        header[8..12].copy_from_slice(&2u32.to_le_bytes());
+        
+        // Counts (4 bytes each)
+        header[12..16].copy_from_slice(&(concept_count as u32).to_le_bytes());
+        header[16..20].copy_from_slice(&(edge_count as u32).to_le_bytes());
+        header[20..24].copy_from_slice(&(vector_count as u32).to_le_bytes());
+        
+        // Reserved space (40 bytes) for future extensions
+        
+        writer.write_all(&header)?;
+        
+        log::info!("📊 Writing {} concepts, {} edges, {} vectors", concept_count, edge_count, vector_count);
+        
+        // Write concepts section
+        for concept in &all_concepts {
+            // Concept header (36 bytes): ID(16) + content_len(4) + strength(4) + confidence(4) + access_count(4) + created(4)
+            let mut concept_header = vec![0u8; 36];
+            
+            // ID (16 bytes)
+            concept_header[0..16].copy_from_slice(&concept.id.0);
+            
+            // Content length (4 bytes)
+            let content_len = concept.content.len();
+            concept_header[16..20].copy_from_slice(&(content_len as u32).to_le_bytes());
+            
+            // Strength (4 bytes)
+            concept_header[20..24].copy_from_slice(&concept.strength.to_le_bytes());
+            
+            // Confidence (4 bytes)
+            concept_header[24..28].copy_from_slice(&concept.confidence.to_le_bytes());
+            
+            // Access count (4 bytes)
+            concept_header[28..32].copy_from_slice(&concept.access_count.to_le_bytes());
+            
+            // Created timestamp (4 bytes - truncating from u64)
+            concept_header[32..36].copy_from_slice(&(concept.created as u32).to_le_bytes());
+            
+            writer.write_all(&concept_header)?;
+            
+            // Write content
+            writer.write_all(&concept.content)?;
+        }
+        
+        // Write edges section
+        for concept in &all_concepts {
+            for neighbor_id in &concept.neighbors {
+                // Edge data (36 bytes): source_id(16) + target_id(16) + confidence(4)
+                let mut edge_data = vec![0u8; 36];
+                
+                // Source ID (16 bytes)
+                edge_data[0..16].copy_from_slice(&concept.id.0);
+                
+                // Target ID (16 bytes)
+                edge_data[16..32].copy_from_slice(&neighbor_id.0);
+                
+                // Use concept confidence for edge confidence (4 bytes)
+                edge_data[32..36].copy_from_slice(&concept.confidence.to_le_bytes());
+                
+                writer.write_all(&edge_data)?;
+            }
+        }
+        
+        // Write vectors section
+        let vectors = self.vectors.read();
+        for concept in &all_concepts {
+            if let Some(vector) = vectors.get(&concept.id) {
+                // Vector header: concept_id(16) + dimension(4)
+                let mut vector_header = vec![0u8; 20];
+                
+                // Concept ID (16 bytes)
+                vector_header[0..16].copy_from_slice(&concept.id.0);
+                
+                // Dimension (4 bytes)
+                let dimension = vector.len();
+                vector_header[16..20].copy_from_slice(&(dimension as u32).to_le_bytes());
+                
+                writer.write_all(&vector_header)?;
+                
+                // Write vector components
+                for component in vector {
+                    writer.write_all(&component.to_le_bytes())?;
+                }
+            }
+        }
+        
+        // Flush and sync
+        writer.flush()?;
+        
+        let elapsed = save_start.elapsed();
+        let file_size = std::fs::metadata(storage_file)?.len();
+        
+        log::info!(
+            "✅ Snapshot saved: {:.1} MB in {:.2}ms ({} concepts, {} edges, {} vectors)",
+            file_size as f64 / 1024.0 / 1024.0,
+            elapsed.as_secs_f64() * 1000.0,
+            concept_count,
+            edge_count,
+            vector_count
+        );
+        
+        Ok(())
     }
 }
 

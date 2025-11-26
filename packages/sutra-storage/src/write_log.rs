@@ -47,6 +47,12 @@ pub enum WriteEntry {
         timestamp: u64,
     },
     
+    /// Delete a concept
+    DeleteConcept {
+        id: ConceptId,
+        timestamp: u64,
+    },
+    
     /// Batch marker (for checkpointing)
     BatchMarker {
         sequence: u64,
@@ -214,12 +220,14 @@ pub struct WriteLogStats {
 }
 
 /// Write log errors
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WriteLogError {
     /// Log is full (backpressure)
     Full,
     /// Channel disconnected
     Disconnected,
+    /// System error (e.g., WAL failure)
+    SystemError(String),
 }
 
 impl std::fmt::Display for WriteLogError {
@@ -227,6 +235,7 @@ impl std::fmt::Display for WriteLogError {
         match self {
             Self::Full => write!(f, "Write log full (backpressure)"),
             Self::Disconnected => write!(f, "Write log disconnected"),
+            Self::SystemError(msg) => write!(f, "System error: {}", msg),
         }
     }
 }

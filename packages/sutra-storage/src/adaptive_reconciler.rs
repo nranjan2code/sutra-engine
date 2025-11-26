@@ -616,6 +616,25 @@ fn apply_entry(snapshot: &mut GraphSnapshot, entry: &WriteEntry) {
             }
         }
         
+        WriteEntry::DeleteConcept { id, timestamp: _ } => {
+            // Remove concept and all its edges
+            if snapshot.concepts.contains_key(id) {
+                snapshot.concepts.remove(id);
+                
+                // Remove all edges pointing to this concept from other concepts
+                // Since im::HashMap is immutable-friendly, we need to clone and update
+                let mut updated_concepts = im::HashMap::new();
+                for (other_id, mut other_node) in snapshot.concepts.iter() {
+                    if other_id != id {
+                        let mut node_clone = other_node.clone();
+                        node_clone.neighbors.retain(|neighbor| neighbor != id);
+                        updated_concepts.insert(*other_id, node_clone);
+                    }
+                }
+                snapshot.concepts = updated_concepts;
+            }
+        }
+        
         WriteEntry::BatchMarker { .. } => {
             // Marker only, no action
         }
