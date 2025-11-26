@@ -332,6 +332,30 @@ target/
 *.pdb
 
 # =============================================================================
+# Desktop Edition (Sutra Desktop)
+# =============================================================================
+
+# macOS app bundle build output
+desktop/target/
+target/release/bundle/
+
+# Desktop app data directory (user data, not committed)
+# The actual data is at ~/Library/Application Support/ai.sutra.SutraDesktop/
+# but during development, local data dirs may be created
+desktop/data/
+desktop/*.db
+desktop/*.wal
+
+# Desktop build artifacts
+*.app/
+*.dmg
+Sutra*.app/
+
+# Icon conversion artifacts
+desktop/assets/*.iconset/
+desktop/assets/*.icns
+
+# =============================================================================
 # Machine Learning and AI
 # =============================================================================
 

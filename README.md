@@ -14,15 +14,54 @@
 
 Explainable reasoning over your private domain knowledge—without frontier LLMs. Built for regulated industries requiring complete audit trails and 1000× lower costs than ChatGPT.
 
+**🔥 NEW: Desktop Edition** - Pure Rust native macOS application. No Docker, no servers—just a single app. `cargo run -p sutra-desktop`
+
 **🔥 Phase 2 Complete:** External ML service integration validated with **520 req/sec peak throughput**, **5-9ms latency**, and **100% E2E test success rate**.
 
 > **Note:** This deployment uses `sutra-works-` prefix for all Docker containers and images to avoid conflicts with other Sutra deployments. All services are isolated behind an nginx reverse proxy for production-grade security. See `docs/deployment/NAMING_CONVENTIONS.md` and `docs/deployment/NETWORK_SECURITY.md` for details.
 
 ---
 
-## 🎉 What's New (2025-11-21)
+## 🖥️ Desktop Edition (NEW - November 2025)
 
-**🔥 Phase 2 Complete - External ML Service Integration & E2E Validation (v3.3.0)**
+**Self-contained native macOS application - No Docker required!**
+
+```bash
+# Build and run
+cargo build -p sutra-desktop --release
+cargo run -p sutra-desktop
+```
+
+- 🚀 **Native Performance**: Pure Rust from storage to UI (egui/eframe)
+- 🔒 **Complete Privacy**: All data stays on your machine
+- 📦 **Self-Contained**: Single ~20MB binary
+- 🧠 **Full Storage Engine**: Same `sutra-storage` crate as server edition
+
+[**Desktop Documentation →**](docs/desktop/README.md) | [**Architecture →**](docs/desktop/ARCHITECTURE.md)
+
+---
+
+## 🎉 What's New (2025-11-26)
+
+**�️ Desktop Edition Released (v1.0.0)**
+
+- ✅ **Pure Rust Application** - Native macOS app using egui/eframe
+- ✅ **No Docker Required** - Self-contained single binary
+- ✅ **Reuses Storage Engine** - Same `sutra-storage` crate (no code duplication)
+- ✅ **Premium Dark UI** - Modern design with animations
+- ✅ **Local Persistence** - WAL-backed storage in ~/Library/Application Support/
+- ✅ **Full Features** - Chat, Knowledge Browser, Search, Settings
+
+**Desktop Architecture:**
+```
+UI (egui) → App Controller → sutra-storage (Rust crate)
+```
+
+See documentation: `docs/desktop/README.md`
+
+---
+
+**�🔥 Phase 2 Complete - External ML Service Integration & E2E Validation (v3.3.0)**
 
 - ✅ **58× Throughput Improvement** - 9 r/s → 520 r/s peak async throughput
 - ✅ **11-20× Faster Latency** - 100-200ms → 5-9ms average response time

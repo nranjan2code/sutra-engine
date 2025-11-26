@@ -1,18 +1,23 @@
 # Sutra AI - AI Assistant Instructions
-**Updated: November 19, 2025 - Phase 1 Production Foundation Complete**
+**Updated: November 26, 2025 - Desktop Edition Released**
 
 **General-Purpose Semantic Reasoning Engine with Temporal, Causal, and Explainable AI**
 
 ## Project Architecture
 
-Sutra AI is a **15-service distributed system** currently deployed in production with complete internal architecture validation. Unlike general LLMs, it starts empty and learns from YOUR proprietary data with complete audit trails. Sutra combines semantic understanding, temporal reasoning, causal analysis, and explainability for ANY knowledge-intensive industry.
+Sutra AI is available in **two deployment modes**:
 
-**CURRENT STATUS (November 19, 2025):**
+1. **Server Edition**: 15-service distributed system for production deployments
+2. **Desktop Edition**: Pure Rust native application for personal/offline use (NEW!)
+
+Unlike general LLMs, Sutra starts empty and learns from YOUR proprietary data with complete audit trails. Sutra combines semantic understanding, temporal reasoning, causal analysis, and explainability for ANY knowledge-intensive industry.
+
+**CURRENT STATUS (November 26, 2025):**
 - ✅ **Phase 1 COMPLETE:** Production Foundation Deployment
+- ✅ **Desktop Edition:** Pure Rust native app released (v1.0.0)
 - ✅ **Deployment Status:** 15 containers running, 23 Docker images built
 - ✅ **Service Health:** All 5 core services validated (API, Hybrid, ML-Base, Embedding, NLG)
 - ✅ **System Architecture:** Production-grade multi-service mesh operational
-- ✅ **Performance Baseline:** Internal connectivity validated, health monitoring active
 - 🚀 **Ready for Phase 2:** ML Service Optimization with external advanced services
 
 **Key Capabilities:**
@@ -24,6 +29,44 @@ Sutra AI is a **15-service distributed system** currently deployed in production
 - ✅ **Real-Time Learning** (<10ms concept ingestion, no retraining)
 
 **Market Applications:** DevOps observability ($20B), enterprise knowledge management ($30B), content platforms ($50B), supply chain ($15B), customer support ($12B), scientific research ($5B), and any domain requiring explainable decisions.
+
+## Desktop Edition (NEW - November 2025)
+
+**Pure Rust native application - No Docker, no servers, no external dependencies.**
+
+### Quick Start
+```bash
+# Build and run
+cargo build -p sutra-desktop --release
+cargo run -p sutra-desktop
+
+# Create macOS app bundle
+cd desktop && ./scripts/build-macos.sh
+```
+
+### Architecture
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Sutra Desktop App                         │
+├─────────────────────────────────────────────────────────────┤
+│  UI Layer (egui/eframe)  →  App Controller  →  sutra-storage │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+- 🚀 **Native Performance**: Pure Rust from storage to UI
+- 🔒 **Complete Privacy**: All data stays on your machine
+- 📦 **Self-Contained**: Single binary, ~20MB
+- 🎨 **Modern UI**: Premium dark theme with animations
+- 🧠 **Full Storage Engine**: Reuses `sutra-storage` crate (no code duplication)
+
+**Data Location:** `~/Library/Application Support/ai.sutra.SutraDesktop/`
+
+**Documentation:**
+- `docs/desktop/README.md` - Overview and usage
+- `docs/desktop/ARCHITECTURE.md` - Internal design
+- `docs/desktop/BUILDING.md` - Build instructions
+- `docs/desktop/UI_COMPONENTS.md` - UI component reference
 
 ### Core Components
 
@@ -45,9 +88,26 @@ Sutra AI is a **15-service distributed system** currently deployed in production
 - `sutra-embedding-service` - HA embedding cluster (3 replicas + HAProxy) on :8888
 - `sutra-bulk-ingester` (Rust) - High-throughput data ingestion on :8005
 
+**Desktop Application (Rust):**
+- `sutra-desktop` - Native GUI using egui/eframe
+- Directly uses `sutra-storage` crate (no duplication)
+- Self-contained with local file persistence
+
 ## Essential Workflows
 
-### Build System (2025-11-03)
+### Desktop Edition (NEW)
+```bash
+# Development build and run
+cargo run -p sutra-desktop
+
+# Release build
+cargo build -p sutra-desktop --release
+
+# Create macOS app bundle
+cd desktop && ./scripts/build-macos.sh
+```
+
+### Build System (Server Edition)
 ```bash
 # Build all services (single :latest tag strategy)
 SUTRA_EDITION=simple sutra build                        # 8 services (4.4GB)
@@ -90,14 +150,13 @@ docker ps | grep sutra-works           # 15 containers running ✅
 - ✅ Validated core service functionality and health monitoring
 - ✅ Established foundation for Phase 2 ML optimization
 
-### Release Management (2025-11-19)
+### Release Management (2025-11-26)
 ```bash
-sutra version                      # Show current version (3.0.1)
-# Current status: Phase 1 complete, ready for v3.2.0 release
-echo "3.2.0" > VERSION            # Next version for Phase 1 completion
+sutra version                      # Show current version (3.3.0)
+echo "3.3.0" > VERSION            # Current version
 git add VERSION
-git commit -m "Release v3.2.0: Phase 1 Production Foundation Complete"
-git tag -a v3.2.0 -m "Release version 3.2.0 - Production deployment validated"
+git commit -m "Release v3.3.0: Desktop Edition"
+git tag -a v3.3.0 -m "Release version 3.3.0 - Desktop Edition released"
 git push origin main --tags        # Trigger automated builds
 ```
 
@@ -264,11 +323,22 @@ ShardSplit, ShardMerge
 
 - **Unified CLI:** `./sutra` (Python CLI, single entry point for all operations)
 - **Build script:** `./sutra-optimize.sh` (backend build orchestration, called by ./sutra)
-- **Version control:** `VERSION` (single source of truth, currently 3.0.1)
+- **Version control:** `VERSION` (single source of truth, currently 3.3.0)
 - **Compose file:** `.sutra/compose/production.yml` (unified, profile-based)
 - **Storage engine:** `packages/sutra-storage/src/` (14K+ LOC Rust)
 - **Reasoning core:** `packages/sutra-core/sutra_core/` (42 Python modules)
 - **Storage adapter:** `packages/sutra-core/sutra_core/storage/tcp_adapter.py` (ONLY adapter - TCP binary protocol)
+
+**Desktop Edition:**
+- **Desktop app:** `desktop/src/` (Pure Rust GUI application)
+- **Desktop main:** `desktop/src/main.rs` (entry point, window setup)
+- **Desktop app:** `desktop/src/app.rs` (controller, uses sutra-storage)
+- **Desktop UI:** `desktop/src/ui/` (sidebar, chat, knowledge, settings, status_bar)
+- **Desktop theme:** `desktop/src/theme.rs` (color palette, styling)
+- **Desktop build:** `desktop/scripts/build-macos.sh` (macOS app bundle)
+- **Desktop docs:** `docs/desktop/` (README, ARCHITECTURE, BUILDING, UI_COMPONENTS)
+
+**Documentation:**
 - **Architecture docs:** `.github/copilot-instructions.md` (AI assistant guidance - updated November 2025)
 - **Documentation hub:** `docs/README.md` (navigation, user journeys)
 - **Build docs:** `docs/build/README.md` (build system guide)

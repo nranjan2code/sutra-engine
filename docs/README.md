@@ -2,7 +2,28 @@
 
 **Production-Ready Domain-Specific Reasoning Engine**
 
-**Version:** 3.0.1 | **Grade:** A+ (98/100) | **Status:** Production-Ready
+**Version:** 3.3.0 | **Grade:** A+ (98/100) | **Status:** Production-Ready
+
+---
+
+## 🖥️ NEW: Desktop Edition (November 26, 2025)
+
+**Pure Rust Desktop Application - No Docker Required!**
+
+A self-contained native macOS application that packages the complete Sutra semantic reasoning engine. Perfect for personal use, offline development, and edge deployments.
+
+- 🚀 **Native Performance**: Pure Rust from storage to UI (egui/eframe)
+- 🔒 **Complete Privacy**: All data stays on your machine
+- 📦 **Self-Contained**: Single app bundle, no dependencies
+- 🧠 **Full Reasoning Engine**: Same storage engine as server edition
+
+```bash
+# Build and run
+cargo build -p sutra-desktop --release
+cargo run -p sutra-desktop
+```
+
+[**Desktop Documentation →**](desktop/README.md) | [**Architecture →**](desktop/ARCHITECTURE.md) | [**Building →**](desktop/BUILDING.md)
 
 ---
 
@@ -74,6 +95,7 @@
 
 ```
 docs/
+├── desktop/              # 🆕 Desktop Edition (pure Rust native app)
 ├── getting-started/      # User onboarding (quickstart, tutorials)
 ├── build/                # Building services & Docker images
 ├── deployment/           # Deployment guides (simple, community, enterprise)
@@ -203,6 +225,13 @@ Unlike general LLMs, Sutra:
 
 ## 🏢 Editions
 
+### 🆕 Desktop Edition (1 binary)
+- **Pure Rust** native application
+- Single executable, no Docker
+- Local file storage
+- **Size**: ~20MB binary
+- **Use**: Personal, offline, edge
+
 ### Simple Edition (8 services)
 - Single-node deployment
 - All core functionality
@@ -223,7 +252,7 @@ Unlike general LLMs, Sutra:
 - **Size**: 4.76GB
 - **Use**: High-scale, multi-tenant
 
-→ [Editions Comparison](getting-started/editions.md) | [Pricing](PRICING.md)
+→ [Desktop Edition](desktop/README.md) | [Editions Comparison](getting-started/editions.md) | [Pricing](PRICING.md)
 
 ## 🛠️ System Requirements
 

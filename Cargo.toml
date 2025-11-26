@@ -6,7 +6,8 @@ members = [
     "packages/sutra-grid-master",
     "packages/sutra-grid-agent",
     "packages/sutra-grid-events",
-    "packages/sutra-bulk-ingester"
+    "packages/sutra-bulk-ingester",
+    "desktop"
 ]
 
 # Shared dependencies for consistency across workspace
