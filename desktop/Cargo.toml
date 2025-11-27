@@ -65,6 +65,12 @@ webbrowser = "1.0"         # Open URLs in default browser
 cocoa = "0.26"
 objc = "0.2"
 
+# ============================================================================
+# AI / ML (Local)
+# ============================================================================
+fastembed = "4.4"          # Local embedding generation (ONNX)
+async-trait = "0.1"        # Async traits for embedding provider
+
 [[bin]]
 name = "sutra-desktop"
 path = "src/main.rs"

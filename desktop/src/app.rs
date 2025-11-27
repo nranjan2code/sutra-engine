@@ -31,7 +31,10 @@ use sutra_storage::{
     semantic::SemanticType,
     ParallelPathFinder,
     PathResult,
+    learning_pipeline::{LearningPipeline, LearnOptions},
 };
+
+use crate::local_embedding::LocalEmbeddingProvider;
 
 // Core UI imports
 use crate::ui::{
@@ -65,6 +68,7 @@ pub struct SutraApp {
     // This is THE SAME storage engine used by Docker deployments
     // ========================================================================
     storage: Arc<ConcurrentMemory>,
+    pipeline: Arc<LearningPipeline>, // 🔥 NEW: Unified learning pipeline
     data_dir: PathBuf,
     
     // Async communication
@@ -134,11 +138,33 @@ impl SutraApp {
         let mut status_bar = StatusBar::default();
         status_bar.set_status(ConnectionStatus::Connected);
         status_bar.set_concept_count(stats.snapshot.concept_count);
+        // Initialize local AI pipeline
+        info!("Initializing local AI pipeline...");
+        let pipeline = match LocalEmbeddingProvider::new() {
+            Ok(provider) => {
+                let provider = Arc::new(provider);
+                // We need to block here because LearningPipeline::new_with_provider is async
+                // but we are in a sync context. Since we're initializing, it's okay to block.
+                let pipeline = tokio::runtime::Runtime::new()
+                    .unwrap()
+                    .block_on(LearningPipeline::new_with_provider(provider))
+                    .expect("Failed to initialize learning pipeline");
+                info!("✅ Local AI pipeline initialized successfully");
+                Arc::new(pipeline)
+            }
+            Err(e) => {
+                error!("❌ Failed to initialize local AI: {}", e);
+                // Fallback to dummy pipeline or handle error gracefully
+                // For now, we panic because AI is core to the "world class" experience
+                panic!("Failed to initialize local AI: {}", e);
+            }
+        };
         
         let (tx, rx) = mpsc::channel();
         
         Self {
             storage: Arc::new(storage),
+            pipeline,
             data_dir,
             tx,
             rx,
@@ -148,7 +174,8 @@ impl SutraApp {
             quick_learn: QuickLearnPanel::default(),
             settings,
             status_bar,
-            // Enhanced panels
+            
+            // Enhanced UI
             graph_view: GraphView::default(),
             reasoning_paths: ReasoningPathsPanel::default(),
             temporal_view: TemporalView::default(),
@@ -156,12 +183,10 @@ impl SutraApp {
             analytics: AnalyticsDashboard::default(),
             query_builder: QueryBuilder::default(),
             export_import: ExportImportPanel::default(),
+            
             initialized: false,
         }
     }
-    
-    // ========================================================================
-    // Chat Actions
     // ========================================================================
     
     fn handle_chat_action(&mut self, action: ChatAction) {
@@ -169,22 +194,21 @@ impl SutraApp {
             ChatAction::Learn(content) => {
                 self.chat.is_processing = true;
                 let storage = self.storage.clone();
+                let pipeline = self.pipeline.clone();
                 let tx = self.tx.clone();
                 let content_clone = content.clone();
                 
                 std::thread::spawn(move || {
                     let start = Instant::now();
-                    let hash = md5::compute(content_clone.as_bytes());
-                    let concept_id = ConceptId::from_bytes(hash.0);
                     
-                    match storage.learn_concept(
-                        concept_id,
-                        content_clone.as_bytes().to_vec(),
-                        None,
-                        1.0,
-                        1.0,
-                    ) {
-                        Ok(_) => {
+                    // Use unified pipeline
+                    let options = LearnOptions::default();
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    let result = rt.block_on(pipeline.learn_concept(&storage, &content_clone, &options));
+                    
+                    match result {
+                        Ok(id_str) => {
+                            let concept_id = ConceptId::from_string(&id_str);
                             let elapsed_ms = start.elapsed().as_millis() as u64;
                             let _ = tx.send(AppMessage::LearnResult {
                                 content: content_clone,
@@ -198,7 +222,7 @@ impl SutraApp {
                             let _ = tx.send(AppMessage::LearnResult {
                                 content: content_clone,
                                 concept_id: None,
-                                error: Some(format!("{:?}", e)),
+                                error: Some(e.to_string()),
                                 duration_ms: elapsed_ms,
                             });
                         }
@@ -321,58 +345,44 @@ impl SutraApp {
                 let storage = self.storage.clone();
                 let tx = self.tx.clone();
                     
-                    std::thread::spawn(move || {
-                        match storage.delete_concept(concept_id) {
-                            Ok(_) => {
-                                let _ = tx.send(AppMessage::ConceptDeleted {
-                                    concept_id: id_str,
-                                    success: true,
-                                    error: None,
-                                });
-                            }
-                            Err(e) => {
-                                let _ = tx.send(AppMessage::ConceptDeleted {
-                                    concept_id: id_str,
-                                    success: false,
-                                    error: Some(format!("Failed to delete: {:?}", e)),
-                                });
-                            }
+                std::thread::spawn(move || {
+                    match storage.delete_concept(concept_id) {
+                        Ok(_) => {
+                            let _ = tx.send(AppMessage::ConceptDeleted {
+                                concept_id: id_str,
+                                success: true,
+                                error: None,
+                            });
                         }
-                    });
-                    
-                    self.status_bar.set_activity("Deleting concept...");
+                        Err(e) => {
+                            let _ = tx.send(AppMessage::ConceptDeleted {
+                                concept_id: id_str,
+                                success: false,
+                                error: Some(format!("{:?}", e)),
+                            });
+                        }
+                    }
+                });
             }
         }
     }
     
-    // ========================================================================
-    // Quick Learn Actions
-    // ========================================================================
-    
     fn handle_quick_learn_action(&mut self, action: QuickLearnAction) {
         match action {
             QuickLearnAction::Learn(content) => {
-                use crate::ui::quick_learn::LearnStatus;
-                
                 self.quick_learn.is_processing = true;
-                self.quick_learn.add_learn_entry(content.clone(), LearnStatus::Processing);
-                
                 let storage = self.storage.clone();
+                let pipeline = self.pipeline.clone();
                 let tx = self.tx.clone();
                 let content_clone = content.clone();
                 
                 std::thread::spawn(move || {
                     let start = Instant::now();
-                    let hash = md5::compute(content_clone.as_bytes());
-                    let concept_id = ConceptId::from_bytes(hash.0);
                     
-                    let result = storage.learn_concept(
-                        concept_id,
-                        content_clone.as_bytes().to_vec(),
-                        None, // No vector provided
-                        1.0,  // Default strength
-                        0.8,  // Default confidence
-                    );
+                    // Use unified pipeline
+                    let options = LearnOptions::default();
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    let result = rt.block_on(pipeline.learn_concept(&storage, &content_clone, &options));
                     
                     let elapsed = start.elapsed();
                     let message = match result {
@@ -415,31 +425,28 @@ impl SutraApp {
                 }
                 
                 let storage = self.storage.clone();
+                let pipeline = self.pipeline.clone();
                 let tx = self.tx.clone();
                 
                 std::thread::spawn(move || {
                     let start = Instant::now();
+                    
+                    // Use unified pipeline batch learning
+                    let options = LearnOptions::default();
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    
                     let mut successes = 0;
                     let mut failures = Vec::new();
                     
                     for content in lines {
-                        let hash = md5::compute(content.as_bytes());
-                        let concept_id = ConceptId::from_bytes(hash.0);
-                        
-                        match storage.learn_concept(
-                            concept_id,
-                            content.as_bytes().to_vec(),
-                            None, // No vector provided
-                            1.0,  // Default strength
-                            0.8,  // Default confidence
-                        ) {
+                        match rt.block_on(pipeline.learn_concept(&storage, &content, &options)) {
                             Ok(_) => {
                                 successes += 1;
                                 let _ = tx.send(AppMessage::QuickLearnCompleted { 
                                     content: content.clone(),
                                     success: true,
                                     error: None,
-                                    elapsed_ms: 0, // Individual timing not tracked in batch
+                                    elapsed_ms: 0,
                                 });
                             }
                             Err(e) => {
@@ -1118,6 +1125,7 @@ impl SutraApp {
                 };
                 
                 let storage = self.storage.clone();
+                let pipeline = self.pipeline.clone();
                 let tx = self.tx.clone();
                 
                 self.export_import.batch_progress.is_running = true;
@@ -1140,6 +1148,9 @@ impl SutraApp {
                             let mut errors = 0;
                             let mut last_update = Instant::now();
                             
+                            let options = LearnOptions::default();
+                            let rt = tokio::runtime::Runtime::new().unwrap();
+                            
                             for (i, line) in lines.iter().skip(1).enumerate() {
                                 let parts: Vec<&str> = line.split(',').collect();
                                 if let Some(content) = parts.first() {
@@ -1149,16 +1160,11 @@ impl SutraApp {
                                             .and_then(|s| s.trim().parse().ok())
                                             .unwrap_or(1.0);
                                         
-                                        let hash = md5::compute(content.as_bytes());
-                                        let concept_id = ConceptId::from_bytes(hash.0);
+                                        // Use unified pipeline
+                                        let mut item_options = options.clone();
+                                        item_options.confidence = confidence;
                                         
-                                        if storage.learn_concept(
-                                            concept_id,
-                                            content.as_bytes().to_vec(),
-                                            None,
-                                            1.0,
-                                            confidence,
-                                        ).is_err() {
+                                        if rt.block_on(pipeline.learn_concept(&storage, content, &item_options)).is_err() {
                                             errors += 1;
                                         }
                                     }
@@ -1253,6 +1259,11 @@ impl SutraApp {
                 
                 let new_storage = ConcurrentMemory::new(config);
                 self.storage = Arc::new(new_storage);
+                
+                // Reinitialize pipeline (it holds references to storage components internally via extractor)
+                // Actually pipeline is stateless regarding storage instance, but let's be safe
+                // The pipeline holds the embedding provider which is expensive to reload
+                // We can reuse the existing pipeline instance as it doesn't hold storage reference
                 
                 // Reset UI state
                 self.knowledge.concepts.clear();
@@ -1591,18 +1602,20 @@ impl SutraApp {
         self.settings.update_stats(convert_to_ui_stats(&stats));
         self.analytics.update(&self.storage);
     }
-    
-    /// Import data from JSON format
+
     fn import_json_data(&self, content: &str) -> Result<(usize, usize), String> {
-        let data: serde_json::Value = serde_json::from_str(content)
+        let json: serde_json::Value = serde_json::from_str(content)
             .map_err(|e| format!("Invalid JSON: {}", e))?;
-        
-        let concepts = data.get("concepts")
+            
+        let concepts = json.get("concepts")
             .and_then(|c| c.as_array())
             .ok_or("Missing 'concepts' array in JSON")?;
         
         let mut imported_concepts = 0;
         let mut imported_edges = 0;
+        
+        let options = LearnOptions::default();
+        let rt = tokio::runtime::Runtime::new().unwrap();
         
         for concept in concepts {
             let content = concept.get("content")
@@ -1617,18 +1630,12 @@ impl SutraApp {
                 .and_then(|s| s.as_f64())
                 .unwrap_or(1.0) as f32;
             
-            // Generate concept ID from content hash
-            let hash = md5::compute(content.as_bytes());
-            let concept_id = ConceptId::from_bytes(hash.0);
+            // Use unified pipeline
+            let mut item_options = options.clone();
+            item_options.confidence = confidence;
+            item_options.strength = strength;
             
-            // Learn the concept
-            if self.storage.learn_concept(
-                concept_id,
-                content.as_bytes().to_vec(),
-                None,
-                strength,
-                confidence,
-            ).is_ok() {
+            if rt.block_on(self.pipeline.learn_concept(&self.storage, content, &item_options)).is_ok() {
                 imported_concepts += 1;
             }
             

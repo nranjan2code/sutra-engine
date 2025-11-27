@@ -15,15 +15,16 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::embedding_client::EmbeddingClient;
+use crate::embedding_provider::EmbeddingProvider;
 use crate::types::AssociationType;
 
 /// Semantic association extractor using embeddings
 pub struct SemanticExtractor {
-    /// Embedding client (HA service)
-    embedding_client: EmbeddingClient,
+    /// Embedding client (HA service or local provider)
+    embedding_client: Arc<dyn EmbeddingProvider>,
     
     /// Pre-computed embeddings for relation types
     relation_embeddings: HashMap<AssociationType, Vec<f32>>,
@@ -53,8 +54,8 @@ impl SemanticExtractor {
     ///
     /// This is async because it needs to generate embeddings for relation types.
     /// Call this once during initialization and reuse the instance.
-    pub async fn new(embedding_client: EmbeddingClient) -> Result<Self> {
-        info!("Initializing SemanticExtractor with HA embedding service (lazy relation embeddings)");
+    pub async fn new(embedding_client: Arc<dyn EmbeddingProvider>) -> Result<Self> {
+        info!("Initializing SemanticExtractor with embedding provider (lazy relation embeddings)");
         
         // Define relation type descriptions for embedding (but don't generate embeddings yet)
         let relation_descriptions = vec![
@@ -382,7 +383,8 @@ mod tests {
     
     #[test]
     fn test_split_sentences() {
-        let client = EmbeddingClient::with_defaults().unwrap();
+        use crate::embedding_client::HttpEmbeddingClient;
+        let client = Arc::new(HttpEmbeddingClient::with_defaults().unwrap());
         let extractor = SemanticExtractor {
             embedding_client: client,
             relation_embeddings: HashMap::new(),
@@ -401,7 +403,8 @@ mod tests {
     
     #[test]
     fn test_extract_entities() {
-        let client = EmbeddingClient::with_defaults().unwrap();
+        use crate::embedding_client::HttpEmbeddingClient;
+        let client = Arc::new(HttpEmbeddingClient::with_defaults().unwrap());
         let extractor = SemanticExtractor {
             embedding_client: client,
             relation_embeddings: HashMap::new(),
@@ -426,7 +429,8 @@ mod tests {
             return;
         }
         
-        let client = EmbeddingClient::with_defaults().unwrap();
+        use crate::embedding_client::HttpEmbeddingClient;
+        let client = Arc::new(HttpEmbeddingClient::with_defaults().unwrap());
         let extractor = SemanticExtractor::new(client).await.unwrap();
         
         let text = "Paris is the capital of France. The Eiffel Tower is located in Paris.";

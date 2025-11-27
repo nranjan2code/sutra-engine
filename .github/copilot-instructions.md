@@ -1,5 +1,5 @@
 # Sutra AI - AI Assistant Instructions
-**Updated: November 26, 2025 - Desktop Edition Released**
+**Updated: November 27, 2025 - Desktop Edition Released (Local AI Integrated)**
 
 **General-Purpose Semantic Reasoning Engine with Temporal, Causal, and Explainable AI**
 
@@ -12,13 +12,13 @@ Sutra AI is available in **two deployment modes**:
 
 Unlike general LLMs, Sutra starts empty and learns from YOUR proprietary data with complete audit trails. Sutra combines semantic understanding, temporal reasoning, causal analysis, and explainability for ANY knowledge-intensive industry.
 
-**CURRENT STATUS (November 26, 2025):**
+**CURRENT STATUS (November 27, 2025):**
 - ✅ **Phase 1 COMPLETE:** Production Foundation Deployment
-- ✅ **Desktop Edition:** Pure Rust native app released (v1.0.0)
+- ✅ **Desktop Edition:** Pure Rust native app released (v3.3.0) with **Local AI**
 - ✅ **Deployment Status:** 15 containers running, 23 Docker images built
 - ✅ **Service Health:** All 5 core services validated (API, Hybrid, ML-Base, Embedding, NLG)
 - ✅ **System Architecture:** Production-grade multi-service mesh operational
-- 🚀 **Ready for Phase 2:** ML Service Optimization with external advanced services
+- 🚀 **Phase 2 In Progress:** ML Service Optimization & Local AI Integration
 
 **Key Capabilities:**
 - ✅ **Temporal Reasoning** (before/after/during relationships)
@@ -49,19 +49,21 @@ cd desktop && ./scripts/build-macos.sh
 ┌─────────────────────────────────────────────────────────────┐
 │                    Sutra Desktop App                         │
 ├─────────────────────────────────────────────────────────────┤
-│  UI Layer (egui/eframe)  →  App Controller  →  sutra-storage │
+│  UI Layer (egui)  →  App Controller  →  sutra-storage        │
+│                                              ↓               │
+│                                      Local AI (fastembed)    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **Key Features:**
 - 🚀 **Native Performance**: Pure Rust from storage to UI
+- 🧠 **Local AI**: Built-in ONNX embedding models (fastembed)
 - 🔒 **Complete Privacy**: All data stays on your machine
 - 📦 **Self-Contained**: Single binary, ~20MB
 - 🎨 **Modern UI**: Premium dark theme with animations
-- 🧠 **Full Storage Engine**: Reuses `sutra-storage` crate (no code duplication)
+- 💾 **Full Storage Engine**: Reuses `sutra-storage` crate (no code duplication)
 - 💬 **Slash Commands**: Modern `/learn`, `/search`, `/help`, `/stats` interface with autocomplete
 - 🔍 **Keyword Search**: Intelligent text search with stop word filtering (shared with enterprise)
-- ⌨️ **Autocomplete**: Type `/` for intelligent command suggestions with keyboard navigation
 
 **Slash Commands:**
 | Command | Shortcut | Description |
@@ -96,17 +98,16 @@ cd desktop && ./scripts/build-macos.sh
 - Cross-shard 2PC transactions, adaptive reconciliation
 - **`text_search()` method** - Keyword-based search with stop word filtering (shared by Desktop & Enterprise)
 
-**Reasoning Engine (Python):**
+**Local AI Layer (Rust):**
+- `fastembed` - ONNX Runtime wrapper for local embedding generation
+- `nomic-embed-text-v1.5` - High-quality embedding model (same as server)
+- **No API Keys** - Runs completely offline
+
+**Reasoning Engine (Python - Server Only):**
 - `sutra-core` - Graph traversal with Multi-Path Plan Aggregation (MPPA)
 - Real-time learning without retraining
 - Quality gates: "I don't know" responses when confidence < threshold
 - Progressive streaming with confidence-based refinement
-
-**API & Services:**
-- `sutra-api` (FastAPI) - REST endpoints on :8000
-- `sutra-hybrid` - Semantic orchestration on :8001  
-- `sutra-embedding-service` - HA embedding cluster (3 replicas + HAProxy) on :8888
-- `sutra-bulk-ingester` (Rust) - High-throughput data ingestion on :8005
 
 **Desktop Application (Rust):**
 - `sutra-desktop` - Native GUI using egui/eframe

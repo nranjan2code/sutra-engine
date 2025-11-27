@@ -73,6 +73,31 @@
             "dependsOn": "Desktop: Build Debug"
         },
         {
+            "label": "Desktop: Run Release",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "run",
+                "-p",
+                "sutra-desktop",
+                "--release"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "detail": "Run Sutra Desktop application in release mode (optimized)",
+            "dependsOn": "Desktop: Build Release"
+        },
+        {
             "label": "Desktop: Build macOS App Bundle",
             "type": "shell",
             "command": "./desktop/scripts/build-macos.sh",

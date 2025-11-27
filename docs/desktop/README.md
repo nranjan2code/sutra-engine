@@ -1,8 +1,8 @@
 # Sutra Desktop
 
 **Version:** 3.3.0  
-**Release Date:** November 26, 2025  
-**Status:** Production Ready ✅
+**Release Date:** November 27, 2025  
+**Status:** Production Ready ✅ (Local AI Integrated)
 
 Pure Rust native application for personal knowledge management with semantic reasoning, temporal analysis, and causal understanding - no servers, no Docker, no external dependencies required.
 
@@ -10,18 +10,19 @@ Pure Rust native application for personal knowledge management with semantic rea
 
 ## Overview
 
-Sutra Desktop is a self-contained knowledge management application that brings enterprise-grade semantic reasoning capabilities to your local machine. It directly uses the `sutra-storage` crate from the Sutra ecosystem, ensuring feature parity with the server edition while maintaining complete data privacy.
+Sutra Desktop is a self-contained knowledge management application that brings enterprise-grade semantic reasoning capabilities to your local machine. It directly uses the `sutra-storage` crate from the Sutra ecosystem and integrates **local AI models** via ONNX, ensuring feature parity with the server edition while maintaining complete data privacy.
 
 ### Key Features
 
 | Feature | Description |
 |---------|-------------|
 | 🚀 **Native Performance** | Pure Rust from storage to UI, ~300ms startup |
+| 🧠 **Local AI** | Built-in ONNX embedding models (fastembed) - no API keys needed |
 | ⚡ **Async Architecture** | Non-blocking UI with background processing |
 | 🔒 **Complete Privacy** | All data stays on your machine |
 | 📦 **Self-Contained** | Single binary, ~20MB |
 | 🎨 **Modern UI** | Premium dark theme with enhanced menu bar |
-| 🧠 **Full Storage Engine** | Reuses `sutra-storage` crate (no code duplication) |
+| 💾 **Full Storage Engine** | Reuses `sutra-storage` crate (no code duplication) |
 | 💬 **Enhanced Chat** | Improved autocomplete, better visual design |
 | 🔍 **Multi-View Analysis** | Graph, temporal, causal, and path visualization |
 | 📊 **Real-time Analytics** | Performance metrics and usage statistics |

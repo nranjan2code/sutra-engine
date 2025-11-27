@@ -27,6 +27,7 @@ pub mod schema;
 pub mod semantic;
 
 // Unified learning pipeline modules
+pub mod embedding_provider;
 pub mod embedding_client;
 pub mod semantic_extractor;
 pub mod learning_pipeline;

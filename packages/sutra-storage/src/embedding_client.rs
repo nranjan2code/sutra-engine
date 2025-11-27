@@ -63,14 +63,28 @@ struct EmbeddingResponse {
     cached_count: u32,
 }
 
+use crate::embedding_provider::EmbeddingProvider;
+use async_trait::async_trait;
+
 /// Embedding client for generating vector embeddings
 #[derive(Clone)]
-pub struct EmbeddingClient {
+pub struct HttpEmbeddingClient {
     config: EmbeddingConfig,
     client: Client,
 }
 
-impl EmbeddingClient {
+#[async_trait]
+impl EmbeddingProvider for HttpEmbeddingClient {
+    async fn generate(&self, text: &str, normalize: bool) -> Result<Vec<f32>> {
+        self.generate(text, normalize).await
+    }
+
+    async fn generate_batch(&self, texts: &[String], normalize: bool) -> Vec<Option<Vec<f32>>> {
+        self.generate_batch(texts, normalize).await
+    }
+}
+
+impl HttpEmbeddingClient {
     /// Create new embedding client with configuration
     pub fn new(config: EmbeddingConfig) -> Result<Self> {
         let client = Client::builder()
@@ -79,7 +93,7 @@ impl EmbeddingClient {
             .context("Failed to create HTTP client")?;
             
         info!(
-            "Initialized EmbeddingClient: service_url={}, timeout={}s",
+            "Initialized HttpEmbeddingClient: service_url={}, timeout={}s",
             config.service_url, config.timeout_secs
         );
         
@@ -316,7 +330,7 @@ mod tests {
     
     #[tokio::test]
     async fn test_client_creation() {
-        let client = EmbeddingClient::with_defaults();
+        let client = HttpEmbeddingClient::with_defaults();
         assert!(client.is_ok());
     }
     
@@ -324,7 +338,7 @@ mod tests {
     #[tokio::test]
     #[ignore] // Only run with --ignored flag
     async fn test_generate_embedding() {
-        let client = EmbeddingClient::with_defaults().unwrap();
+        let client = HttpEmbeddingClient::with_defaults().unwrap();
         let result = client.generate("Test text", true).await;
         
         // This will fail if embedding service isn't running, which is expected

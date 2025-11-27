@@ -1,7 +1,7 @@
 # Sutra Desktop Architecture
 
 **Version:** 3.3.0  
-**Updated:** November 26, 2025
+**Updated:** November 27, 2025
 
 This document describes the internal architecture of Sutra Desktop, including module structure, data flow, and design decisions.
 
@@ -22,7 +22,15 @@ The desktop application is a **thin UI wrapper** around `sutra-storage`. All sto
 - Single source of truth for storage logic
 - Automatic updates when storage crate improves
 
-### 2. Immediate Mode GUI
+### 2. Local AI Pipeline (NEW)
+
+The desktop edition integrates **local AI models** directly into the binary:
+- **Engine**: `fastembed` crate (ONNX Runtime wrapper)
+- **Model**: `nomic-embed-text-v1.5` (same as server edition)
+- **Execution**: Runs on CPU (AVX2 optimized) or Metal (macOS)
+- **Privacy**: No data leaves the machine; no API keys required
+
+### 3. Immediate Mode GUI
 
 Using **egui** (immediate mode GUI), the UI is:
 - Rebuilt every frame (~60 FPS) with smooth 16ms budget
@@ -31,7 +39,7 @@ Using **egui** (immediate mode GUI), the UI is:
 - Memory efficient with optimized allocations
 - Native menu bar integration for better platform integration
 
-### 3. Asynchronous Architecture
+### 4. Asynchronous Architecture
 
 - **UI Thread**: Handles all rendering and user interaction (60 FPS).
 - **Background Threads**: Heavy operations (learning, graph layout, pathfinding) run in dedicated threads.
@@ -50,6 +58,7 @@ desktop/
 └── src/
     ├── main.rs             # Entry point, window setup
     ├── app.rs              # Main application controller
+    ├── local_embedding.rs  # Local AI provider (fastembed)
     ├── theme.rs            # Color palette and styling
     ├── types.rs            # Shared data types & AppMessage
     └── ui/

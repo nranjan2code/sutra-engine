@@ -15,19 +15,20 @@ mod app;
 mod ui;
 mod theme;
 mod types;
+mod local_embedding; // 🔥 NEW: Local AI provider
 
-use anyhow::Result;
-use eframe::egui;
-use tracing::{info, Level};
-use tracing_subscriber::FmtSubscriber;
-
-use app::SutraApp;
+pub use app::SutraApp;
 
 /// Application version (matches workspace)
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Application name
 pub const APP_NAME: &str = "Sutra AI";
+
+use anyhow::Result;
+use eframe::egui;
+use tracing::{info, Level};
+use tracing_subscriber::FmtSubscriber;
 
 fn main() -> Result<()> {
     // Initialize logging

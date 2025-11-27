@@ -3,8 +3,10 @@
 
 use anyhow::Result;
 use tracing::{info, warn, debug};
+use std::sync::Arc;
 
-use crate::embedding_client::EmbeddingClient;
+use crate::embedding_provider::EmbeddingProvider;
+use crate::embedding_client::HttpEmbeddingClient;
 use crate::semantic_extractor::SemanticExtractor;
 use crate::semantic::{SemanticAnalyzer, SemanticMetadata};
 use crate::storage_trait::LearningStorage;
@@ -38,15 +40,18 @@ impl Default for LearnOptions {
 }
 
 pub struct LearningPipeline {
-    embedding_client: EmbeddingClient,
+    embedding_client: Arc<dyn EmbeddingProvider>,
     semantic_extractor: SemanticExtractor,
     semantic_analyzer: SemanticAnalyzer, // 🔥 NEW: Semantic understanding
 }
 
 impl LearningPipeline {
     pub async fn new() -> Result<Self> {
-        let embedding_client = EmbeddingClient::with_defaults()?;
-        
+        let embedding_client = Arc::new(HttpEmbeddingClient::with_defaults()?);
+        Self::new_with_provider(embedding_client).await
+    }
+
+    pub async fn new_with_provider(embedding_client: Arc<dyn EmbeddingProvider>) -> Result<Self> {
         // Initialize semantic extractor (async - pre-computes relation embeddings)
         let semantic_extractor = SemanticExtractor::new(embedding_client.clone()).await?;
         
