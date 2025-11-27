@@ -341,6 +341,37 @@ impl ReasoningPathsPanel {
                 return;
             }
             
+            // Smart Empty State
+            if self.paths.is_empty() && self.error_message.is_none() {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(60.0);
+                    ui.label(RichText::new("🛣️").size(40.0));
+                    ui.add_space(16.0);
+                    ui.label(RichText::new("Discover Connections").size(18.0).color(TEXT_PRIMARY).strong());
+                    ui.add_space(8.0);
+                    ui.label(RichText::new("Find multi-hop reasoning paths between any two concepts.").size(14.0).color(TEXT_MUTED));
+                    ui.add_space(24.0);
+                    
+                    egui::Frame::none()
+                        .fill(BG_WIDGET)
+                        .rounding(Rounding::same(8.0))
+                        .inner_margin(12.0)
+                        .show(ui, |ui| {
+                            ui.label(RichText::new("Try searching for:").size(12.0).color(TEXT_SECONDARY));
+                            ui.add_space(4.0);
+                            ui.monospace("From: \"Rust\"  To: \"Performance\"");
+                        });
+                });
+                
+                // Still show controls at bottom
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                    ui.add_space(20.0);
+                    self.render_controls(ui, &mut action);
+                });
+                
+                return;
+            }
+            
             // Path list
             ScrollArea::vertical()
                 .auto_shrink([false; 2])

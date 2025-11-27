@@ -306,6 +306,42 @@ impl GraphView {
         ui.painter().rect_filled(graph_rect, Rounding::same(12.0), BG_DARK);
         ui.painter().rect_stroke(graph_rect, Rounding::same(12.0), Stroke::new(1.0, BG_WIDGET));
         
+        // Smart Empty State
+        if self.nodes.is_empty() {
+            ui.allocate_rect(graph_rect, Sense::hover());
+            let center = graph_rect.center();
+            
+            ui.painter().text(
+                center - Vec2::new(0.0, 30.0),
+                egui::Align2::CENTER_CENTER,
+                "🕸️ Knowledge Graph is Empty",
+                egui::FontId::proportional(24.0),
+                TEXT_MUTED,
+            );
+            
+            ui.painter().text(
+                center + Vec2::new(0.0, 10.0),
+                egui::Align2::CENTER_CENTER,
+                "Start by teaching Sutra some concepts.",
+                egui::FontId::proportional(16.0),
+                TEXT_SECONDARY,
+            );
+            
+            ui.painter().text(
+                center + Vec2::new(0.0, 40.0),
+                egui::Align2::CENTER_CENTER,
+                "Try: /learn Rust is a systems programming language",
+                egui::FontId::monospace(12.0),
+                ACCENT,
+            );
+            
+            // Controls bar (still show it so user can see layout options etc)
+            ui.add_space(8.0);
+            self.render_controls(ui, &mut action);
+            
+            return action;
+        }
+
         // Handle interactions
         let response = ui.allocate_rect(graph_rect, Sense::click_and_drag());
         

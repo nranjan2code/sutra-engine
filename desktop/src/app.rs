@@ -1769,6 +1769,51 @@ impl SutraApp {
 
 impl eframe::App for SutraApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Handle file drag-and-drop overlay
+        if !ctx.input(|i| i.raw.hovered_files.is_empty()) {
+            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("file_drop_overlay")));
+            let screen_rect = ctx.screen_rect();
+            painter.rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(200));
+            
+            // Draw dashed border
+            let stroke = egui::Stroke::new(2.0, egui::Color32::WHITE);
+            painter.rect_stroke(screen_rect.shrink(20.0), 10.0, stroke);
+            
+            painter.text(
+                screen_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "📥 Drop to Import Data",
+                egui::FontId::proportional(32.0),
+                egui::Color32::WHITE,
+            );
+        }
+
+        // Handle dropped files
+        let dropped_files = ctx.input(|i| i.raw.dropped_files.clone());
+        if !dropped_files.is_empty() {
+            for file in dropped_files {
+                if let Some(path) = file.path {
+                    let path_str = path.to_string_lossy().to_string();
+                    info!("File dropped: {}", path_str);
+                    
+                    if path_str.to_lowercase().ends_with(".json") {
+                        self.sidebar.current_view = SidebarView::Export;
+                        self.export_import.import_path = path_str.clone();
+                        self.export_import.active_tab = crate::ui::export_import::ExportImportTab::Import;
+                        self.handle_export_import_action(ExportImportAction::Import(path_str));
+                    } else if path_str.to_lowercase().ends_with(".csv") {
+                        self.sidebar.current_view = SidebarView::Export;
+                        self.export_import.batch_path = path_str.clone();
+                        self.export_import.active_tab = crate::ui::export_import::ExportImportTab::Batch;
+                        self.handle_export_import_action(ExportImportAction::BatchImport(path_str));
+                    } else {
+                        self.status_bar.set_activity(format!("Unsupported file type: {}", path_str));
+                        warn!("Unsupported file dropped: {}", path_str);
+                    }
+                }
+            }
+        }
+
         // Handle async messages
         self.handle_async_messages();
 

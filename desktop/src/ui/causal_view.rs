@@ -217,11 +217,27 @@ impl CausalView {
         // Empty state
         if self.causal_chains.is_empty() {
             ui.vertical_centered(|ui| {
-                ui.add_space(40.0);
+                ui.add_space(60.0);
                 ui.label(RichText::new("🔗").size(40.0));
+                ui.add_space(16.0);
+                ui.label(RichText::new("Root Cause Analysis").size(18.0).color(TEXT_PRIMARY).strong());
                 ui.add_space(8.0);
-                ui.label(RichText::new("Enter an effect to analyze").size(14.0).color(TEXT_MUTED));
-                ui.label(RichText::new("Find root causes and causal chains").size(12.0).color(TEXT_MUTED));
+                ui.label(RichText::new("Trace effects back to their origins across the graph.").size(14.0).color(TEXT_MUTED));
+                ui.add_space(24.0);
+                
+                egui::Frame::none()
+                    .fill(BG_WIDGET)
+                    .rounding(Rounding::same(8.0))
+                    .inner_margin(12.0)
+                    .show(ui, |ui| {
+                        ui.label(RichText::new("Try analyzing:").size(12.0).color(TEXT_SECONDARY));
+                        ui.add_space(4.0);
+                        ui.monospace("Effect: \"System Crash\"");
+                        ui.add_space(8.0);
+                        ui.label(RichText::new("Or teach causal links:").size(12.0).color(TEXT_SECONDARY));
+                        ui.add_space(4.0);
+                        ui.monospace("/learn Memory leak causes system crash");
+                    });
             });
             return;
         }

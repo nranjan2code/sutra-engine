@@ -331,6 +331,7 @@ pub enum GraphAction {
 - Drag background to pan
 - Scroll to zoom
 - Pause/resume simulation
+- **Smart Empty State:** Shows "Knowledge Graph is Empty" with quick actions to `/learn` or `/import` when no data exists.
 
 ### Edge Type Colors
 | Type | Color | Pattern |
@@ -404,6 +405,7 @@ pub enum ReasoningPathsAction {
 - Consensus summary with confidence badge
 - Path cards with expand/collapse
 - Step-by-step path detail view
+- **Smart Empty State:** Shows "Discover Connections" guide explaining how to use the path finder when no paths are active.
 - Color-coded support indicators
 
 ### Layout
@@ -473,6 +475,10 @@ pub enum TemporalViewAction {
 - N×N grid showing all relations
 - Symbols: → Before, ← After, ⊂ During, = Concurrent
 - Color-coded cells
+**Smart Empty State:**
+- Displays "No Temporal Events Found" when the timeline is empty.
+- Provides examples of temporal statements (e.g., "Event A happened before Event B").
+
 
 ### Layout
 ```
@@ -534,6 +540,10 @@ pub enum CausalViewAction {
 - Click to explore node
 
 **Graph View:**
+**Smart Empty State:**
+- Displays "Root Cause Analysis" guide when no causal chains are found.
+- Explains how to teach causal relationships (e.g., "X causes Y").
+
 - Circular layout of all nodes
 - Directed edges between causes
 - Root causes in red

@@ -28,6 +28,8 @@ Sutra Desktop is a self-contained knowledge management application that brings e
 | 📊 **Real-time Analytics** | Performance metrics and usage statistics |
 | 🗑️ **Knowledge Management** | Safe deletion with confirmation across multiple screens |
 | 🍎 **Native Integration** | Full menu bar with File/View/Help menus |
+| 📥 **Drag-and-Drop** | Drop .json/.csv files directly to import data |
+| 💡 **Smart Guidance** | Context-aware empty states guide you to the right actions |
 
 ### What's Included
 
