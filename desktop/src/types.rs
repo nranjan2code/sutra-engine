@@ -24,6 +24,7 @@ pub enum AppMessage {
         query: String,
         results: Vec<(ConceptId, String, f32)>, // id, content, confidence
         duration_ms: u64,
+        generated_response: Option<String>,
     },
     KnowledgeLoaded {
         concepts: Vec<ConceptInfo>,

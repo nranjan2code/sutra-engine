@@ -66,10 +66,16 @@ cocoa = "0.26"
 objc = "0.2"
 
 # ============================================================================
-# AI / ML (Local)
+# AI / ML (Local) - VENDORED INTO MONOREPO
 # ============================================================================
-# fastembed = "4.4"          # Local embedding generation (ONNX)
-sutra-embedder = { git = "https://github.com/nranjan2code/sutra-embedder", branch = "main" }
+# sutra-embedder: Local ONNX embedding (nomic-embed-text-v1.5, 768D)
+# Now vendored at packages/sutra-embedder for better reproducibility
+sutra-embedder = { path = "../packages/sutra-embedder" }
+
+# sutraworks-model: Local NLG (RWKV/Mamba architecture)
+# Now vendored at packages/sutraworks-model for better reproducibility
+sutraworks-model = { path = "../packages/sutraworks-model" }
+
 async-trait = "0.1"        # Async traits for embedding provider
 
 [[bin]]

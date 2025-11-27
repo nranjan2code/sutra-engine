@@ -24,13 +24,14 @@ The desktop application is a **thin UI wrapper** around `sutra-storage`. All sto
 
 ### 2. Local AI Pipeline (PRODUCTION)
 
-The desktop edition integrates **real neural networks** directly into the binary:
-- **Engine**: `sutra-embedder` crate with ONNX Runtime (optimized Rust)
-- **Model**: `all-MiniLM-L6-v2` neural network (384D, 90MB)
-- **Auto-Download**: Models downloaded automatically on first launch
+The desktop edition integrates **real neural networks** directly via vendored crates:
+- **Embedding Engine**: `sutra-embedder` crate (vendored in `packages/sutra-embedder`)
+- **Embedding Model**: `all-mpnet-base-v2` (768D, 420MB) - matches server dimensions
+- **NLG Engine**: `sutraworks-model` crate (vendored in `packages/sutraworks-model`)
+- **Auto-Download**: Models downloaded automatically on first launch (~500MB total)
 - **Hardware Optimized**: CoreML (Apple Silicon) + FP16 mixed precision
 - **Privacy**: Complete offline operation after initial model download
-- **Platform Strategy**: Same crate powers both server (microservice) and desktop (linked library)
+- **Zero External Deps**: Both AI packages are workspace members, no git submodules
 
 ### 3. Immediate Mode GUI
 
@@ -60,7 +61,8 @@ desktop/
 └── src/
     ├── main.rs             # Entry point, window setup
     ├── app.rs              # Main application controller
-    ├── local_embedding.rs  # Local AI provider (sutra-embedder)
+    ├── local_embedding.rs  # Local embedding (sutra-embedder - vendored)
+    ├── local_nlg.rs        # Local NLG (sutraworks-model - vendored)
     ├── theme.rs            # Color palette and styling
     ├── types.rs            # Shared data types & AppMessage
     └── ui/

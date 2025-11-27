@@ -1,0 +1,112 @@
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# ONNX Models and Cache
+# Models should be downloaded on-demand, not stored in git due to large file sizes
+models/*.onnx
+models/*-tokenizer.json
+*.onnx
+*.safetensors
+
+# Benchmark outputs and test results
+benchmark-results.txt
+benchmark-*.txt
+test_benchmark_results/
+benchmark_output/
+criterion-output/
+perf_data/
+benchmark_report.*
+benchmark_results.*
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# macOS specific
+.AppleDouble
+.LSOverride
+.DocumentRevisions-V100
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~.nib
+.idea/
+*.iml
+
+# Logs
+*.log
+*.log.*
+logs/
+
+# Benchmarks and Profiling
+/target/criterion
+criterion-*.json
+*.profraw
+*.profdata
+flamegraph.svg
+perf.data*
+
+# ML and ONNX Runtime specific
+*.tensorboard
+*.pb
+*.h5
+*.keras
+onnxruntime_profile_*
+onnx_profile_*
+
+# Environment and Configuration
+.env
+.env.*
+!.env.example
+config/local.*
+
+# Coverage and Testing
+coverage/
+*.gcda
+*.gcno
+*.gcov
+lcov.info
+tarpaulin-report.html
+test-results/
+junit.xml
+
+# Documentation Build
+/target/doc
+docs/build/
+book/
+
+# Local development and temporary files
+scratch/
+tmp/
+temp/
+.cache/
+*.tmp
+*.temp
+.build/
+
+# System and Editor temporary files
+.#*
+\#*#
+.*.swp
+.*.swo
+Session.vim
+.netrwhist

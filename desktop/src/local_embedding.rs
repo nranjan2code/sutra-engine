@@ -15,13 +15,13 @@ impl LocalEmbeddingProvider {
     /// Create a new local embedding provider
     /// 
     /// This will download the model if it doesn't exist.
-    /// Uses "nomic" preset (768D) for server compatibility.
+    /// Uses 768D configuration for server compatibility.
     pub async fn new_async() -> Result<Self> {
         info!("Initializing LocalEmbeddingProvider (sutra-embedder) with auto-download...");
         
-        // Use async version that can auto-download models
-        // "nomic" preset uses nomic-embed-text-v1.5 (768D)
-        let config = EmbedderConfig::from_name("nomic")?;
+        // Use 768D dimension for server compatibility
+        // "high-quality" preset uses all-mpnet-base-v2 (768D)
+        let config = EmbedderConfig::from_name("high-quality")?;
         let model = Embedder::new_async(config).await?;
         
         info!("Local embedding model loaded successfully with auto-download");
@@ -35,8 +35,8 @@ impl LocalEmbeddingProvider {
     pub fn new() -> Result<Self> {
         info!("Initializing LocalEmbeddingProvider (sutra-embedder)...");
         
-        // Use "nomic" preset (768D)
-        let config = EmbedderConfig::from_name("nomic")?;
+        // Use "high-quality" preset (768D)
+        let config = EmbedderConfig::from_name("high-quality")?;
         let model = Embedder::new(config)?;
         
         info!("Local embedding model loaded successfully");

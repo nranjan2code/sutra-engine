@@ -1,0 +1,44 @@
+{
+    // Rust-Analyzer Configuration
+    "rust-analyzer.linkedProjects": [],
+    "rust-analyzer.check.workspace": true,
+    "rust-analyzer.cargo.features": "all",
+    "rust-analyzer.checkOnSave.command": "clippy",
+    "rust-analyzer.checkOnSave.allTargets": true,
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.procMacro.enable": true,
+    // File Associations
+    "files.associations": {
+        "*.rs": "rust",
+        "Cargo.toml": "toml",
+        "Cargo.lock": "toml"
+    },
+    // Editor Settings
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+        100
+    ],
+    "editor.tabSize": 4,
+    // File Exclusions for Performance
+    "files.exclude": {
+        "**/target": true,
+        "**/.git": true,
+        "**/.DS_Store": true
+    },
+    "search.exclude": {
+        "**/target": true,
+        "**/node_modules": true,
+        "**/.git": true
+    },
+    // Terminal
+    "terminal.integrated.env.osx": {
+        "RUST_BACKTRACE": "1"
+    },
+    // Extensions Recommendations
+    "recommendations": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "serayuzgur.crates",
+        "tamasfe.even-better-toml"
+    ]
+}

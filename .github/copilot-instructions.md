@@ -98,11 +98,12 @@ cd desktop && ./scripts/build-macos.sh
 - Cross-shard 2PC transactions, adaptive reconciliation
 - **`text_search()` method** - Keyword-based search with stop word filtering (shared by Desktop & Enterprise)
 
-**Local AI Layer (Rust):**
-- `sutra-embedder` - Optimized Rust ONNX implementation (4× faster than generic wrappers)
-- `nomic-embed-text-v1.5` - High-quality embedding model (same as server)
-- **No API Keys** - Runs completely offline
-- **Platform Strategy** - Same crate used as library (desktop) and microservice (server)
+**Local AI Layer (Rust - Vendored):**
+- `packages/sutra-embedder` - Vendored ONNX embedding library (4× faster than generic wrappers)
+- `packages/sutraworks-model` - Vendored NLG/text generation library with RWKV support
+- `all-mpnet-base-v2` - High-quality embedding model (768D, server-compatible)
+- **No API Keys** - Runs completely offline after initial model download (~420MB)
+- **Vendored Strategy** - Both AI packages embedded in workspace, no external git dependencies
 
 **Reasoning Engine (Python - Server Only):**
 - `sutra-core` - Graph traversal with Multi-Path Plan Aggregation (MPPA)
@@ -111,9 +112,12 @@ cd desktop && ./scripts/build-macos.sh
 - Progressive streaming with confidence-based refinement
 
 **Desktop Application (Rust):**
-- `sutra-desktop` - Native GUI using egui/eframe
+- `sutra-desktop` - Native GUI using egui/eframe 0.29
+- `local_embedding.rs` - Integration with vendored `sutra-embedder`
+- `local_nlg.rs` - Integration with vendored `sutraworks-model`
 - Directly uses `sutra-storage` crate (no duplication)
 - Self-contained with local file persistence
+- **First Launch**: Downloads AI models (~420MB) automatically
 
 ## Essential Workflows
 
@@ -355,10 +359,18 @@ ShardSplit, ShardMerge
 - **Desktop app:** `desktop/src/` (Pure Rust GUI application)
 - **Desktop main:** `desktop/src/main.rs` (entry point, window setup)
 - **Desktop app:** `desktop/src/app.rs` (controller, uses sutra-storage)
+- **Local embedding:** `desktop/src/local_embedding.rs` (sutra-embedder integration)
+- **Local NLG:** `desktop/src/local_nlg.rs` (sutraworks-model integration)
 - **Desktop UI:** `desktop/src/ui/` (sidebar, chat, knowledge, settings, status_bar)
 - **Desktop theme:** `desktop/src/theme.rs` (color palette, styling)
 - **Desktop build:** `desktop/scripts/build-macos.sh` (macOS app bundle)
 - **Desktop docs:** `docs/desktop/` (README, ARCHITECTURE, BUILDING, UI_COMPONENTS)
+
+**Vendored AI Packages:**
+- **Embedder:** `packages/sutra-embedder/` (ONNX embedding with all-mpnet-base-v2, 768D)
+- **NLG/Model:** `packages/sutraworks-model/` (RWKV/Mamba text generation)
+- **Embedder config:** Uses "high-quality" preset for 768D vectors (server-compatible)
+- **Model facade:** `packages/sutraworks-model/src/lib.rs` (public API for external consumers)
 
 **Documentation:**
 - **Architecture docs:** `.github/copilot-instructions.md` (AI assistant guidance - updated November 2025)

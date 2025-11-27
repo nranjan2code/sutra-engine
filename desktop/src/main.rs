@@ -16,6 +16,7 @@ mod ui;
 mod theme;
 mod types;
 mod local_embedding; // 🔥 NEW: Local AI provider
+mod local_nlg;       // 🔥 NEW: Local NLG provider
 
 pub use app::SutraApp;
 

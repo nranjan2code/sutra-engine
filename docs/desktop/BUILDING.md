@@ -57,7 +57,9 @@ cargo build -p sutra-desktop
 cargo run -p sutra-desktop
 ```
 
-**First Launch Note:** The application downloads AI models (~500MB nomic-embed-text-v1.5) automatically on first run. This takes 1-3 minutes depending on your internet connection.
+**First Launch Note:** The application downloads AI models (~500MB all-mpnet-base-v2) automatically on first run. This takes 1-3 minutes depending on your internet connection.
+
+**Vendored AI Dependencies:** The desktop app uses `sutra-embedder` and `sutraworks-model` which are vendored directly in the workspace at `packages/sutra-embedder` and `packages/sutraworks-model`. No external git repositories or submodules required.
 
 ### Release Build
 

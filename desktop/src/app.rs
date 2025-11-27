@@ -35,6 +35,7 @@ use sutra_storage::{
 };
 
 use crate::local_embedding::LocalEmbeddingProvider;
+use crate::local_nlg::LocalNlgProvider;
 
 // Core UI imports
 use crate::ui::{
@@ -69,6 +70,7 @@ pub struct SutraApp {
     // ========================================================================
     storage: Arc<ConcurrentMemory>,
     pipeline: Arc<LearningPipeline>, // 🔥 NEW: Unified learning pipeline
+    nlg: Option<Arc<LocalNlgProvider>>, // 🔥 NEW: Local NLG provider
     data_dir: PathBuf,
     
     // Async communication
@@ -137,6 +139,23 @@ impl SutraApp {
         // Initialize status bar
         let mut status_bar = StatusBar::default();
         status_bar.set_status(ConnectionStatus::Connected);
+        
+        // Initialize local NLG provider
+        info!("Initializing local NLG provider...");
+        let nlg = match tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(LocalNlgProvider::new_async()) {
+            Ok(provider) => {
+                info!("✅ Local NLG provider initialized successfully");
+                Some(Arc::new(provider))
+            }
+            Err(e) => {
+                error!("❌ Failed to initialize local NLG: {}", e);
+                // Don't panic, just continue without NLG
+                None
+            }
+        };
+
         status_bar.set_concept_count(stats.snapshot.concept_count);
         // Initialize local AI pipeline
         info!("Initializing local AI pipeline...");
@@ -167,6 +186,7 @@ impl SutraApp {
         Self {
             storage: Arc::new(storage),
             pipeline,
+            nlg,  // Local NLG provider (optional)
             data_dir,
             tx,
             rx,
@@ -235,22 +255,56 @@ impl SutraApp {
             ChatAction::Query(query) => {
                 self.chat.is_processing = true;
                 let storage = self.storage.clone();
+                let nlg = self.nlg.clone(); // Clone NLG provider
                 let tx = self.tx.clone();
                 let query_clone = query.clone();
                 
                 std::thread::spawn(move || {
                     let start = Instant::now();
                     let results = storage.text_search(&query_clone, 5);
-                    let elapsed_ms = start.elapsed().as_millis() as u64;
                     
-                    let result_data = results.into_iter()
+                    let result_data: Vec<(ConceptId, String, f32)> = results.into_iter()
                         .map(|(id, content, conf)| (id, content, conf))
                         .collect();
+                        
+                    // Generate NLG response if provider is available and we have results
+                    let generated_response = if let Some(nlg_provider) = nlg {
+                        if !result_data.is_empty() {
+                            // Construct prompt from results
+                            let context: String = result_data.iter()
+                                .take(3)
+                                .map(|(_, content, _)| format!("- {}", content))
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                                
+                            let prompt = format!(
+                                "Context:\n{}\n\nQuestion: {}\n\nAnswer based on the context:",
+                                context, query_clone
+                            );
+                            
+                            // Run generation (blocking in this thread)
+                            let rt = tokio::runtime::Runtime::new().unwrap();
+                            match rt.block_on(nlg_provider.generate(&prompt)) {
+                                Ok(response) => Some(response),
+                                Err(e) => {
+                                    warn!("NLG generation failed: {}", e);
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    
+                    let elapsed_ms = start.elapsed().as_millis() as u64;
                         
                     let _ = tx.send(AppMessage::SearchResults {
                         query: query_clone,
                         results: result_data,
                         duration_ms: elapsed_ms,
+                        generated_response,
                     });
                 });
             }
@@ -1251,11 +1305,11 @@ impl SutraApp {
                     }
                 }
                 
-                // Reinitialize storage
+                // Reinitialize storage with same config as initial setup
                 let config = ConcurrentConfig {
                     storage_path: self.data_dir.clone(),
                     memory_threshold: 10_000,
-                    vector_dimension: 256,
+                    vector_dimension: 768, // Must match nomic-embed-text-v1.5 (768D)
                     adaptive_reconciler_config: AdaptiveReconcilerConfig {
                         base_interval_ms: 100,
                         ..Default::default()
@@ -1308,18 +1362,31 @@ impl SutraApp {
                     }
                 }
                 
-                AppMessage::SearchResults { query, results, duration_ms } => {
+                AppMessage::SearchResults { query, results, duration_ms, generated_response } => {
                     self.chat.is_processing = false;
                     if results.is_empty() {
                         self.chat.add_response(
                             "🤔 I don't have knowledge about that yet.\n\nTeach me with: `/learn <your knowledge>`".to_string()
                         );
                     } else {
-                        let mut response = String::from("Based on my knowledge:\n\n");
-                        for (i, (_id, content, confidence)) in results.iter().enumerate() {
-                            response.push_str(&format!("{}. {} (relevance: {:.0}%)\n", i + 1, content, confidence * 100.0));
+                        if let Some(response) = generated_response {
+                            // Use NLG response if available
+                            self.chat.add_response(format!(
+                                "{}\n\n*Sources:*\n{}", 
+                                response,
+                                results.iter().take(3).enumerate()
+                                    .map(|(i, (_, content, _))| format!("{}. {}", i + 1, content))
+                                    .collect::<Vec<_>>()
+                                    .join("\n")
+                            ));
+                        } else {
+                            // Fallback to list view
+                            let mut response = String::from("Based on my knowledge:\n\n");
+                            for (i, (_id, content, confidence)) in results.iter().enumerate() {
+                                response.push_str(&format!("{}. {} (relevance: {:.0}%)\n", i + 1, content, confidence * 100.0));
+                            }
+                            self.chat.add_response(response);
                         }
-                        self.chat.add_response(response);
                     }
                     
                     let preview = if query.len() > 30 { &query[..30] } else { &query };

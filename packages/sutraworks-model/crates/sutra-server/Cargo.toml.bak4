@@ -1,0 +1,38 @@
+[package]
+name = "sutra-server"
+version = "1.0.0"
+edition = "2021"
+authors = ["SutraWorks"]
+license = "MIT OR Apache-2.0"
+description = "Production HTTP API server for SutraWorks AI models"
+
+[[bin]]
+name = "sutra-server"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+sutra-core = { path = "../sutra-core" }
+sutra-rwkv = { path = "../sutra-rwkv" }
+sutra-mamba = { path = "../sutra-mamba" }
+sutra-tokenizer = { path = "../sutra-tokenizer" }
+sutra-loader = { path = "../sutra-loader" }
+
+# HTTP Server
+axum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# CLI and utilities
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+
+# Performance monitoring
+std = { version = "1.0", features = ["time"] }
+anyhow = "1.0"

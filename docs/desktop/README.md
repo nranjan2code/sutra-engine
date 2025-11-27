@@ -65,7 +65,9 @@ cargo build -p sutra-desktop --release
 cd desktop && ./scripts/build-macos.sh
 ```
 
-**First Launch:** The app automatically downloads AI models (~500MB nomic-embed-text-v1.5) on first run for real neural network embeddings.
+**First Launch:** The app automatically downloads AI models (~420MB all-mpnet-base-v2) on first run for real neural network embeddings (768D vectors, server-compatible).
+
+**Vendored Dependencies:** The desktop app uses `sutra-embedder` and `sutraworks-model` which are embedded directly in the workspace at `packages/sutra-embedder` and `packages/sutraworks-model`. No external git repositories or submodules required.
 
 # Release build (optimized)
 cargo build -p sutra-desktop --release
@@ -236,10 +238,15 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed technical documentation.
 - Contents: Knowledge graphs, user settings, query logs
 
 **AI Models:**
-- Location: `models/` directory (in project root)
-- Size: ~500MB (nomic-embed-text-v1.5 ONNX model + tokenizer)
+- Location: Hugging Face cache (auto-managed by `sutra-embedder`)
+- Size: ~420MB (all-mpnet-base-v2 ONNX model + tokenizer)
+- Dimensions: 768D vectors (server-compatible)
 - Download: Automatic on first launch
 - Optimization: Apple Silicon CoreML with FP16 precision
+
+**Vendored AI Packages:**
+- `packages/sutra-embedder` - Rust ONNX embedding library
+- `packages/sutraworks-model` - Text generation and NLG support
 
 ---
 
