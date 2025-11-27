@@ -57,7 +57,7 @@ cargo build -p sutra-desktop
 cargo run -p sutra-desktop
 ```
 
-**First Launch Note:** The application downloads AI models (~90MB all-MiniLM-L6-v2) automatically on first run. This takes 30-60 seconds depending on your internet connection.
+**First Launch Note:** The application downloads AI models (~500MB nomic-embed-text-v1.5) automatically on first run. This takes 1-3 minutes depending on your internet connection.
 
 ### Release Build
 

@@ -17,10 +17,10 @@ Sutra Desktop is a self-contained knowledge management application that brings e
 | Feature | Description |
 |---------|-------------|
 | 🚀 **Native Performance** | Pure Rust from storage to UI, ~300ms startup |
-| 🧠 **Local AI** | Real ONNX neural networks with auto-download (~90MB) - no API keys needed |
+| 🧠 **Local AI** | Real ONNX neural networks with auto-download (~500MB) - no API keys needed |
 | ⚡ **Async Architecture** | Non-blocking UI with background processing |
 | 🔒 **Complete Privacy** | All data stays on your machine |
-| 📦 **Self-Contained** | Single binary + auto-downloaded AI models (~90MB) |
+| 📦 **Self-Contained** | Single binary + auto-downloaded AI models (~500MB) |
 | 🎨 **Modern UI** | Premium dark theme with enhanced menu bar |
 | 💾 **Full Storage Engine** | Reuses `sutra-storage` crate (no code duplication) |
 | 💬 **Enhanced Chat** | Multiline input, improved autocomplete, better visual design |
@@ -65,7 +65,7 @@ cargo build -p sutra-desktop --release
 cd desktop && ./scripts/build-macos.sh
 ```
 
-**First Launch:** The app automatically downloads AI models (~90MB all-MiniLM-L6-v2) on first run for real neural network embeddings.
+**First Launch:** The app automatically downloads AI models (~500MB nomic-embed-text-v1.5) on first run for real neural network embeddings.
 
 # Release build (optimized)
 cargo build -p sutra-desktop --release
@@ -237,7 +237,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed technical documentation.
 
 **AI Models:**
 - Location: `models/` directory (in project root)
-- Size: ~90MB (all-MiniLM-L6-v2 ONNX model + tokenizer)
+- Size: ~500MB (nomic-embed-text-v1.5 ONNX model + tokenizer)
 - Download: Automatic on first launch
 - Optimization: Apple Silicon CoreML with FP16 precision
 

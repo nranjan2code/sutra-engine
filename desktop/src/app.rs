@@ -112,7 +112,7 @@ impl SutraApp {
         let config = ConcurrentConfig {
             storage_path: data_dir.clone(),
             memory_threshold: 10_000,
-            vector_dimension: 256,
+            vector_dimension: 768,
             adaptive_reconciler_config: AdaptiveReconcilerConfig {
                 base_interval_ms: 100,
                 ..Default::default()
@@ -1843,7 +1843,7 @@ fn node_to_concept_info(node: &ConceptNode, storage: &ConcurrentMemory) -> Conce
 fn convert_to_ui_stats(stats: &ConcurrentStats) -> StorageStatsUI {
     StorageStatsUI {
         total_concepts: stats.snapshot.concept_count,
-        vector_dimensions: 256,
+        vector_dimensions: 768,
         data_path: String::new(),
         status: StorageStatus::Running,
     }

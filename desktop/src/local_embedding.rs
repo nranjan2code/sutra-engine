@@ -15,12 +15,13 @@ impl LocalEmbeddingProvider {
     /// Create a new local embedding provider
     /// 
     /// This will download the model if it doesn't exist.
-    /// Uses efficient preset (384D) for better compatibility.
+    /// Uses "nomic" preset (768D) for server compatibility.
     pub async fn new_async() -> Result<Self> {
         info!("Initializing LocalEmbeddingProvider (sutra-embedder) with auto-download...");
         
         // Use async version that can auto-download models
-        let config = EmbedderConfig::from_name("efficient")?;
+        // "nomic" preset uses nomic-embed-text-v1.5 (768D)
+        let config = EmbedderConfig::from_name("nomic")?;
         let model = Embedder::new_async(config).await?;
         
         info!("Local embedding model loaded successfully with auto-download");
@@ -34,8 +35,8 @@ impl LocalEmbeddingProvider {
     pub fn new() -> Result<Self> {
         info!("Initializing LocalEmbeddingProvider (sutra-embedder)...");
         
-        // Use "efficient" preset which uses smaller all-MiniLM-L6-v2 model (384D)
-        let config = EmbedderConfig::from_name("efficient")?;
+        // Use "nomic" preset (768D)
+        let config = EmbedderConfig::from_name("nomic")?;
         let model = Embedder::new(config)?;
         
         info!("Local embedding model loaded successfully");
