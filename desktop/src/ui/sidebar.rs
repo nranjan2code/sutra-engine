@@ -6,6 +6,7 @@ use crate::theme::{PRIMARY, PRIMARY_DIM, PRIMARY_LIGHT, SECONDARY, ACCENT, SUCCE
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SidebarView {
     #[default]
+    Home,
     Chat,
     Knowledge,
     Search,
@@ -25,6 +26,7 @@ impl SidebarView {
     /// Get display info for the view
     pub fn info(&self) -> (&'static str, &'static str, &'static str) {
         match self {
+            SidebarView::Home => ("🏠", "Home", "Dashboard overview"),
             SidebarView::Chat => ("💬", "Chat", "Have a conversation"),
             SidebarView::Knowledge => ("📚", "Knowledge", "Browse concepts"),
             SidebarView::Search => ("⚡", "Quick Learn", "Fast knowledge entry"),
@@ -119,6 +121,8 @@ impl Sidebar {
                     self.section_header(ui, "MAIN");
                     ui.add_space(8.0);
                     
+                    self.nav_item(ui, SidebarView::Home);
+                    ui.add_space(2.0);
                     self.nav_item(ui, SidebarView::Chat);
                     ui.add_space(2.0);
                     self.nav_item(ui, SidebarView::Knowledge);

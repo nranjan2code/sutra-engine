@@ -1,7 +1,7 @@
 # Sutra Desktop UI Components
 
-**Version:** 3.3.0  
-**Updated:** November 27, 2025
+**Version:** 3.3.1  
+**Updated:** November 28, 2025
 
 This document provides a detailed reference for all UI panels and components in Sutra Desktop.
 
@@ -27,10 +27,12 @@ This document provides a detailed reference for all UI panels and components in 
 |-------|------|---------|-------------|
 | Menu Bar | `app.rs` | Native menu integration | Direct navigation |
 | Sidebar | `sidebar.rs` | Navigation | Direct state update |
+| Home | `home.rs` | Dashboard landing page | `HomeAction` |
 | Chat | `chat.rs` | Conversational learning | `ChatAction` |
 | Knowledge | `knowledge.rs` | Concept browser | `KnowledgeAction` |
 | Settings | `settings.rs` | Configuration | `SettingsAction` |
 | Status Bar | `status_bar.rs` | Status display | None (display only) |
+| Onboarding | `onboarding.rs` | First-launch tour | None (overlay) |
 | Graph View | `graph_view.rs` | Visual graph | `GraphAction` |
 | Reasoning Paths | `reasoning_paths.rs` | MPPA analysis | `ReasoningPathsAction` |
 | Temporal View | `temporal_view.rs` | Timeline analysis | `TemporalViewAction` |
@@ -38,6 +40,7 @@ This document provides a detailed reference for all UI panels and components in 
 | Analytics | `analytics.rs` | Performance metrics | `AnalyticsAction` |
 | Query Builder | `query_builder.rs` | Advanced search | `QueryBuilderAction` |
 | Export/Import | `export_import.rs` | Data portability | `ExportImportAction` |
+| Undo/Redo | `undo_redo.rs` | Command stack | `UndoCommand` trait |
 
 ---
 
@@ -99,6 +102,7 @@ pub struct Sidebar {
 
 pub enum SidebarView {
     // MAIN
+    Home,      // NEW: Default landing page
     Chat, Knowledge, Search,
     // ANALYSIS (collapsible)
     Graph, Paths, Timeline, Causal,
@@ -126,6 +130,7 @@ pub enum SidebarView {
 │  Desktop    v3.3     │
 ├──────────────────────┤
 │  MAIN                │
+│  🏠 Home (DEFAULT)    │
 │  💬 Chat             │
 │  📚 Knowledge        │
 │  🔍 Search           │
@@ -143,6 +148,220 @@ pub enum SidebarView {
 ├──────────────────────┤
 │  ⚙️ Settings         │
 └──────────────────────┘
+```
+
+---
+
+## Home Dashboard (`home.rs`) - NEW
+
+### Purpose
+Default landing page with at-a-glance stats, quick actions, and personalized guidance.
+
+### Structure
+```rust
+pub struct HomePanel {
+    pub stats: DashboardStats,
+    pub recent_activity: Vec<ActivityItem>,
+    pub tips: Vec<LearningTip>,
+    pub current_tip_index: usize,
+}
+
+pub enum HomeAction {
+    NavigateToChat,
+    NavigateToKnowledge,
+    NavigateToGraph,
+    NavigateToImport,
+    LearnExample(String),
+    RefreshStats,
+}
+```
+
+### Features
+
+**Personalized Greeting:**
+- Time-of-day aware greeting (Good morning/afternoon/evening/night)
+- Username display (if configured)
+
+**Stats Cards:**
+- Total concepts with trend indicator
+- Total connections count
+- Knowledge health score (0-100%)
+- Last activity timestamp
+
+**Quick Actions:**
+- "Start Learning" → Chat panel
+- "Browse Knowledge" → Knowledge panel
+- "View Graph" → Graph visualization
+- "Import Data" → Export/Import panel
+
+**Recent Activity:**
+- Last 5 learning/search activities
+- Timestamp with relative time ("2 minutes ago")
+- Activity type icons
+
+**Learning Tips:**
+- Rotating tips carousel
+- Examples of what to teach Sutra
+- "Try This" button to auto-populate chat
+
+### Layout
+```
+┌────────────────────────────────────────────────────────────┐
+│ 👋 Good afternoon!                         [↻ Refresh]    │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│ │ 📚 Concepts │ │ 🔗 Connect  │ │ 💚 Health   │           │
+│ │    1,247    │ │    4,892    │ │     92%     │           │
+│ │   +47 today │ │  3.9 ratio  │ │  Excellent  │           │
+│ └─────────────┘ └─────────────┘ └─────────────┘           │
+│                                                            │
+├────────────────────────────────────────────────────────────┤
+│ ⚡ Quick Actions                                           │
+│ [💬 Start Learning] [📚 Browse] [🕸️ Graph] [📥 Import]   │
+├────────────────────────────────────────────────────────────┤
+│ 📋 Recent Activity                                         │
+│ • 2m ago: Learned "Memory management in Rust"             │
+│ • 15m ago: Searched for "async patterns"                  │
+│ • 1h ago: Learned "Error handling best practices"         │
+├────────────────────────────────────────────────────────────┤
+│ 💡 Learning Tip                              [← 1/5 →]    │
+│ "Try teaching causal relationships:                       │
+│  'Memory leaks cause performance degradation'"            │
+│                                        [✨ Try This]      │
+└────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Onboarding Tour (`onboarding.rs`) - NEW
+
+### Purpose
+Interactive first-launch overlay that guides new users through key features.
+
+### Structure
+```rust
+pub struct OnboardingTour {
+    pub is_active: bool,
+    pub current_step: usize,
+    pub steps: Vec<TourStep>,
+}
+
+pub struct TourStep {
+    pub title: String,
+    pub description: String,
+    pub highlight_area: Option<Rect>,
+    pub icon: String,
+}
+```
+
+### Tour Steps (7 total)
+
+1. **Welcome** - Introduction to Sutra Desktop
+2. **Concepts** - How knowledge is stored
+3. **Search** - Finding information with `/search`
+4. **Commands** - Slash command overview
+5. **Keyboard** - Keyboard shortcuts
+6. **Tips** - Pro tips for power users
+7. **Complete** - Ready to start!
+
+### Features
+
+**Overlay Rendering:**
+- Semi-transparent dark backdrop
+- Spotlight effect on highlighted areas
+- Smooth fade transitions
+
+**Navigation:**
+- "Next" / "Previous" buttons
+- Step indicator dots (○ ● ○ ○)
+- "Skip Tour" option
+- Auto-dismisses on final step
+
+**Persistence:**
+- Config file: `~/.sutra/desktop/onboarding.conf`
+- Set `completed=true` after tour
+- "Reset Onboarding" in Settings to replay
+
+### Layout
+```
+┌────────────────────────────────────────────────────────────┐
+│░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│
+│░░░░┌──────────────────────────────────────────┐░░░░░░░░░░░│
+│░░░░│  🎉 Welcome to Sutra Desktop!            │░░░░░░░░░░░│
+│░░░░│                                          │░░░░░░░░░░░│
+│░░░░│  Your personal knowledge companion.      │░░░░░░░░░░░│
+│░░░░│  Let's take a quick tour of the          │░░░░░░░░░░░│
+│░░░░│  main features.                          │░░░░░░░░░░░│
+│░░░░│                                          │░░░░░░░░░░░│
+│░░░░│  ○ ● ○ ○ ○ ○ ○                          │░░░░░░░░░░░│
+│░░░░│                                          │░░░░░░░░░░░│
+│░░░░│  [Skip Tour]              [Next →]       │░░░░░░░░░░░│
+│░░░░└──────────────────────────────────────────┘░░░░░░░░░░░│
+│░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│
+└────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Undo/Redo System (`undo_redo.rs`) - NEW
+
+### Purpose
+Global command stack for reversing destructive actions.
+
+### Structure
+```rust
+pub trait UndoCommand: Send + Sync {
+    fn execute(&self, storage: &ConcurrentMemory) -> Result<()>;
+    fn undo(&self, storage: &ConcurrentMemory) -> Result<()>;
+    fn description(&self) -> String;
+}
+
+pub struct UndoStack {
+    pub commands: VecDeque<Box<dyn UndoCommand>>,
+    pub redo_stack: VecDeque<Box<dyn UndoCommand>>,
+    pub max_size: usize,
+    pub enabled: bool,
+}
+```
+
+### Supported Commands
+
+| Command | Description | Undo Behavior |
+|---------|-------------|---------------|
+| `DeleteConceptCommand` | Delete single concept | Restores concept + edges |
+| `DeleteBatchCommand` | Delete multiple concepts | Restores all concepts + edges |
+| `ClearAllDataCommand` | Clear entire knowledge base | Restores full backup |
+
+### Features
+
+**Keyboard Shortcuts:**
+- **⌘Z** (Mac) / **Ctrl+Z** (Win/Linux): Undo
+- **⌘⇧Z** (Mac) / **Ctrl+Shift+Z** (Win/Linux): Redo
+
+**Settings Integration:**
+- Enable/disable toggle in Settings → Appearance
+- Default: Enabled
+- When disabled, destructive actions are permanent
+
+**Capacity:**
+- Maximum 50 commands in history
+- FIFO eviction when full
+- Redo stack clears on new command
+
+### Usage Flow
+```
+1. User deletes concept
+   ↓
+2. DeleteConceptCommand created with backup
+   ↓
+3. Command pushed to undo stack
+   ↓
+4. User presses ⌘Z
+   ↓
+5. Command.undo() restores concept
+   ↓
+6. Command moved to redo stack
 ```
 
 ---
@@ -802,8 +1021,12 @@ pub enum SettingsAction {
 - Warning about restart requirements
 
 **Appearance:**
-- Theme selector (Dark/Light/System)
+- Theme selector (Dark/Light/High Contrast) - NEW
 - Font size slider
+- Undo/Redo toggle - NEW
+
+**Onboarding:**
+- "Reset Onboarding Tour" button - NEW
 
 **Actions:**
 - Export/Import buttons
@@ -865,19 +1088,29 @@ pub enum ConnectionStatus {
 
 ## Theming Reference
 
-### Color Palette
+### Theme Modes (NEW)
+
+Sutra Desktop supports three theme modes, selectable in Settings:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Dark** | Default premium dark theme | General use, reduces eye strain |
+| **Light** | Clean light theme | Bright environments, printing |
+| **High Contrast** | WCAG AAA compliant | Accessibility, visual impairments |
+
+### Color Palette (Dark Theme - Default)
 
 ```rust
 // Primary colors
 PRIMARY:      #A78BFA  // Vibrant Purple
 PRIMARY_DIM:  #8B5CF6  // Deep Purple  
-PRIMARY_LIGHT:#C4B5FD  // Light Purple (NEW)
+PRIMARY_LIGHT:#C4B5FD  // Light Purple
 SECONDARY:    #60A5FA  // Sky Blue
 ACCENT:       #FBBF24  // Amber
 SUCCESS:      #34D399  // Emerald
 WARNING:      #FB923C  // Orange
 ERROR:        #F87171  // Red
-INFO:         #60A5FA  // Blue (NEW)
+INFO:         #60A5FA  // Blue
 
 // Backgrounds
 BG_DARK:      #0F0F19  // Darkest
@@ -889,8 +1122,53 @@ BG_ELEVATED:  #28283E  // Elevated cards
 
 // Text
 TEXT_PRIMARY:   #F8FAFC  // Almost white
-TEXT_SECONDARY: #A0AEC0  // Improved contrast (NEW)
-TEXT_MUTED:     #7D8CAD  // Better visibility (NEW)
+TEXT_SECONDARY: #A0AEC0  // Improved contrast
+TEXT_MUTED:     #7D8CAD  // Better visibility
+```
+
+### Color Palette (Light Theme)
+
+```rust
+// Backgrounds
+BG_DARK:      #FFFFFF  // Pure white
+BG_PANEL:     #F8FAFC  // Off-white panels
+BG_SIDEBAR:   #F1F5F9  // Light gray sidebar
+BG_WIDGET:    #E2E8F0  // Light inputs
+BG_HOVER:     #CBD5E1  // Hover state
+BG_ELEVATED:  #FFFFFF  // Elevated cards
+
+// Text
+TEXT_PRIMARY:   #0F172A  // Near black
+TEXT_SECONDARY: #475569  // Medium gray
+TEXT_MUTED:     #94A3B8  // Light gray
+```
+
+### Color Palette (High Contrast Theme)
+
+```rust
+// Backgrounds - Pure black for maximum contrast
+BG_DARK:      #000000  // Pure black
+BG_PANEL:     #000000  // Pure black
+BG_SIDEBAR:   #000000  // Pure black
+BG_WIDGET:    #1A1A1A  // Near black
+BG_HOVER:     #333333  // Dark gray
+BG_ELEVATED:  #0A0A0A  // Very dark
+
+// Primary - Bright cyan for visibility
+PRIMARY:      #00FFFF  // Cyan (high visibility)
+PRIMARY_DIM:  #00CCCC  // Darker cyan
+PRIMARY_LIGHT:#66FFFF  // Bright cyan
+
+// Text - Pure white for maximum contrast
+TEXT_PRIMARY:   #FFFFFF  // Pure white
+TEXT_SECONDARY: #E0E0E0  // Near white
+TEXT_MUTED:     #B0B0B0  // Light gray
+
+// Accents - High visibility colors
+ACCENT:       #FFFF00  // Yellow (high visibility)
+SUCCESS:      #00FF00  // Bright green
+WARNING:      #FFA500  // Orange
+ERROR:        #FF0000  // Pure red
 ```
 
 ### Common Styles

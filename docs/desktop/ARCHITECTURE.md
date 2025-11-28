@@ -1,7 +1,7 @@
 # Sutra Desktop Architecture
 
-**Version:** 3.3.0  
-**Updated:** November 27, 2025
+**Version:** 3.3.1  
+**Updated:** November 28, 2025
 
 This document describes the internal architecture of Sutra Desktop, including module structure, data flow, and design decisions.
 
@@ -63,15 +63,18 @@ desktop/
     ├── app.rs              # Main application controller
     ├── local_embedding.rs  # Local embedding (sutra-embedder - vendored)
     ├── local_nlg.rs        # Local NLG (sutraworks-model - vendored)
-    ├── theme.rs            # Color palette and styling
+    ├── theme.rs            # Color palette, themes, styling
     ├── types.rs            # Shared data types & AppMessage
     └── ui/
         ├── mod.rs          # Module exports
         ├── sidebar.rs      # Navigation sidebar
+        ├── home.rs         # Home dashboard (NEW)
         ├── chat.rs         # Chat interface
         ├── knowledge.rs    # Concept browser
         ├── settings.rs     # Settings panel
         ├── status_bar.rs   # Bottom status bar
+        ├── onboarding.rs   # First-launch tour (NEW)
+        ├── undo_redo.rs    # Command stack (NEW)
         ├── graph_view.rs   # Interactive graph visualization
         ├── reasoning_paths.rs   # MPPA path explorer
         ├── temporal_view.rs     # Timeline analysis
@@ -128,19 +131,30 @@ Key methods:
 
 ### theme.rs - Visual Design System
 
-Color palette following modern dark theme principles and **WCAG AA compliance**:
+Color palette following modern dark theme principles and **WCAG AA compliance**.
+Now supports **three theme modes**: Dark, Light, and High Contrast.
 
 ```rust
-// Enhanced primary colors
-pub const PRIMARY: Color32 = Color32::from_rgb(167, 139, 250);       // Vibrant Purple
-pub const PRIMARY_LIGHT: Color32 = Color32::from_rgb(196, 181, 253); // Light Purple (NEW)
-pub const INFO: Color32 = Color32::from_rgb(96, 165, 250);           // Blue (NEW)
+// Theme mode selection
+pub enum ThemeMode {
+    Dark,         // Default premium dark theme
+    Light,        // Clean light theme for bright environments
+    HighContrast, // WCAG AAA for accessibility
+}
 
-// Improved text colors - Better contrast
-pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(248, 250, 252);     // ~15:1 contrast
-pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(160, 174, 192);   // ~7:1 contrast (improved)
-pub const TEXT_MUTED: Color32 = Color32::from_rgb(125, 140, 165);       // ~5:1 contrast (improved)
+// Enhanced primary colors (Dark theme)
+pub const PRIMARY: Color32 = Color32::from_rgb(167, 139, 250);       // Vibrant Purple
+pub const PRIMARY_LIGHT: Color32 = Color32::from_rgb(196, 181, 253); // Light Purple
+pub const INFO: Color32 = Color32::from_rgb(96, 165, 250);           // Blue
+
+// Theme-aware getters
+pub fn primary() -> Color32;     // Returns theme-appropriate primary color
+pub fn bg_panel() -> Color32;    // Returns theme-appropriate background
+pub fn text_primary() -> Color32; // Returns theme-appropriate text color
 ```
+
+Theme can be changed in Settings → Appearance. The High Contrast theme uses
+pure black backgrounds with bright cyan/yellow accents for maximum visibility.
 
 ### types.rs - Shared Data Structures
 
@@ -221,6 +235,7 @@ Benefits:
 ```rust
 pub enum SidebarView {
     // MAIN section
+    Home,      // NEW: Default dashboard landing page
     Chat, Knowledge, Search,
     // ANALYSIS section (collapsible)
     Graph, Paths, Timeline, Causal,
@@ -232,6 +247,7 @@ pub enum SidebarView {
 ```
 
 The sidebar renders differently based on current selection and provides visual feedback.
+**Home** is now the default landing view.
 
 ### Panel Update Cycle
 
@@ -485,10 +501,12 @@ Manual testing checklist:
 
 ### Planned (v3.4+)
 
-1. **Local Embeddings**: ONNX Runtime for offline vector generation
+1. ✅ **Local Embeddings**: ONNX Runtime for offline vector generation (DONE)
 2. **Multi-Window**: Detachable panels using egui viewports
-3. **Themes**: Light mode and custom color schemes
-4. **Undo/Redo**: Transaction-based history
+3. ✅ **Themes**: Light mode and High Contrast (DONE - Nov 28, 2025)
+4. ✅ **Undo/Redo**: Transaction-based history (DONE - Nov 28, 2025)
+5. ✅ **Home Dashboard**: Default landing page with stats (DONE - Nov 28, 2025)
+6. ✅ **Onboarding Tour**: Interactive first-launch guide (DONE - Nov 28, 2025)
 
 ### Considered (v4.0+)
 
@@ -496,6 +514,8 @@ Manual testing checklist:
 2. **Collaborative**: Multi-user sync with conflict resolution
 3. **Mobile**: Touch-optimized UI for tablets
 4. **AI Assistant**: Local LLM integration (llama.cpp)
+5. **Context Menus**: Right-click actions for nodes and sidebar items
+6. **LOD Rendering**: Level-of-detail for massive graphs (10k+ nodes)
 
 ---
 

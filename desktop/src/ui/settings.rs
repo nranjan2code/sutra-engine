@@ -1,7 +1,7 @@
 //! Settings panel - Premium design
 
 use eframe::egui::{self, RichText, Rounding, ScrollArea, Stroke, TextEdit, Vec2};
-use crate::theme::{PRIMARY, SECONDARY, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, SUCCESS, WARNING, BG_WIDGET, BG_ELEVATED, elevated_card};
+use crate::theme::{PRIMARY, SECONDARY, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, SUCCESS, WARNING, BG_WIDGET, BG_ELEVATED, elevated_card, ThemeMode, apply_theme};
 
 #[derive(Clone)]
 pub struct StorageStatsUI {
@@ -35,7 +35,7 @@ pub struct SettingsPanel {
     pub vector_dimensions: String,
     
     // Appearance
-    pub theme: Theme,
+    pub theme_mode: ThemeMode,
     pub font_size: f32,
     
     // Storage stats
@@ -43,13 +43,9 @@ pub struct SettingsPanel {
     
     // State
     dirty: bool,
-}
-
-#[derive(Clone, PartialEq)]
-pub enum Theme {
-    Dark,
-    Light,
-    System,
+    
+    // Undo/Redo
+    pub show_undo_history: bool,
 }
 
 impl Default for SettingsPanel {
@@ -57,10 +53,11 @@ impl Default for SettingsPanel {
         Self {
             data_path: "~/.sutra/desktop".into(),
             vector_dimensions: "768".into(),
-            theme: Theme::Dark,
+            theme_mode: ThemeMode::Dark,
             font_size: 14.0,
             stats: StorageStatsUI::default(),
             dirty: false,
+            show_undo_history: false,
         }
     }
 }
@@ -89,7 +86,9 @@ impl SettingsPanel {
                 ui.add_space(20.0);
                 
                 // Appearance section
-                self.appearance_section(ui);
+                if let Some(a) = self.appearance_section(ui) {
+                    action = Some(a);
+                }
                 ui.add_space(20.0);
                 
                 // Actions section
@@ -97,7 +96,7 @@ impl SettingsPanel {
                 ui.add_space(20.0);
                 
                 // About section
-                self.about_section(ui);
+                self.about_section(ui, &mut action);
                 ui.add_space(40.0);
             });
         
@@ -213,7 +212,9 @@ impl SettingsPanel {
         });
     }
     
-    fn appearance_section(&mut self, ui: &mut egui::Ui) {
+    fn appearance_section(&mut self, ui: &mut egui::Ui) -> Option<SettingsAction> {
+        let mut action = None;
+        
         elevated_card().show(ui, |ui| {
             ui.set_width(ui.available_width());
             
@@ -224,24 +225,36 @@ impl SettingsPanel {
             });
             ui.add_space(16.0);
             
-            // Theme selector row
+            // Theme selector row with visual preview
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Theme").size(13.0).color(TEXT_SECONDARY));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    egui::ComboBox::from_id_salt("theme")
-                        .width(120.0)
-                        .selected_text(match self.theme {
-                            Theme::Dark => "Dark",
-                            Theme::Light => "Light",
-                            Theme::System => "System",
-                        })
+                    let old_theme = self.theme_mode;
+                    egui::ComboBox::from_id_salt("theme_mode")
+                        .width(150.0)
+                        .selected_text(self.theme_mode.name())
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.theme, Theme::Dark, "Dark");
-                            ui.selectable_value(&mut self.theme, Theme::Light, "Light");
-                            ui.selectable_value(&mut self.theme, Theme::System, "System");
+                            ui.selectable_value(&mut self.theme_mode, ThemeMode::Dark, "🌙 Dark");
+                            ui.selectable_value(&mut self.theme_mode, ThemeMode::Light, "☀️ Light");
+                            ui.selectable_value(&mut self.theme_mode, ThemeMode::HighContrast, "🔲 High Contrast");
                         });
+                    
+                    if self.theme_mode != old_theme {
+                        action = Some(SettingsAction::ChangeTheme(self.theme_mode));
+                    }
                 });
             });
+            
+            ui.add_space(8.0);
+            
+            // Theme description
+            egui::Frame::none()
+                .fill(BG_WIDGET.gamma_multiply(0.5))
+                .rounding(Rounding::same(8.0))
+                .inner_margin(egui::Margin::symmetric(10.0, 6.0))
+                .show(ui, |ui| {
+                    ui.label(RichText::new(self.theme_mode.description()).size(11.0).color(TEXT_MUTED));
+                });
             
             ui.add_space(12.0);
             
@@ -255,6 +268,8 @@ impl SettingsPanel {
                 });
             });
         });
+        
+        action
     }
     
     fn actions_section(&mut self, ui: &mut egui::Ui, action: &mut Option<SettingsAction>) {
@@ -299,7 +314,7 @@ impl SettingsPanel {
         });
     }
     
-    fn about_section(&self, ui: &mut egui::Ui) {
+    fn about_section(&self, ui: &mut egui::Ui, action: &mut Option<SettingsAction>) {
         elevated_card().show(ui, |ui| {
             ui.set_width(ui.available_width());
             
@@ -334,6 +349,15 @@ impl SettingsPanel {
                 ui.label(RichText::new("•").color(TEXT_MUTED));
                 ui.hyperlink_to(RichText::new("License").size(13.0), "https://github.com/sutraworks/sutra/blob/main/LICENSE");
             });
+            
+            ui.add_space(16.0);
+            
+            // Tour button
+            let tour_btn = egui::Button::new(RichText::new("🎓 Start Interactive Tour").size(13.0))
+                .rounding(Rounding::same(8.0));
+            if ui.add(tour_btn).clicked() {
+                *action = Some(SettingsAction::StartTour);
+            }
         });
     }
     
@@ -363,4 +387,6 @@ pub enum SettingsAction {
     ExportData,
     ImportData,
     ClearData,
+    ChangeTheme(ThemeMode),
+    StartTour,
 }

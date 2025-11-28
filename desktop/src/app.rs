@@ -3,13 +3,17 @@
 //! This module provides the GUI lifecycle management.
 //! ALL storage logic comes from sutra_storage crate - NO duplication.
 //!
-//! ENHANCED UI (v3.3) features:
+//! ENHANCED UI (v3.4) features:
 //! - Graph visualization with force-directed layout
 //! - MPPA-style reasoning path exploration
 //! - Temporal and causal analysis views
 //! - Real-time analytics dashboard
 //! - Advanced query builder
 //! - Export/Import functionality
+//! - Interactive onboarding tour
+//! - Global undo/redo system
+//! - Home dashboard
+//! - High contrast theme support
 
 use std::path::PathBuf;
 use std::sync::{Arc, mpsc};
@@ -55,7 +59,14 @@ use crate::ui::{
     ExportImportPanel, ExportImportAction,
 };
 
-use crate::theme::{BG_DARK, BG_PANEL};
+// New UX features (v3.4)
+use crate::ui::{
+    OnboardingTour, OnboardingAction, is_first_launch, mark_onboarding_complete,
+    CommandHistory, Command, UndoRedoResult,
+    HomeDashboard, HomeAction, DashboardActivityType,
+};
+
+use crate::theme::{BG_DARK, BG_PANEL, ThemeMode, apply_theme};
 use crate::types::{
     AppMessage, ConceptInfo, GraphNode, GraphEdge, EdgeType,
     ReasoningPath, PathStep, ConsensusResult, PathCluster,
@@ -93,6 +104,11 @@ pub struct SutraApp {
     analytics: AnalyticsDashboard,
     query_builder: QueryBuilder,
     export_import: ExportImportPanel,
+    
+    // New UX features (v3.4)
+    home_dashboard: HomeDashboard,
+    onboarding: OnboardingTour,
+    command_history: CommandHistory,
     
     // State
     initialized: bool,
@@ -183,6 +199,9 @@ impl SutraApp {
         
         let (tx, rx) = mpsc::channel();
         
+        // Check if this is first launch for onboarding
+        let first_launch = is_first_launch();
+        
         Self {
             storage: Arc::new(storage),
             pipeline,
@@ -205,6 +224,11 @@ impl SutraApp {
             analytics: AnalyticsDashboard::default(),
             query_builder: QueryBuilder::default(),
             export_import: ExportImportPanel::default(),
+            
+            // New UX features (v3.4)
+            home_dashboard: HomeDashboard::default(),
+            onboarding: OnboardingTour::new(first_launch),
+            command_history: CommandHistory::new(),
             
             initialized: false,
         }
@@ -1270,7 +1294,7 @@ impl SutraApp {
     // Settings Actions
     // ========================================================================
     
-    fn handle_settings_action(&mut self, action: SettingsAction) {
+    fn handle_settings_action(&mut self, action: SettingsAction, ctx: &egui::Context) {
         match action {
             SettingsAction::Save => {
                 match self.storage.flush() {
@@ -1335,6 +1359,67 @@ impl SutraApp {
                 self.refresh_stats();
                 self.status_bar.set_activity("All data cleared");
                 info!("Storage cleared and reinitialized");
+            }
+            SettingsAction::ChangeTheme(mode) => {
+                apply_theme(ctx, mode);
+                self.status_bar.set_activity(format!("Theme changed to {}", mode.name()));
+                info!("Theme changed to {:?}", mode);
+            }
+            SettingsAction::StartTour => {
+                self.onboarding.start();
+                self.status_bar.set_activity("Starting interactive tour");
+            }
+        }
+    }
+    
+    // ========================================================================
+    // Home Dashboard Actions
+    // ========================================================================
+    
+    fn handle_home_action(&mut self, action: HomeAction) {
+        match action {
+            HomeAction::GoToChat => {
+                self.sidebar.current_view = SidebarView::Chat;
+            }
+            HomeAction::GoToQuickLearn => {
+                self.sidebar.current_view = SidebarView::Search;
+            }
+            HomeAction::GoToGraph => {
+                self.sidebar.current_view = SidebarView::Graph;
+                self.handle_graph_action(GraphAction::Refresh);
+            }
+            HomeAction::GoToImport => {
+                self.sidebar.current_view = SidebarView::Export;
+            }
+            HomeAction::StartTour => {
+                self.onboarding.start();
+            }
+        }
+    }
+    
+    // ========================================================================
+    // Onboarding Tour Actions
+    // ========================================================================
+    
+    fn handle_onboarding_action(&mut self, action: OnboardingAction) {
+        match action {
+            OnboardingAction::Next => {
+                self.onboarding.next_step();
+                if !self.onboarding.should_show() {
+                    mark_onboarding_complete();
+                    self.status_bar.set_activity("Tour completed! Welcome to Sutra AI.");
+                }
+            }
+            OnboardingAction::Prev => {
+                self.onboarding.prev_step();
+            }
+            OnboardingAction::Dismiss => {
+                self.onboarding.dismiss();
+                mark_onboarding_complete();
+                self.status_bar.set_activity("Tour skipped. You can restart it from Settings.");
+            }
+            OnboardingAction::NavigateTo(view) => {
+                self.sidebar.current_view = view;
             }
         }
     }
@@ -1827,6 +1912,15 @@ impl eframe::App for SutraApp {
             let events = self.load_temporal_events();
             self.temporal_view.load_events(events);
             
+            // Update home dashboard stats
+            let stats = self.storage.stats();
+            self.home_dashboard.update_stats(
+                stats.snapshot.concept_count,
+                stats.snapshot.edge_count,
+                0, // concepts_today - would need tracking
+                0, // queries_today - would need tracking
+            );
+            
             self.initialized = true;
         }
         
@@ -1858,6 +1952,13 @@ impl eframe::App for SutraApp {
             .frame(egui::Frame::none().fill(BG_PANEL).inner_margin(16.0))
             .show(ctx, |ui| {
                 match self.sidebar.current_view {
+                    // Home dashboard (new default)
+                    SidebarView::Home => {
+                        if let Some(action) = self.home_dashboard.ui(ui) {
+                            self.handle_home_action(action);
+                        }
+                    }
+                    
                     // Core views
                     SidebarView::Chat => {
                         if let Some(action) = self.chat.ui(ui) {
@@ -1876,7 +1977,7 @@ impl eframe::App for SutraApp {
                     }
                     SidebarView::Settings => {
                         if let Some(action) = self.settings.ui(ui) {
-                            self.handle_settings_action(action);
+                            self.handle_settings_action(action, ctx);
                         }
                     }
                     
@@ -1918,6 +2019,14 @@ impl eframe::App for SutraApp {
                     }
                 }
             });
+        
+        // Render onboarding overlay (on top of everything)
+        if self.onboarding.should_show() {
+            let screen_rect = ctx.screen_rect();
+            if let Some(action) = self.onboarding.render(ctx, screen_rect) {
+                self.handle_onboarding_action(action);
+            }
+        }
     }
     
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

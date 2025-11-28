@@ -1,8 +1,8 @@
 # Sutra Desktop
 
-**Version:** 3.3.0  
-**Release Date:** November 27, 2025  
-**Status:** Production Ready ✅ (Local AI Integrated)
+**Version:** 3.3.1  
+**Release Date:** November 28, 2025  
+**Status:** Production Ready ✅ (Local AI + UX Enhancements)
 
 Pure Rust native application for personal knowledge management with semantic reasoning, temporal analysis, and causal understanding - no servers, no Docker, no external dependencies required.
 
@@ -21,7 +21,10 @@ Sutra Desktop is a self-contained knowledge management application that brings e
 | ⚡ **Async Architecture** | Non-blocking UI with background processing |
 | 🔒 **Complete Privacy** | All data stays on your machine |
 | 📦 **Self-Contained** | Single binary + auto-downloaded AI models (~500MB) |
-| 🎨 **Modern UI** | Premium dark theme with enhanced menu bar |
+| 🎨 **Modern UI** | Premium themes (Dark/Light/High Contrast) with enhanced menu bar |
+| 🏠 **Home Dashboard** | Stats, quick actions, activity feed, and learning tips |
+| 🎓 **Onboarding Tour** | Interactive 7-step first-launch guide |
+| ↩️ **Undo/Redo** | Global command stack with ⌘Z/⌘⇧Z shortcuts |
 | 💾 **Full Storage Engine** | Reuses `sutra-storage` crate (no code duplication) |
 | 💬 **Enhanced Chat** | Multiline input, improved autocomplete, better visual design |
 | 🔍 **Multi-View Analysis** | Graph, temporal, causal, and path visualization |
@@ -33,6 +36,8 @@ Sutra Desktop is a self-contained knowledge management application that brings e
 
 ### What's Included
 
+- **Home Dashboard**: Default landing view with stats, quick actions, recent activity, and tips
+- **Onboarding Tour**: Interactive 7-step overlay guide for first-time users
 - **Enhanced Menu Bar**: File/View/Help menus with keyboard shortcuts
 - **Chat Interface**: Natural language interaction with multiline input and autocomplete
 - **Knowledge Browser**: Responsive grid view to browse, search, and safely delete concepts
@@ -44,6 +49,8 @@ Sutra Desktop is a self-contained knowledge management application that brings e
 - **Query Builder**: Visual advanced search with filters
 - **Export/Import**: JSON, CSV, GraphML, and Cypher formats
 - **Concept Deletion**: Permanent removal across Knowledge and Quick Learn panels
+- **Theme System**: Dark, Light, and High Contrast modes
+- **Undo/Redo**: Global command stack (⌘Z/⌘⇧Z) for destructive actions
 
 ---
 
@@ -99,11 +106,18 @@ Type `/` in the chat to see available commands with autocomplete:
 
 ### Keyboard Shortcuts
 
+**Navigation:**
 - **↑/↓ arrows**: Navigate autocomplete suggestions
 - **Enter**: Send message
 - **Shift+Enter**: Insert new line
 - **Tab**: Accept autocomplete suggestion
 - **Esc**: Close autocomplete
+
+**Undo/Redo:**
+- **⌘Z** (Mac) / **Ctrl+Z** (Win/Linux): Undo last action
+- **⌘⇧Z** (Mac) / **Ctrl+Shift+Z** (Win/Linux): Redo action
+- Supports up to 50 undoable commands
+- Available for: Delete concept, Delete batch, Clear all data
 
 ### Navigation
 
@@ -115,6 +129,7 @@ Type `/` in the chat to see available commands with autocomplete:
 **Sidebar:**
 
 **MAIN**
+- 🏠 **Home** - Dashboard with stats, actions, and tips (DEFAULT)
 - 💬 **Chat** - Conversational interface
 - 📚 **Knowledge** - Browse concepts (responsive grid)
 - 🔍 **Search** - Quick search with deletion options

@@ -1,7 +1,66 @@
 //! Modern dark theme for Sutra Desktop
 //! Premium design with rich purple accent
+//! Supports multiple theme variants including high contrast
 
 use eframe::egui::{self, Color32, Frame, Margin, Rounding, Stroke, Visuals};
+use std::sync::atomic::{AtomicU8, Ordering};
+
+// ============================================================================
+// Theme Selection
+// ============================================================================
+
+/// Current theme mode (stored atomically for thread safety)
+static CURRENT_THEME: AtomicU8 = AtomicU8::new(0); // 0 = Dark, 1 = Light, 2 = HighContrast
+
+/// Available theme modes
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ThemeMode {
+    #[default]
+    Dark,
+    Light,
+    HighContrast,
+}
+
+impl ThemeMode {
+    pub fn name(&self) -> &'static str {
+        match self {
+            ThemeMode::Dark => "Dark",
+            ThemeMode::Light => "Light", 
+            ThemeMode::HighContrast => "High Contrast",
+        }
+    }
+    
+    pub fn description(&self) -> &'static str {
+        match self {
+            ThemeMode::Dark => "Default dark theme with purple accents",
+            ThemeMode::Light => "Light theme for bright environments",
+            ThemeMode::HighContrast => "Maximum contrast for accessibility",
+        }
+    }
+}
+
+/// Get current theme mode
+pub fn current_theme() -> ThemeMode {
+    match CURRENT_THEME.load(Ordering::Relaxed) {
+        1 => ThemeMode::Light,
+        2 => ThemeMode::HighContrast,
+        _ => ThemeMode::Dark,
+    }
+}
+
+/// Set theme mode
+pub fn set_theme(mode: ThemeMode) {
+    let value = match mode {
+        ThemeMode::Dark => 0,
+        ThemeMode::Light => 1,
+        ThemeMode::HighContrast => 2,
+    };
+    CURRENT_THEME.store(value, Ordering::Relaxed);
+}
+
+// ============================================================================
+// Dark Theme Colors (Default)
+// ============================================================================
 
 // Primary palette - Vibrant and modern
 pub const PRIMARY: Color32 = Color32::from_rgb(167, 139, 250);    // Vibrant Purple
@@ -27,52 +86,194 @@ pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(248, 250, 252);   // Almost 
 pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(160, 174, 192); // Lighter Slate (~7:1 contrast)
 pub const TEXT_MUTED: Color32 = Color32::from_rgb(125, 140, 165);     // Lightened Dimmed (~5:1 contrast)
 
-/// Apply custom theme to egui context
-pub fn setup_custom_theme(ctx: &egui::Context) {
-    let mut visuals = Visuals::dark();
+// ============================================================================
+// Light Theme Colors
+// ============================================================================
+
+pub mod light {
+    use super::*;
     
-    // Window - subtle border for depth
-    visuals.window_fill = BG_PANEL;
-    visuals.window_stroke = Stroke::new(1.0, Color32::from_rgb(50, 50, 75));
+    pub const PRIMARY: Color32 = Color32::from_rgb(124, 58, 237);     // Deeper purple for light bg
+    pub const PRIMARY_DIM: Color32 = Color32::from_rgb(109, 40, 217);
+    pub const PRIMARY_LIGHT: Color32 = Color32::from_rgb(167, 139, 250);
+    pub const SECONDARY: Color32 = Color32::from_rgb(59, 130, 246);
+    pub const ACCENT: Color32 = Color32::from_rgb(217, 119, 6);       // Darker amber
+    pub const SUCCESS: Color32 = Color32::from_rgb(16, 185, 129);
+    pub const WARNING: Color32 = Color32::from_rgb(245, 158, 11);
+    pub const ERROR: Color32 = Color32::from_rgb(239, 68, 68);
+    pub const INFO: Color32 = Color32::from_rgb(59, 130, 246);
+    
+    pub const BG_DARK: Color32 = Color32::from_rgb(249, 250, 251);    // Lightest
+    pub const BG_PANEL: Color32 = Color32::from_rgb(255, 255, 255);   // White
+    pub const BG_SIDEBAR: Color32 = Color32::from_rgb(243, 244, 246); // Light gray
+    pub const BG_WIDGET: Color32 = Color32::from_rgb(229, 231, 235);  // Input bg
+    pub const BG_HOVER: Color32 = Color32::from_rgb(209, 213, 219);   // Hover
+    pub const BG_ELEVATED: Color32 = Color32::from_rgb(255, 255, 255);// Cards
+    
+    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(17, 24, 39);  // Near black
+    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(75, 85, 99);
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(107, 114, 128);
+}
+
+// ============================================================================
+// High Contrast Theme Colors (WCAG AAA Compliant)
+// ============================================================================
+
+pub mod high_contrast {
+    use super::*;
+    
+    // Maximum contrast colors
+    pub const PRIMARY: Color32 = Color32::from_rgb(255, 255, 0);      // Yellow on black
+    pub const PRIMARY_DIM: Color32 = Color32::from_rgb(255, 215, 0);  // Gold
+    pub const PRIMARY_LIGHT: Color32 = Color32::from_rgb(255, 255, 150);
+    pub const SECONDARY: Color32 = Color32::from_rgb(0, 255, 255);    // Cyan
+    pub const ACCENT: Color32 = Color32::from_rgb(255, 165, 0);       // Orange
+    pub const SUCCESS: Color32 = Color32::from_rgb(0, 255, 0);        // Bright green
+    pub const WARNING: Color32 = Color32::from_rgb(255, 165, 0);      // Orange
+    pub const ERROR: Color32 = Color32::from_rgb(255, 0, 0);          // Red
+    pub const INFO: Color32 = Color32::from_rgb(0, 191, 255);         // Deep sky blue
+    
+    // Pure black backgrounds for maximum contrast
+    pub const BG_DARK: Color32 = Color32::from_rgb(0, 0, 0);
+    pub const BG_PANEL: Color32 = Color32::from_rgb(0, 0, 0);
+    pub const BG_SIDEBAR: Color32 = Color32::from_rgb(0, 0, 0);
+    pub const BG_WIDGET: Color32 = Color32::from_rgb(20, 20, 20);
+    pub const BG_HOVER: Color32 = Color32::from_rgb(40, 40, 40);
+    pub const BG_ELEVATED: Color32 = Color32::from_rgb(30, 30, 30);
+    
+    // Pure white text for maximum contrast
+    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(255, 255, 255);
+    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(255, 255, 255);
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(200, 200, 200);
+}
+
+// ============================================================================
+// Theme-aware color getters
+// ============================================================================
+
+/// Get primary color for current theme
+pub fn primary() -> Color32 {
+    match current_theme() {
+        ThemeMode::Dark => PRIMARY,
+        ThemeMode::Light => light::PRIMARY,
+        ThemeMode::HighContrast => high_contrast::PRIMARY,
+    }
+}
+
+/// Get background panel color for current theme
+pub fn bg_panel() -> Color32 {
+    match current_theme() {
+        ThemeMode::Dark => BG_PANEL,
+        ThemeMode::Light => light::BG_PANEL,
+        ThemeMode::HighContrast => high_contrast::BG_PANEL,
+    }
+}
+
+/// Get text primary color for current theme
+pub fn text_primary() -> Color32 {
+    match current_theme() {
+        ThemeMode::Dark => TEXT_PRIMARY,
+        ThemeMode::Light => light::TEXT_PRIMARY,
+        ThemeMode::HighContrast => high_contrast::TEXT_PRIMARY,
+    }
+}
+
+/// Get text secondary color for current theme
+pub fn text_secondary() -> Color32 {
+    match current_theme() {
+        ThemeMode::Dark => TEXT_SECONDARY,
+        ThemeMode::Light => light::TEXT_SECONDARY,
+        ThemeMode::HighContrast => high_contrast::TEXT_SECONDARY,
+    }
+}
+
+/// Apply custom theme to egui context (initial setup)
+pub fn setup_custom_theme(ctx: &egui::Context) {
+    apply_theme(ctx, ThemeMode::Dark);
+}
+
+/// Apply a specific theme to the context
+pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode) {
+    set_theme(mode);
+    
+    let (bg_panel, bg_widget, bg_hover, bg_dark, text_primary, text_secondary, primary, secondary) = match mode {
+        ThemeMode::Dark => (
+            BG_PANEL, BG_WIDGET, BG_HOVER, BG_DARK, 
+            TEXT_PRIMARY, TEXT_SECONDARY, PRIMARY, SECONDARY
+        ),
+        ThemeMode::Light => (
+            light::BG_PANEL, light::BG_WIDGET, light::BG_HOVER, light::BG_DARK,
+            light::TEXT_PRIMARY, light::TEXT_SECONDARY, light::PRIMARY, light::SECONDARY
+        ),
+        ThemeMode::HighContrast => (
+            high_contrast::BG_PANEL, high_contrast::BG_WIDGET, high_contrast::BG_HOVER, high_contrast::BG_DARK,
+            high_contrast::TEXT_PRIMARY, high_contrast::TEXT_SECONDARY, high_contrast::PRIMARY, high_contrast::SECONDARY
+        ),
+    };
+    
+    let mut visuals = match mode {
+        ThemeMode::Light => Visuals::light(),
+        _ => Visuals::dark(),
+    };
+    
+    // Window
+    visuals.window_fill = bg_panel;
+    visuals.window_stroke = Stroke::new(1.0, if mode == ThemeMode::HighContrast { 
+        Color32::WHITE 
+    } else { 
+        Color32::from_rgb(50, 50, 75) 
+    });
     visuals.window_shadow = egui::Shadow::NONE;
     visuals.window_rounding = Rounding::same(16.0);
     
-    // Panel - clean background
-    visuals.panel_fill = BG_PANEL;
+    // Panel
+    visuals.panel_fill = bg_panel;
     
-    // Widgets - polished with subtle borders
-    visuals.widgets.noninteractive.bg_fill = BG_WIDGET;
-    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, TEXT_SECONDARY);
+    // Widgets
+    visuals.widgets.noninteractive.bg_fill = bg_widget;
+    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, text_secondary);
     visuals.widgets.noninteractive.rounding = Rounding::same(10.0);
-    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(55, 55, 80));
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(
+        if mode == ThemeMode::HighContrast { 2.0 } else { 1.0 }, 
+        if mode == ThemeMode::HighContrast { Color32::WHITE } else { Color32::from_rgb(55, 55, 80) }
+    );
     
-    visuals.widgets.inactive.bg_fill = BG_WIDGET;
-    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, TEXT_PRIMARY);
+    visuals.widgets.inactive.bg_fill = bg_widget;
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, text_primary);
     visuals.widgets.inactive.rounding = Rounding::same(10.0);
-    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(55, 55, 80));
+    visuals.widgets.inactive.bg_stroke = Stroke::new(
+        if mode == ThemeMode::HighContrast { 2.0 } else { 1.0 },
+        if mode == ThemeMode::HighContrast { Color32::WHITE } else { Color32::from_rgb(55, 55, 80) }
+    );
     
-    visuals.widgets.hovered.bg_fill = BG_HOVER;
-    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, TEXT_PRIMARY);
+    visuals.widgets.hovered.bg_fill = bg_hover;
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, text_primary);
     visuals.widgets.hovered.rounding = Rounding::same(10.0);
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, PRIMARY.gamma_multiply(0.4));
+    visuals.widgets.hovered.bg_stroke = Stroke::new(
+        if mode == ThemeMode::HighContrast { 3.0 } else { 1.0 }, 
+        primary
+    );
     
-    visuals.widgets.active.bg_fill = PRIMARY.gamma_multiply(0.25);
-    visuals.widgets.active.fg_stroke = Stroke::new(1.5, PRIMARY);
+    visuals.widgets.active.bg_fill = primary.gamma_multiply(0.25);
+    visuals.widgets.active.fg_stroke = Stroke::new(1.5, primary);
     visuals.widgets.active.rounding = Rounding::same(10.0);
-    visuals.widgets.active.bg_stroke = Stroke::new(1.0, PRIMARY.gamma_multiply(0.6));
+    visuals.widgets.active.bg_stroke = Stroke::new(
+        if mode == ThemeMode::HighContrast { 3.0 } else { 1.0 }, 
+        primary
+    );
     
-    // Selection - vibrant highlight
-    visuals.selection.bg_fill = PRIMARY.gamma_multiply(0.25);
-    visuals.selection.stroke = Stroke::new(1.0, PRIMARY);
+    // Selection
+    visuals.selection.bg_fill = primary.gamma_multiply(if mode == ThemeMode::HighContrast { 0.5 } else { 0.25 });
+    visuals.selection.stroke = Stroke::new(if mode == ThemeMode::HighContrast { 2.0 } else { 1.0 }, primary);
     
     // Extreme background
-    visuals.extreme_bg_color = BG_DARK;
+    visuals.extreme_bg_color = bg_dark;
     
-    // Hyperlinks - use secondary color
-    visuals.hyperlink_color = SECONDARY;
+    // Hyperlinks
+    visuals.hyperlink_color = secondary;
     
-    // Text cursor - prominent
-    visuals.text_cursor.stroke = Stroke::new(2.0, PRIMARY);
+    // Text cursor
+    visuals.text_cursor.stroke = Stroke::new(2.0, primary);
     
     ctx.set_visuals(visuals);
     

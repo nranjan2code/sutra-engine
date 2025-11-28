@@ -21,6 +21,11 @@ pub mod analytics;
 pub mod query_builder;
 pub mod export_import;
 
+// New UX features (v3.4.0)
+pub mod onboarding;
+pub mod undo_redo;
+pub mod home;
+
 // Re-exports for core panels
 pub use sidebar::{Sidebar, SidebarView};
 pub use chat::{ChatPanel, ChatAction};
@@ -37,3 +42,9 @@ pub use causal_view::{CausalView, CausalViewAction};
 pub use analytics::{AnalyticsDashboard, AnalyticsAction};
 pub use query_builder::{QueryBuilder, QueryBuilderAction};
 pub use export_import::{ExportImportPanel, ExportImportAction};
+
+// Re-exports for new UX features
+pub use onboarding::{OnboardingTour, OnboardingAction, is_first_launch, mark_onboarding_complete};
+pub use undo_redo::{CommandHistory, Command, CommandType, UndoRedoResult};
+pub use home::{HomeDashboard, HomeAction, DashboardActivityType};
+
