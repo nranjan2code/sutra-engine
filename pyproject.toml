@@ -49,10 +49,10 @@ cli = ["sutra-cli"]
 all = ["sutra-hybrid", "sutra-api", "sutra-cli"]
 
 [project.urls]
-Homepage = "https://github.com/sutra-ai/sutra-models"
-Repository = "https://github.com/sutra-ai/sutra-models"
-Documentation = "https://sutra-ai.github.io/sutra-models"
-Issues = "https://github.com/sutra-ai/sutra-models/issues"
+Homepage = "https://github.com/sutraworks/sutra-memory"
+Repository = "https://github.com/sutraworks/sutra-memory"
+Documentation = "https://github.com/sutraworks/sutra-memory/docs"
+Issues = "https://github.com/sutraworks/sutra-memory/issues"
 
 [tool.setuptools.packages.find]
 where = ["packages"]

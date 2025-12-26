@@ -30,8 +30,8 @@ members = [
 version = "1.0.0"
 edition = "2021"
 authors = ["SutraWorks"]
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/sutraworks/model"
+license = "MIT"
+repository = "https://github.com/sutraworks/sutra-memory"
 
 # Shared dependencies for consistency across workspace
 [workspace.dependencies]

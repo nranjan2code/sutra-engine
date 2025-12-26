@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Sutra AI - Explainable Graph-Based Reasoning",
+  "license": "MIT",
   "scripts": {
     "dev": "concurrently -n API,CLIENT -c cyan,magenta \"npm run dev:api\" \"npm run dev:client\"",
     "dev:api": "source venv/bin/activate && cd packages/sutra-api && python -m sutra_api.main",
