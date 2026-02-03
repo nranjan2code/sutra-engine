@@ -4,41 +4,52 @@ Sutra Memory allows you to release the core storage engine as a single, standalo
 
 ## 📦 What is the Standalone Engine?
 
-The Standalone Engine is a single binary executable (`sutra-engine`) that contains:
+The Standalone Engine is a professional-grade release containing:
 
-*   **Core Storage Engine**: The Rust-based, lock-free concurrent memory system.
-*   **TCP Server**: High-performance binary protocol server (10-50x faster than REST).
-*   **HNSW Vector Index**: Embedded vector search capabilities.
-*   **Adaptive Reconciler**: Background maintenance and optimization.
-*   **WAL (Write-Ahead Log)**: Crash recovery and data persistence.
-
-It does **NOT** contain:
-*   Python/Javascript bindings (though you can connect to it using them).
-*   Web UI or Dashboard.
-*   Distributed consensus or sharding logic (unless configured for sharded mode).
+*   **Core Storage Engine**: The Rust-based binary (`sutra-engine`).
+*   **Python Client**: A high-performance, pooled client (`sutra-engine-client`).
+*   **Documentation**: API Reference, Architecture deep-dive, and Python Guide.
+*   **Examples**: Ready-to-use demos and service templates.
 
 ## 🚀 Building a Release
 
-We provide a script to automatically build and package the standalone engine:
+We provide a two-step process to build and publish the standalone engine.
+
+### 1. Build the Release Package
+Run the following script to compile the engine and gather assets:
 
 ```bash
 ./scripts/release_storage_engine.sh
 ```
 
-This script will:
-1.  Compile the `storage-server` binary in release mode (optimizing for speed).
-2.  Create a `release/sutra-engine` directory.
-3.  Package the binary, a README, and a convenience start script.
+This creates a self-contained package in `release/sutra-engine/`.
 
-### Output Structure
+### 2. Publish to the Standalone Repo
+If GitHub Actions are available, this happens automatically on push. If you need to push manually (e.g., if Actions are locked), use:
 
-The release directory (`release/sutra-engine/`) will contain:
+```bash
+./scripts/push_to_standalone.sh
+```
+
+This will take the contents of `release/sutra-engine/` and push them directly to [nranjan2code/sutra-engine](https://github.com/nranjan2code/sutra-engine).
+
+## 📂 Repository Structure
+
+The standalone repository is organized for professional use:
 
 ```text
 sutra-engine/
-├── sutra-engine       # The standalone binary
-├── start-engine.sh    # Convenience launch script
-└── README.md          # Usage instructions
+├── sutra-engine           # Core Rust binary
+├── setup.py               # Pip-installable configuration
+├── sutra_engine_client/   # Professional Python Package
+│   ├── client.py          # High-level API (SutraClient)
+│   ├── base_client.py     # High-performance TCP logic
+│   └── connection_pool.py # Connection pooling
+├── docs/                  # Professional Documentation
+│   ├── API.md             # Protocol Reference
+│   ├── ARCHITECTURE.md    # Internal deep-dive
+│   └── PYTHON_CLIENT.md   # Client usage guide
+└── examples/              # Working demonstrations
 ```
 
 ## 🛠️ Usage

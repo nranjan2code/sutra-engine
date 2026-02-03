@@ -95,7 +95,13 @@ Single-binary release for embedding in other applications.
 - Ideal for usage inside other backends/products
 
 ```bash
+# 1. Build the release package
 ./scripts/release_storage_engine.sh
+
+# 2. Push to standalone repo (Manual fallback)
+./scripts/push_to_standalone.sh
+
+# 3. Run the engine
 ./release/sutra-engine/sutra-engine
 ```
 

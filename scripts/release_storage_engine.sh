@@ -1,4 +1,6 @@
 #!/bin/bash
+# Sutra Engine Standalone Release Builder
+# Compiles the Rust core and packages it with docs, client, and examples.
 set -e
 
 # Configuration
