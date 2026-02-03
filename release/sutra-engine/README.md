@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/nranjan2code/sutra-memory/main/assets/sutra-logo.png" alt="Sutra Engine Logo" width="200"/>
+  <img src="assets/logo.png" alt="Sutra Engine Logo" width="300"/>
   <h1>Sutra Engine</h1>
   <p><b>High-Performance Explainable Memory Engine for Reasoning Agents</b></p>
 
