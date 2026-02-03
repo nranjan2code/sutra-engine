@@ -29,10 +29,9 @@ rm -rf "$TEMP_DIR"
 echo -e "${BLUE}📂 Cloning target repository...${NC}"
 git clone "$TARGET_REPO" "$TEMP_DIR"
 
-# Copy files (excluding .git)
-echo -e "${BLUE}📦 Copying files...${NC}"
-cp -r "$SOURCE_DIR/"* "$TEMP_DIR/"
-cp "$SOURCE_DIR/.gitignore" "$TEMP_DIR/" 2>/dev/null || true
+# Sync files (excluding .git)
+echo -e "${BLUE}📦 Syncing files...${NC}"
+rsync -av --delete --exclude=".git" "$SOURCE_DIR/" "$TEMP_DIR/"
 
 # Navigate to temp dir
 cd "$TEMP_DIR"

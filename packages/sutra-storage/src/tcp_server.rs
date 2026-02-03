@@ -161,6 +161,10 @@ pub enum StorageRequest {
         filter: SemanticFilterMsg,
         limit: Option<usize>,
     },
+    TextSearch {
+        query: String,
+        limit: u32,
+    },
     GetStats,
     Flush,
     HealthCheck,
@@ -215,6 +219,9 @@ pub enum StorageResponse {
     },
     QueryBySemanticOk {
         concepts: Vec<ConceptWithSemanticMsg>,
+    },
+    TextSearchOk {
+        results: Vec<(String, f32)>, // (concept_id, score)
     },
     StatsOk {
         concepts: u64,
@@ -325,7 +332,7 @@ impl StorageServer {
                 let error = StorageResponse::Error {
                     message: format!("Message too large: {} bytes (max: {})", len, MAX_MESSAGE_SIZE),
                 };
-                let response_bytes = rmp_serde::to_vec(&error)
+                let response_bytes = rmp_serde::to_vec_named(&error)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
                 stream.write_u32(response_bytes.len() as u32).await?;
                 stream.write_all(&response_bytes).await?;
@@ -345,7 +352,7 @@ impl StorageServer {
             let response = self.handle_request(request).await;
 
             // Serialize response (msgpack for Python clients)
-            let response_bytes = rmp_serde::to_vec(&response)
+            let response_bytes = rmp_serde::to_vec_named(&response)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
             // Write response
@@ -600,6 +607,14 @@ impl StorageServer {
             
             StorageRequest::QueryBySemantic { filter, limit } => {
                 self.handle_query_by_semantic(filter, limit)
+            }
+            StorageRequest::TextSearch { query, limit } => {
+                match self.pipeline.search(&self.storage, &query, limit as usize).await {
+                    Ok(results) => StorageResponse::TextSearchOk { 
+                        results: results.into_iter().map(|(id, score)| (id.to_hex(), score)).collect() 
+                    },
+                    Err(e) => StorageResponse::Error { message: format!("TextSearch failed: {}", e) },
+                }
             }
         }
     }
@@ -953,7 +968,7 @@ impl ShardedStorageServer {
             let response = self.handle_request(request).await;
 
             // Serialize response (msgpack for Python clients)
-            let response_bytes = rmp_serde::to_vec(&response)
+            let response_bytes = rmp_serde::to_vec_named(&response)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
             // Write response
@@ -1165,6 +1180,14 @@ impl ShardedStorageServer {
             StorageRequest::QueryBySemantic { .. } => {
                 StorageResponse::Error {
                     message: "Semantic queries not yet implemented for sharded storage. Use single-shard mode.".to_string(),
+                }
+            }
+            StorageRequest::TextSearch { query, limit } => {
+                match self.pipeline.search(&self.storage, &query, limit as usize).await {
+                    Ok(results) => StorageResponse::TextSearchOk { 
+                        results: results.into_iter().map(|(id, score)| (id.to_hex(), score)).collect() 
+                    },
+                    Err(e) => StorageResponse::Error { message: format!("Sharded TextSearch failed: {}", e) },
                 }
             }
         }

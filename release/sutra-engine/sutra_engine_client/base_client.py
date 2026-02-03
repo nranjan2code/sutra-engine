@@ -190,6 +190,7 @@ class HighPerformanceStorageClient:
             
             # Deserialize response
             response = msgpack.unpackb(response_bytes, strict_map_key=False)
+            # print(f"DEBUG: response: {response}") # For internal debugging if needed
             
             # Record successful request
             response_time = time.time() - start_time

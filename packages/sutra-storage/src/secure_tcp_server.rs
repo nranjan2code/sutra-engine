@@ -266,7 +266,7 @@ impl SecureStorageServer {
             }
             
             // Send response
-            let response_bytes = rmp_serde::to_vec(&response)
+            let response_bytes = rmp_serde::to_vec_named(&response)
                 .map_err(|e| anyhow!("Serialization failed: {}", e))?;
             
             stream.write_u32(response_bytes.len() as u32).await?;
@@ -294,6 +294,7 @@ impl SecureStorageServer {
             StorageRequest::FindContradictions { .. } |
             StorageRequest::QueryBySemantic { .. } |
             StorageRequest::VectorSearch { .. } |
+            StorageRequest::TextSearch { .. } |
             StorageRequest::GetStats |
             StorageRequest::HealthCheck => "read",
             
@@ -324,7 +325,7 @@ impl SecureStorageServer {
             message: message.to_string(),
         };
         
-        let response_bytes = rmp_serde::to_vec(&response)?;
+        let response_bytes = rmp_serde::to_vec_named(&response)?;
         stream.write_u32(response_bytes.len() as u32).await?;
         stream.write_all(&response_bytes).await?;
         stream.flush().await?;

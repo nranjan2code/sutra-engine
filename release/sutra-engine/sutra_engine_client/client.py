@@ -22,29 +22,20 @@ class SutraClient(HighPerformanceStorageClient):
     def learn(self, content: str, **kwargs) -> str:
         """
         Ingest knowledge into the engine.
-        
-        Args:
-            content: The text to learn.
-            generate_embedding: Whether to generate vectors (default: True).
-            extract_associations: Whether to look for relationships (default: True).
         """
         options = {
             "generate_embedding": kwargs.get("generate_embedding", True),
             "extract_associations": kwargs.get("extract_associations", True),
             "confidence": kwargs.get("confidence", 1.0),
-            "strength": kwargs.get("strength", 1.0)
+            "strength": kwargs.get("strength", 1.0),
+            "min_association_confidence": 0.5,
+            "max_associations_per_concept": 10
         }
         return self.learn_concept_v2(content, options=options)
 
-    def get(self, concept_id: str) -> Optional[Dict]:
-        """Retrieve a concept by its ID."""
-        return self.get_concept(concept_id)
-
     def search(self, query: str, limit: int = 5) -> List[Dict]:
         """
-        Search for related knowledge.
-        
-        Returns a list of dicts with 'content', 'id', and 'confidence'.
+        Search for related knowledge using semantic vector search.
         """
         try:
             results = self._send_request({
@@ -54,23 +45,8 @@ class SutraClient(HighPerformanceStorageClient):
                 }
             })
             if "TextSearchOk" in results:
-                return results["TextSearchOk"]["results"]
+                return [{"id": id_hex, "score": score} for id_hex, score in results["TextSearchOk"]["results"]]
             return []
         except Exception as e:
             logger.error(f"Search failed: {e}")
-            return []
-
-    def get_neighbors(self, concept_id: str) -> List[Dict]:
-        """Get concepts directly connected to the given ID."""
-        try:
-            response = self._send_request({
-                "GetNeighbors": {
-                    "concept_id": concept_id
-                }
-            })
-            if "GetNeighborsOk" in response:
-                return response["GetNeighborsOk"]["neighbors"]
-            return []
-        except Exception as e:
-            logger.error(f"Failed to get neighbors: {e}")
             return []

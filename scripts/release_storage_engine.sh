@@ -19,11 +19,9 @@ echo -e "${BLUE}📦 Building Sutra Storage Engine...${NC}"
 cd "$PROJECT_ROOT"
 
 # Build the storage server binary
-# We use -p sutra-storage to target the package and --bin to select the binary
 cargo build --release --bin storage-server -p sutra-storage
 
-echo -e "${BLUE}📂 Preparing release directory...${NC}"
-rm -rf "$RELEASE_DIR"
+echo -e "${BLUE}📂 Updating release directory...${NC}"
 mkdir -p "$RELEASE_DIR"
 
 # Copy binary
@@ -35,25 +33,8 @@ fi
 
 cp "$SOURCE_BIN" "$RELEASE_DIR/$BINARY_NAME"
 
-# Copy Documentation & Assets
-echo -e "${BLUE}📄 Copying documentation and assets...${NC}"
-cp -r "$PROJECT_ROOT/release/sutra-engine/docs" "$RELEASE_DIR/" 2>/dev/null || true
-cp -r "$PROJECT_ROOT/release/sutra-engine/examples" "$RELEASE_DIR/" 2>/dev/null || true
-cp -r "$PROJECT_ROOT/release/sutra-engine/sutra_engine_client" "$RELEASE_DIR/" 2>/dev/null || true
-cp "$PROJECT_ROOT/release/sutra-engine/setup.py" "$RELEASE_DIR/" 2>/dev/null || true
-cp "$PROJECT_ROOT/LICENSE" "$RELEASE_DIR/"
-
-# We already have a specific README in the repo, copy it over the previous generated one
-# if it exists, otherwise generate the simple one.
-if [ -f "$PROJECT_ROOT/release/sutra-engine/README.md" ]; then
-    cp "$PROJECT_ROOT/release/sutra-engine/README.md" "$RELEASE_DIR/README.md"
-else
-    # Fallback to simple generated README if the detailed one doesn't exist
-    cat > "$RELEASE_DIR/README.md" << EOF
-# Sutra Storage Engine
-...
-EOF
-fi
+# The docs, client, and examples are already in $RELEASE_DIR in the source repo
+# We just need to make sure they are pushed to the standalone repo.
 
 # Create a convenience launch script
 cat > "$RELEASE_DIR/start-engine.sh" << EOF
@@ -74,6 +55,13 @@ echo "Data: \$STORAGE_PATH"
 ./$BINARY_NAME
 EOF
 chmod +x "$RELEASE_DIR/start-engine.sh"
+
+echo -e "${GREEN}✅ Binary updated in release directory!${NC}"
+echo -e "   Location: $RELEASE_DIR"
+echo -e "   Binary:   $RELEASE_DIR/$BINARY_NAME"
+echo -e "   Script:   $RELEASE_DIR/start-engine.sh"
+
+exit 0
 
 echo -e "${GREEN}✅ Release created successfully!${NC}"
 echo -e "   Location: $RELEASE_DIR"

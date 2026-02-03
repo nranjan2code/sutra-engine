@@ -1,67 +1,31 @@
-# Byte-compiled / optimized / DLL files
+# Build artifacts
+bin/
+target/
+dist/
+build/
+*.so
+*.dylib
+*.dll
+*.exe
+sutra-engine
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-bin/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
-
-# Environments
-.env
-.venv
-env/
 venv/
-ENV/
-env.bak/
-venv.bak/
+.env
 
-# Sutra Data
+# Node
+node_modules/
+npm-debug.log*
+
+# Data
 data/
 storage.dat
 wal/
-*.log
-*.pid
-*.dat
+
+# IDE
+.vscode/
+.idea/
+.DS_Store

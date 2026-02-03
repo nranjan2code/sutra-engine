@@ -41,6 +41,9 @@ pub trait LearningStorage {
         assoc_type: AssociationType,
         confidence: f32,
     ) -> Result<u64>;
+
+    /// Search for concepts similar to query vector
+    fn vector_search(&self, vector: &[f32], k: usize, ef_search: usize) -> Vec<(ConceptId, f32)>;
 }
 
 // Implement for ConcurrentMemory
@@ -67,6 +70,11 @@ impl LearningStorage for crate::concurrent_memory::ConcurrentMemory {
         self.learn_association(source, target, assoc_type, confidence)
             .map_err(|e| anyhow::anyhow!("WriteLog error: {:?}", e))
     }
+
+    fn vector_search(&self, vector: &[f32], k: usize, ef_search: usize) -> Vec<(ConceptId, f32)> {
+        // Disambiguate call to inherent method to avoid recursion
+        crate::concurrent_memory::ConcurrentMemory::vector_search(self, vector, k, ef_search)
+    }
 }
 
 // Implement for ShardedStorage
@@ -91,6 +99,11 @@ impl LearningStorage for crate::sharded_storage::ShardedStorage {
     ) -> Result<u64> {
         self.learn_association(source, target, assoc_type, confidence)
     }
+
+    fn vector_search(&self, vector: &[f32], k: usize, ef_search: usize) -> Vec<(ConceptId, f32)> {
+        // ShardedStorage uses semantic_search as its inherent vector search implementation
+        self.semantic_search(vector.to_vec(), k)
+    }
 }
 
 // Blanket impl for Arc<T> where T: LearningStorage
@@ -114,5 +127,9 @@ impl<T: LearningStorage> LearningStorage for std::sync::Arc<T> {
         confidence: f32,
     ) -> Result<u64> {
         (**self).learn_association(source, target, assoc_type, confidence)
+    }
+
+    fn vector_search(&self, vector: &[f32], k: usize, ef_search: usize) -> Vec<(ConceptId, f32)> {
+        (**self).vector_search(vector, k, ef_search)
     }
 }

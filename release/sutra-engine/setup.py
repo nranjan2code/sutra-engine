@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="sutra-engine-client",
     version="1.0.0",
-    description="Python client for the Sutra EngineStandalone reasoning engine.",
+    description="Python client for the Sutra Engine standalone reasoning engine.",
     author="Sutra Works",
     packages=find_packages(),
     install_requires=[

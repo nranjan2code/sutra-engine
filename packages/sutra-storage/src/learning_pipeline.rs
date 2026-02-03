@@ -242,4 +242,23 @@ impl LearningPipeline {
         content.hash(&mut hasher);
         format!("{:016x}", hasher.finish())
     }
+
+    /// Search concepts by text using semantic similarity
+    pub async fn search<S: LearningStorage>(
+        &self,
+        storage: &S,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<(ConceptId, f32)>> {
+        info!("LearningPipeline: search for '{}' (limit={})", query, limit);
+
+        // Step 1: Generate embedding for search query
+        let query_vector = self.embedding_client.generate(query, false).await?;
+
+        // Step 2: Perform vector search in storage
+        // ef_search is hardcoded to 128 for a good balance of speed and accuracy
+        let results = storage.vector_search(&query_vector, limit, 128);
+
+        Ok(results)
+    }
 }
