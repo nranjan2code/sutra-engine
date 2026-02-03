@@ -1,0 +1,78 @@
+name: Standalone Engine Sync
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/sutra-storage/**'
+      - 'scripts/release_storage_engine.sh'
+      - 'release/sutra-engine/**'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  sync-to-engine-repo:
+    name: Sync to Standalone Engine Repo
+    runs-on: ubuntu-latest
+    if: github.repository == 'nranjan2code/sutra-memory' # Only run on main repo
+    
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu
+
+      - name: Build Standalone Binary (Linux x64)
+        run: |
+          cargo build --release --bin storage-server -p sutra-storage --target x86_64-unknown-linux-gnu
+          mkdir -p release/sutra-engine/bin/linux-x64
+          cp target/x86_64-unknown-linux-gnu/release/storage-server release/sutra-engine/bin/linux-x64/sutra-engine
+
+      - name: Prepare Standalone Repo Content
+        run: |
+          # The release_storage_engine.sh script already does some work but we fine-tune for the sub-repo
+          bash scripts/release_storage_engine.sh
+          # we move the linux binary into a standard location if we want to support multiple
+          # For now, let's keep it simple as defined in the script
+
+      - name: Sync to Sub-Repo
+        env:
+          ENGINE_REPO_TOKEN: ${{ secrets.ENGINE_REPO_SYNC_TOKEN }}
+        run: |
+          if [ -z "$ENGINE_REPO_TOKEN" ]; then
+            echo "::warning::ENGINE_REPO_SYNC_TOKEN not found. Skipping sync."
+            exit 0
+          fi
+          
+          # Configure Git
+          git config --global user.name "Sutra Bot"
+          git config --global user.email "bot@sutra-ai.com"
+          
+          # Create a temp directory for the engine repo
+          TEMP_DIR=$(mktemp -d)
+          cd $TEMP_DIR
+          
+          # Clone the target repo
+          git clone https://x-access-token:${ENGINE_REPO_TOKEN}@github.com/${{ github.repository_owner }}/sutra-engine.git .
+          
+          # Clean existing files (except .git)
+          find . -maxdepth 1 ! -name ".git" ! -name "." -exec rm -rf {} +
+          
+          # Copy new content from main repo
+          cp -r ${{ github.workspace }}/release/sutra-engine/* .
+          
+          # Commit and push
+          git add .
+          if git diff --staged --quiet; then
+            echo "No changes to sync."
+          else
+            git commit -m "Sync from main repo (commit: ${{ github.sha }})"
+            git push origin main
+          fi

@@ -9,6 +9,7 @@ Sutra uses a centralized versioning system with automated builds and deployment 
 - **[Quick Reference](QUICK_REFERENCE.md)** - Command cheat sheet
 - **[Changelog](changelog.md)** - Version history and changes
 - **[Setup](SETUP_COMPLETE.md)** - Release infrastructure setup
+- **[Standalone Releases](../STANDALONE_RELEASES.md)** - Single-binary engine releases
 
 ## Quick Start
 
@@ -278,6 +279,12 @@ git push origin :refs/tags/v2.0.1
 ./sutra-deploy.sh release patch
 git push origin main --tags
 ```
+
+## Standalone Binaries
+
+In addition to the full Docker stack, we support releasing the storage engine as a standalone binary for embedded use cases.
+
+See: **[Standalone Releases](../STANDALONE_RELEASES.md)**
 
 ## Related Documentation
 

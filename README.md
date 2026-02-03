@@ -58,7 +58,7 @@ Traditional LLMs (GPT-4, Claude, etc.) are powerful but come with critical limit
 - **💰 Cost Effective** - ~$0.0001 per query vs $0.01-$0.10 for LLMs (100-1000× cheaper)
 - **📈 Production Grade** - 520 req/sec throughput, 5-9ms latency, 100% test success
 
-### Two Deployment Modes
+### Deployment Modes
 
 #### 🖥️ **Desktop Edition** - Self-Contained Native App
 Perfect for individual researchers, small teams, or local development.
@@ -85,6 +85,21 @@ Enterprise-grade deployment for teams and organizations.
 - Production monitoring and self-observation
 
 [Deployment Guide →](docs/deployment/README.md)
+
+#### 📦 **Standalone Engine** - Embedded Power
+Single-binary release for embedding in other applications.
+
+- Just the Rust storage engine, nothing else
+- Like SQLite or DuckDB for reasoning
+- Configured via environment variables
+- Ideal for usage inside other backends/products
+
+```bash
+./scripts/release_storage_engine.sh
+./release/sutra-engine/sutra-engine
+```
+
+[Standalone Release Guide →](docs/STANDALONE_RELEASES.md)
 
 ---
 
