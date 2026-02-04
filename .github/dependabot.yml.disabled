@@ -1,0 +1,310 @@
+# Dependabot configuration for Sutra Models
+# Monitors and creates PRs for dependency updates
+
+version: 2
+updates:
+  # Python dependencies - root
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    assignees:
+      - "nisheethranjan"
+    commit-message:
+      prefix: "deps(python)"
+    groups:
+      dev-dependencies:
+        patterns:
+          - "pytest*"
+          - "black"
+          - "isort"
+          - "mypy"
+          - "ruff"
+      
+  # Python packages - scan each package directory
+  - package-ecosystem: "pip"
+    directory: "/packages/sutra-core"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "sutra-core"
+    commit-message:
+      prefix: "deps(sutra-core)"
+      
+  - package-ecosystem: "pip"
+    directory: "/packages/sutra-api"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "sutra-api"
+    commit-message:
+      prefix: "deps(sutra-api)"
+      
+  - package-ecosystem: "pip"
+    directory: "/packages/sutra-hybrid"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "sutra-hybrid"
+    commit-message:
+      prefix: "deps(sutra-hybrid)"
+      
+  - package-ecosystem: "pip"
+    directory: "/packages/sutra-nlg"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "sutra-nlg"
+    commit-message:
+      prefix: "deps(sutra-nlg)"
+      
+  - package-ecosystem: "pip"
+    directory: "/packages/sutra-control"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "control-center"
+    commit-message:
+      prefix: "deps(control)"
+      
+  - package-ecosystem: "pip"
+    directory: "/packages/sutra-embedding-service"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "embedding-service"
+    commit-message:
+      prefix: "deps(embedding)"
+      
+  - package-ecosystem: "pip"
+    directory: "/packages/sutra-nlg-service"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "nlg-service"
+    commit-message:
+      prefix: "deps(nlg-service)"
+
+  # Rust dependencies - root workspace
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "03:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "rust"
+    assignees:
+      - "nisheethranjan"
+    commit-message:
+      prefix: "deps(rust)"
+    groups:
+      tokio-ecosystem:
+        patterns:
+          - "tokio*"
+          - "tower*"
+          - "hyper*"
+      serde-ecosystem:
+        patterns:
+          - "serde*"
+          - "bincode"
+          - "rmp-serde"
+          
+  # Rust packages - individual crates
+  - package-ecosystem: "cargo"
+    directory: "/packages/sutra-storage"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "storage"
+    commit-message:
+      prefix: "deps(storage)"
+    ignore:
+      # Don't update PyO3 automatically - requires careful testing
+      - dependency-name: "pyo3*"
+        
+  - package-ecosystem: "cargo"
+    directory: "/packages/sutra-protocol"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "protocol"
+    commit-message:
+      prefix: "deps(protocol)"
+      
+  - package-ecosystem: "cargo"
+    directory: "/packages/sutra-grid-master"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "grid"
+    commit-message:
+      prefix: "deps(grid-master)"
+      
+  - package-ecosystem: "cargo"
+    directory: "/packages/sutra-grid-agent"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "grid"
+    commit-message:
+      prefix: "deps(grid-agent)"
+      
+  - package-ecosystem: "cargo"
+    directory: "/packages/sutra-grid-events"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "grid"
+    commit-message:
+      prefix: "deps(grid-events)"
+      
+  - package-ecosystem: "cargo"
+    directory: "/packages/sutra-bulk-ingester"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "ingester"
+    commit-message:
+      prefix: "deps(bulk-ingester)"
+      
+  - package-ecosystem: "cargo"
+    directory: "/packages/sutra-explorer"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "explorer"
+    commit-message:
+      prefix: "deps(explorer)"
+
+  # Node.js dependencies - root
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "03:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    assignees:
+      - "nisheethranjan"
+    commit-message:
+      prefix: "deps(npm)"
+    groups:
+      dev-tools:
+        patterns:
+          - "eslint*"
+          - "prettier*"
+          - "typescript*"
+          - "@types/*"
+          
+  # Node.js packages
+  - package-ecosystem: "npm"
+    directory: "/packages/sutra-control"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "control-center"
+    commit-message:
+      prefix: "deps(control-ui)"
+    groups:
+      mui:
+        patterns:
+          - "@mui/*"
+      react:
+        patterns:
+          - "react*"
+          - "@types/react*"
+    ignore:
+      # Don't auto-update major React versions
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+        
+  - package-ecosystem: "npm"
+    directory: "/packages/sutra-client"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "client"
+    commit-message:
+      prefix: "deps(client)"
+
+  # Docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "03:00"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "deps(docker)"
+    ignore:
+      # Pin Python and Rust base images for stability
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "rust"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "03:00"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(actions)"
+
+# Security updates are always created immediately regardless of schedule
+# They bypass the open-pull-requests-limit
+# They are never grouped with other updates
