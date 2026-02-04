@@ -28,41 +28,11 @@ report() {
 
 # 1. Python Code Quality
 echo ""
-echo "📋 Python Code Quality..."
-TARGETS="python crates/storage-client"
-
-if command -v black &> /dev/null; then
-    black --check $TARGETS && report "Black formatting" || report "Black formatting"
-else
-    echo -e "${YELLOW}⚠${NC} Black not installed, skipping"
-fi
-
-if command -v isort &> /dev/null; then
-    isort --check-only $TARGETS && report "Import sorting" || report "Import sorting"
-else
-    echo -e "${YELLOW}⚠${NC} isort not installed, skipping"
-fi
-
-if command -v flake8 &> /dev/null; then
-    flake8 $TARGETS && report "Flake8 linting" || report "Flake8 linting"
-else
-    echo -e "${YELLOW}⚠${NC} Flake8 not installed, skipping"
-fi
+echo "📋 Python Code Quality... SKIPPED (Pure Rust)"
 
 # 2. Python Security
 echo ""
-echo "🔒 Python Security Scanning..."
-if command -v bandit &> /dev/null; then
-    bandit -r $TARGETS -c .bandit && report "Bandit security scan" || report "Bandit security scan"
-else
-    echo -e "${YELLOW}⚠${NC} Bandit not installed, skipping"
-fi
-
-if command -v safety &> /dev/null; then
-    safety check --json && report "Safety dependency scan" || report "Safety dependency scan"
-else
-    echo -e "${YELLOW}⚠${NC} Safety not installed, skipping"
-fi
+echo "🔒 Python Security Scanning... SKIPPED (Pure Rust)"
 
 # 3. JavaScript/TypeScript Quality
 echo ""
@@ -91,14 +61,10 @@ fi
 # 6. Tests
 echo ""
 echo "🧪 Running Tests..."
-if command -v pytest &> /dev/null; then
-    if [ -f "pytest.ini" ]; then
-        PYTHONPATH=python/core:python/hybrid:crates/storage-client pytest tests/ -v && report "Python tests" || report "Python tests"
-    else
-        echo -e "${YELLOW}⚠${NC} pytest.ini not found, skipping"
-    fi
+if command -v cargo &> /dev/null; then
+    cargo test --workspace && report "Rust tests" || report "Rust tests"
 else
-    echo -e "${YELLOW}⚠${NC} pytest not installed, skipping"
+    echo -e "${YELLOW}⚠${NC} Cargo not installed, skipping"
 fi
 
 # 7. Bundle Size Check
