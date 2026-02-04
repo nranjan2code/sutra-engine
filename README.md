@@ -28,30 +28,19 @@ It is built in Rust to provide elite-level performance, supporting over **50,000
 
 ## 🚀 Quick Start
 
-### 1. Installation
-Download the latest binary for your architecture and ensure it is executable.
+### 1. Build from Source
+Ensure you have the Rust toolchain installed.
 
 ```bash
-# Start the engine with default settings
-./start-engine.sh
+# Build the storage server
+cargo build --release --bin storage-server
+
+# Run the engine
+./target/release/storage-server
 ```
 
-### 2. Connect (Python)
-The easiest way to interact with Sutra is via the professional Python SDK.
-
-```python
-from sutra_engine_client import SutraClient
-
-# Initialize client
-client = SutraClient(host="localhost", port=50051)
-
-# Ingest knowledge
-concept_id = client.learn("The Sutra Engine uses a dual-plane memory architecture.")
-
-# Semantic search
-results = client.search("How does Sutra store memory?")
-print(results)
-```
+### 2. Connect
+You can connect to the engine using any TCP client that supports the Sutra custom binary protocol.
 
 ---
 
@@ -60,14 +49,13 @@ print(results)
 We've provided comprehensive guides for every aspect of the engine:
 
 ### 🏁 Foundations
-- [**Getting Started**](docs/GETTING_STARTED.md): Installation, first concepts, and basic workflow.
+- [**Getting Started**](docs/GETTING_STARTED.md): Installation and basic workflow.
 - [**Project Architecture**](docs/ARCHITECTURE.md): Deep dive into the "Dual-Plane" design.
 
 ### 🛠 Developers
 - [**API Reference**](docs/API_REFERENCE.md): Full specification of the binary protocol.
-- [**Client Guide (Python)**](docs/CLIENT_PYTHON.md): Professional SDK usage.
-- [**Client Guide (TypeScript)**](docs/CLIENT_TYPESCRIPT.md): Node.js integration.
 - [**Client Guide (Rust)**](docs/CLIENT_RUST.md): Native high-performance usage.
+- [**Client Guide (TypeScript)**](docs/CLIENT_TYPESCRIPT.md): Node.js integration.
 
 ### 🛡 Production & Ops
 - [**Security Manual**](docs/SECURITY.md): TLS 1.3, HMAC Auth, and Production Hardening.
@@ -82,10 +70,9 @@ We've provided comprehensive guides for every aspect of the engine:
 
 ## 📁 Examples
 
-The `examples/` directory contains ready-to-run projects for:
-- 🐍 **Python**: `examples/python/demo.py`
-- 🟦 **TypeScript**: `examples/typescript/`
-- 🦀 **Rust**: `examples/rust/`
+The `crates/storage/examples` directory contains ready-to-run projects for:
+- 🦀 **Rust**: Native storage client and server examples.
+- 🟦 **TypeScript**: TCP client sample.
 
 ---
 
