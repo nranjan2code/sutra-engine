@@ -18,7 +18,7 @@ Default: `50051`
 
 ## 📥 Storage Requests
 
-Requests are sent as a MessagePack Map where the key is the variant name.
+Requests are sent as a MessagePack Map where the key is the variant name. Most requests now support a `namespace` parameter for multi-tenant isolation.
 
 ### 1. `LearnConceptV2`
 High-level ingestion with automatic embedding and association extraction.
@@ -27,6 +27,7 @@ High-level ingestion with automatic embedding and association extraction.
 ```json
 {
   "LearnConceptV2": {
+    "namespace": "Option<String>",
     "content": "String",
     "options": {
       "generate_embedding": "Boolean",
@@ -34,52 +35,80 @@ High-level ingestion with automatic embedding and association extraction.
       "min_association_confidence": "Float",
       "max_associations_per_concept": "Integer",
       "strength": "Float",
-      "confidence": "Float"
+      "confidence": "Float",
+      "attributes": "Map<String, String>"
     }
   }
 }
 ```
 
-### 2. `TextSearch`
-Semantic search using natural language.
+### 2. `QueryConcept`
+Semantic search and metadata retrieval for a specific concept.
 
 **Payload:**
 ```json
 {
-  "TextSearch": {
-    "query": "String",
-    "limit": "Integer"
-  }
-}
-```
-
-### 3. `GetNeighbors`
-Get directly associated concepts in the graph.
-
-**Payload:**
-```json
-{
-  "GetNeighbors": {
+  "QueryConcept": {
+    "namespace": "Option<String>",
     "concept_id": "String (Hex)"
   }
 }
 ```
 
-### 4. `GetStats`
+### 3. `DeleteConcept`
+Permanently remove a concept and its associations from a namespace.
+
+**Payload:**
+```json
+{
+  "DeleteConcept": {
+    "namespace": "String",
+    "id": "String (Hex)"
+  }
+}
+```
+
+### 4. `ListRecent`
+Retrieve the most recently learned concepts in a namespace.
+
+**Payload:**
+```json
+{
+  "ListRecent": {
+    "namespace": "String",
+    "limit": "Integer"
+  }
+}
+```
+
+### 5. `ClearCollection`
+Reset an entire namespace, deleting all concepts and vectors.
+
+**Payload:**
+```json
+{
+  "ClearCollection": {
+    "namespace": "String"
+  }
+}
+```
+
+### 6. `GetStats`
 Get engine health and performance metrics.
 
 **Payload:**
 ```json
 {
-  "GetStats": null
+  "GetStats": { "namespace": "Option<String>" }
 }
 ```
+
+### 7. `Flush` & `HealthCheck`
+Unit variants sent as simple strings: `"Flush"` and `"HealthCheck"`.
 
 ---
 
 ## 📤 Storage Responses
-
-Responses follow the same variant-based map structure.
 
 ### 1. `LearnConceptV2Ok`
 ```json
@@ -90,19 +119,7 @@ Responses follow the same variant-based map structure.
 }
 ```
 
-### 2. `TextSearchOk`
-```json
-{
-  "TextSearchOk": {
-    "results": [
-      ["ConceptID_Hex", "SimilarityScore_Float"],
-      ["...", 0.95]
-    ]
-  }
-}
-```
-
-### 3. `StatsOk`
+### 2. `StatsOk`
 ```json
 {
   "StatsOk": {
@@ -115,35 +132,9 @@ Responses follow the same variant-based map structure.
 }
 ```
 
-### 4. `Error`
-Returned whenever a request fails.
+### 3. `FlushOk`
 ```json
-{
-  "Error": {
-    "message": "String"
-  }
-}
-```
-
----
-
-## 🛠 CURL & HTTP Support
-
-While Sutra Engine is optimized for TCP, you can use a simple **HTTP Proxy** or the `sutra-cli` (if installed) to interact via CURL.
-
-### Rest Bridge (Experimental)
-If you are running the engine in a containerized environment with the REST sidecar enabled:
-
-**Ingest Knowledge:**
-```bash
-curl -X POST http://localhost:8080/learn \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Sutra is fast."}'
-```
-
-**Search:**
-```bash
-curl -X GET "http://localhost:8080/search?q=speed&limit=5"
+"FlushOk" or { "FlushOk": true }
 ```
 
 ---
@@ -151,7 +142,7 @@ curl -X GET "http://localhost:8080/search?q=speed&limit=5"
 ## ⚙️ Standard Object Types
 
 ### `ConceptID`
-A 16-character Hex string (e.g., `50039b83b9425364`).
+A 32-character Hex string (e.g., `dcbf7561e84be97e383322b99bb343e2`), representing a 1128-bit (16-byte) MD5 hash.
 
 ### `SimilarityScore`
 A floating point value between `0.0` and `1.0`. Higher is more similar.
