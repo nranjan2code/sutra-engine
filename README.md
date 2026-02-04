@@ -48,35 +48,34 @@ For a minimal, clean setup path, see:
 
 ---
 
-## 📚 Documentation (Exhaustive)
+## 📚 Documentation
 
-We've provided comprehensive guides for every aspect of the engine:
+Start at the index for the full map:
+- [**Documentation Index**](docs/INDEX.md)
 
 ### 🏁 Foundations
+- [**Standalone Quickstart**](docs/STANDALONE_QUICKSTART.md): Minimal run path.
 - [**Getting Started**](docs/GETTING_STARTED.md): Installation and basic workflow.
-- [**Project Architecture**](docs/ARCHITECTURE.md): Deep dive into the "Dual-Plane" design.
+- [**Project Architecture**](docs/ARCHITECTURE.md): Dual‑plane design and core layout.
 
 ### 🛠 Developers
-- [**API Reference**](docs/API_REFERENCE.md): Full specification of the binary protocol.
-- [**Client Guide (Rust)**](docs/CLIENT_RUST.md): Native high-performance usage.
-- [**Client Guide (TypeScript)**](docs/CLIENT_TYPESCRIPT.md): Node.js integration.
+- [**API Reference**](docs/API_REFERENCE.md): Full TCP + MessagePack protocol spec.
 
 ### 🛡 Production & Ops
-- [**Security Manual**](docs/SECURITY.md): TLS 1.3, HMAC Auth, and Production Hardening.
-- [**Operations & Tuning**](docs/OPERATIONS.md): Persistence, Sharding, and Performance Optimization.
-- [**Monitoring**](docs/MONITORING.md): Interpreting engine statistics and health checks.
+- [**Security Manual**](docs/SECURITY.md): TLS 1.3, HMAC Auth, and hardening.
+- [**Operations & Tuning**](docs/OPERATIONS.md): Persistence, sharding, performance.
+- [**Test Results**](docs/TEST_RESULTS.md): Latest validation run.
+- [**Final Report**](docs/FINAL_REPORT.md): Standalone cleanup and verification summary.
 
 ### 🆘 Support
-- [**Troubleshooting**](docs/TROUBLESHOOTING.md): Common error codes and solutions.
-- [**FAQ**](docs/FAQ.md): Frequently Asked Questions.
+- [**Troubleshooting**](docs/TROUBLESHOOTING.md): Common error codes and fixes.
 
 ---
 
 ## 📁 Examples
 
-The `crates/storage/examples` directory contains ready-to-run projects for:
-- 🦀 **Rust**: Native storage client and server examples.
-- 🟦 **TypeScript**: TCP client sample.
+- `crates/protocol/examples/minimal_roundtrip.rs`: minimal protocol roundtrip.
+- `crates/storage/examples/concurrent_burst_demo.rs`: storage stress demo.
 
 ---
 
