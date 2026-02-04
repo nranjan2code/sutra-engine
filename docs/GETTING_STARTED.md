@@ -6,17 +6,25 @@ This guide will walk you through setting up Sutra Engine and making your first s
 
 ## 🏗 Installation
 
-Sutra Engine is distributed as a single static binary. 
+Sutra Engine is built using Rust.
 
-1. **Download**: Obtain the binary for your architecture (Linux/macOS/Windows).
-2. **Setup**: Place it in a directory where you have write permissions (for data storage).
-3. **Run**:
+1. **Clone the repository**:
    ```bash
-   chmod +x sutra-engine
-   ./start-engine.sh
+   git clone https://github.com/nranjan2code/sutra-engine.git
+   cd sutra-engine
    ```
 
-By default, the engine will create a `./data` directory to store its Persistent Knowledge Graph and HNSW indices.
+2. **Build the binary**:
+   ```bash
+   cargo build --release --bin storage-server
+   ```
+
+3. **Run the engine**:
+   ```bash
+   ./target/release/storage-server
+   ```
+
+By default, the engine will create a `./data` directory (as configured in your environment or defaults) to store its Persistent Knowledge Graph and HNSW indices.
 
 ---
 
@@ -34,31 +42,15 @@ Sutra operates on two planes:
 
 ## 🛠 Your First Operation
 
-### Using the Python Client
+The engine uses a custom binary protocol. You can interact with it using any TCP client that supports MessagePack serialization.
 
-Install the requirements:
-```bash
-pip install msgpack
-```
+### Basic Request Flow:
+1. Open a TCP connection to `localhost:50051`.
+2. Send a 4-byte big-endian length prefix.
+3. Send the MessagePack-encoded request body.
 
-Create a script `hello_sutra.py`:
+See the [**API Reference**](API_REFERENCE.md) for the full list of available commands and response formats.
 
-```python
-from sutra_engine_client import SutraClient
-
-client = SutraClient()
-
-# 1. Ingest
-print("Ingesting knowledge...")
-cid = client.learn("The Burj Khalifa is the tallest building in the world.")
-
-# 2. Search
-print("Searching...")
-results = client.search("tallest skyscraper")
-
-for res in results:
-    print(f"Result: {res['id']} (Score: {res['score']})")
-```
 
 ---
 
