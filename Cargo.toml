@@ -1,39 +1,24 @@
 [workspace]
 resolver = "2"
 members = [
-    "packages/sutra-storage",
-    "packages/sutra-protocol", 
-    "packages/sutra-grid-master",
-    "packages/sutra-grid-agent",
-    "packages/sutra-grid-events",
-    "packages/sutra-bulk-ingester",
-    "packages/sutra-embedder",
-    "packages/sutraworks-model",
-    "packages/sutraworks-model/crates/sutra-core",
-    "packages/sutraworks-model/crates/sutra-loader",
-    "packages/sutraworks-model/crates/sutra-tokenizer",
-    "packages/sutraworks-model/crates/sutra-quantize",
-    "packages/sutraworks-model/crates/sutra-peft",
-    "packages/sutraworks-model/crates/sutra-rwkv",
-    "packages/sutraworks-model/crates/sutra-mamba",
-    "packages/sutraworks-model/crates/sutra-nesy",
-    "packages/sutraworks-model/crates/sutra-training",
-    "packages/sutraworks-model/crates/sutra-train",
-    "packages/sutraworks-model/crates/sutra-demo",
-    "packages/sutraworks-model/crates/sutra-server",
-    "packages/sutraworks-model/examples",
-    "desktop"
+    "crates/storage",
+    "crates/protocol",
+    "crates/grid-master",
+    "crates/grid-agent",
+    "crates/grid-events",
+    "crates/bulk-ingester",
+    "crates/embedder",
+    "crates/model",
+    "crates/model/crates/*",
 ]
 
-# Workspace-level package metadata (for sutraworks-model sub-crates)
 [workspace.package]
 version = "1.0.0"
 edition = "2021"
 authors = ["SutraWorks"]
 license = "MIT"
-repository = "https://github.com/sutraworks/sutra-memory"
+repository = "https://github.com/sutraworks/sutra-engine"
 
-# Shared dependencies for consistency across workspace
 [workspace.dependencies]
 tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "signal", "net", "io-util"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -43,48 +28,11 @@ thiserror = "1.0"
 anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
-
-# sutraworks-model dependencies
 ndarray = "0.16"
 ndarray-linalg = "0.16"
 rayon = "1.10"
-num-traits = "0.2"
-rand = "0.8"
-rand_distr = "0.4"
-memmap2 = "0.9"
-egui = "0.28"
-eframe = { version = "0.28", default-features = false, features = ["default_fonts", "glow"] }
-rfd = "0.14"
-plotters = "0.3"
-plotters-bitmap = "0.3"
-image = "0.24"
-axum = { version = "0.7", features = ["json"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors"] }
-clap = { version = "4.5", features = ["derive"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
-# Internal sutraworks-model crates
-sutra-core = { path = "packages/sutraworks-model/crates/sutra-core" }
-sutra-quantize = { path = "packages/sutraworks-model/crates/sutra-quantize" }
-sutra-peft = { path = "packages/sutraworks-model/crates/sutra-peft" }
-sutra-rwkv = { path = "packages/sutraworks-model/crates/sutra-rwkv" }
-sutra-mamba = { path = "packages/sutraworks-model/crates/sutra-mamba" }
-sutra-nesy = { path = "packages/sutraworks-model/crates/sutra-nesy" }
-sutra-loader = { path = "packages/sutraworks-model/crates/sutra-loader" }
-sutra-tokenizer = { path = "packages/sutraworks-model/crates/sutra-tokenizer" }
-sutra-training = { path = "packages/sutraworks-model/crates/sutra-training" }
-sutra-train = { path = "packages/sutraworks-model/crates/sutra-train" }
-sutra-demo = { path = "packages/sutraworks-model/crates/sutra-demo" }
-sutra-server = { path = "packages/sutraworks-model/crates/sutra-server" }
-
-# Workspace-level profiles
-[profile.release]
-opt-level = 3
-lto = "thin"
-codegen-units = 1
-strip = true
-
-[profile.dev]
-opt-level = 0
-debug = true
+# Internal mapped dependencies
+sutra-core = { path = "crates/model/crates/sutra-core" }
+sutra-protocol = { path = "crates/protocol" }
