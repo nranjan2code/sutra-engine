@@ -3,8 +3,8 @@ use async_trait::async_trait;
 
 /// Trait for embedding providers
 ///
-/// This allows swapping the HTTP-based embedding service (Server Edition)
-/// with a local ONNX-based provider (Desktop Edition).
+/// This allows swapping the HTTP-based embedding service
+/// with a local provider implementation.
 #[async_trait]
 pub trait EmbeddingProvider: Send + Sync {
     /// Generate embedding for a single text

@@ -249,7 +249,9 @@ mod tests {
         let id = ConceptId([1; 16]);
         let content = b"test concept".to_vec();
 
-        let seq = log.append_concept(id, content, None, 1.0, 0.9).unwrap();
+        let seq = log
+            .append_concept(id, content, None, 1.0, 0.9, std::collections::HashMap::new())
+            .unwrap();
         assert_eq!(seq, 0);
 
         let stats = log.stats();
@@ -264,7 +266,8 @@ mod tests {
         // Write 10 entries
         for i in 0..10 {
             let id = ConceptId([i; 16]);
-            log.append_concept(id, vec![i], None, 1.0, 0.9).unwrap();
+            log.append_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
+                .unwrap();
         }
 
         // Drain 5
@@ -281,7 +284,14 @@ mod tests {
 
         for i in 0..100 {
             let id = ConceptId([i as u8; 16]);
-            log.append_concept(id, vec![i as u8], None, 1.0, 0.9)
+            log.append_concept(
+                id,
+                vec![i as u8],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
                 .unwrap();
         }
 
@@ -296,9 +306,15 @@ mod tests {
 
         let id = ConceptId([1; 16]);
 
-        let seq1 = log.append_concept(id, vec![1], None, 1.0, 0.9).unwrap();
-        let seq2 = log.append_concept(id, vec![2], None, 1.0, 0.9).unwrap();
-        let seq3 = log.append_concept(id, vec![3], None, 1.0, 0.9).unwrap();
+        let seq1 = log
+            .append_concept(id, vec![1], None, 1.0, 0.9, std::collections::HashMap::new())
+            .unwrap();
+        let seq2 = log
+            .append_concept(id, vec![2], None, 1.0, 0.9, std::collections::HashMap::new())
+            .unwrap();
+        let seq3 = log
+            .append_concept(id, vec![3], None, 1.0, 0.9, std::collections::HashMap::new())
+            .unwrap();
 
         assert_eq!(seq1, 0);
         assert_eq!(seq2, 1);
@@ -339,7 +355,14 @@ mod tests {
         // Fill the queue to capacity (100,000 entries)
         for i in 0..100_000 {
             let id = ConceptId([(i % 256) as u8; 16]);
-            log.append_concept(id, vec![i as u8], None, 1.0, 0.9)
+            log.append_concept(
+                id,
+                vec![i as u8],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
                 .unwrap();
         }
 
@@ -352,7 +375,14 @@ mod tests {
         // Each new entry should evict one old entry
         for i in 100_000..101_000 {
             let id = ConceptId([(i % 256) as u8; 16]);
-            let _result = log.append_concept(id, vec![i as u8], None, 1.0, 0.9);
+            let _result = log.append_concept(
+                id,
+                vec![i as u8],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            );
             // Some may succeed (after evicting oldest), some may fail (race conditions)
             // But the queue should stay around capacity
         }

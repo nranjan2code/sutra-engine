@@ -42,6 +42,10 @@ cargo build --release --bin storage-server
 ### 2. Connect
 You can connect to the engine using any TCP client that supports the Sutra custom binary protocol.
 
+### 3. Standalone Quickstart
+For a minimal, clean setup path, see:
+- `docs/STANDALONE_QUICKSTART.md`
+
 ---
 
 ## 📚 Documentation (Exhaustive)

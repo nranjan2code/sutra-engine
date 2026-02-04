@@ -1,6 +1,6 @@
-# sutra | sed 's/\b\(.\)/\u\1/g'protocol
+# Sutra Protocol
 
-**sutra-protocol - Part of Sutra AI ecosystem**
+**sutra-protocol - Standalone storage protocol crate**
 
 License: MIT
 
@@ -14,16 +14,8 @@ See main documentation for details.
 
 ## Quick Start
 
-```bash
-# Docker
-docker-compose -f docker-compose-grid.yml up -d sutra-protocol
-```
-
----
-
-## Configuration
-
-See `docker-compose-grid.yml` for environment variables.
+This crate provides message types and TCP framing helpers for the standalone
+Sutra storage engine. It does not run a service on its own.
 
 ---
 

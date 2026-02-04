@@ -63,8 +63,9 @@ use crate::adaptive_reconciler::{
 ///
 /// ## Usage Example
 ///
-/// ```rust
-/// use sutra_storage::{ConcurrentMemory, ConcurrentConfig};
+/// ```rust,no_run
+/// use std::collections::HashMap;
+/// use sutra_storage::{ConcurrentConfig, ConcurrentMemory, ConceptId};
 ///
 /// let config = ConcurrentConfig {
 ///     storage_path: "./data".into(),
@@ -73,16 +74,27 @@ use crate::adaptive_reconciler::{
 ///     ..Default::default()
 /// };
 ///
-/// let memory = ConcurrentMemory::new(config).await?;
+/// let memory = ConcurrentMemory::new(config);
 ///
 /// // Write (lock-free, never blocks)
-/// let id = memory.write_concept("Rust is fast", vec![0.1, 0.2, ...]).await?;
+/// let id = ConceptId::from_string("concept-1");
+/// memory
+///     .learn_concept(
+///         id,
+///         b"Rust is fast".to_vec(),
+///         None,
+///         1.0,
+///         0.9,
+///         HashMap::new(),
+///     )
+///     .unwrap();
 ///
 /// // Read (immutable snapshot, never blocks)
-/// let concept = memory.get_concept(id)?;
+/// let concept = memory.query_concept(&id).unwrap();
 ///
 /// // Vector search (HNSW index, <1ms)
-/// let results = memory.vector_search(&query_vec, 10)?;
+/// let query_vec = vec![0.1, 0.2, 0.3];
+/// let results = memory.vector_search(&query_vec, 10, 64);
 /// ```
 ///
 /// ## Advanced Features
@@ -916,7 +928,7 @@ impl ConcurrentMemory {
     /// Searches concepts using keyword matching with stop word filtering.
     /// Returns concepts ranked by number of matching keywords.
     ///
-    /// This is used by Desktop Edition which doesn't have embedding service.
+    /// This is used when no external embedding service is available.
     pub fn text_search(&self, query: &str, limit: usize) -> Vec<(ConceptId, String, f32)> {
         // Common stop words to filter out
         const STOP_WORDS: &[&str] = &[
@@ -1282,7 +1294,14 @@ mod tests {
         // Learn concept
         let id = ConceptId([1; 16]);
         memory
-            .learn_concept(id, b"test concept".to_vec(), None, 1.0, 0.9)
+            .learn_concept(
+                id,
+                b"test concept".to_vec(),
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
 
         // Wait for reconciliation
@@ -1313,8 +1332,12 @@ mod tests {
         let id2 = ConceptId([2; 16]);
 
         // Learn concepts
-        memory.learn_concept(id1, vec![1], None, 1.0, 0.9).unwrap();
-        memory.learn_concept(id2, vec![2], None, 1.0, 0.9).unwrap();
+        memory
+            .learn_concept(id1, vec![1], None, 1.0, 0.9, std::collections::HashMap::new())
+            .unwrap();
+        memory
+            .learn_concept(id2, vec![2], None, 1.0, 0.9, std::collections::HashMap::new())
+            .unwrap();
 
         // Learn association
         memory
@@ -1354,9 +1377,15 @@ mod tests {
         let id3 = ConceptId([3; 16]);
 
         // Build chain: 1 -> 2 -> 3
-        memory.learn_concept(id1, vec![1], None, 1.0, 0.9).unwrap();
-        memory.learn_concept(id2, vec![2], None, 1.0, 0.9).unwrap();
-        memory.learn_concept(id3, vec![3], None, 1.0, 0.9).unwrap();
+        memory
+            .learn_concept(id1, vec![1], None, 1.0, 0.9, std::collections::HashMap::new())
+            .unwrap();
+        memory
+            .learn_concept(id2, vec![2], None, 1.0, 0.9, std::collections::HashMap::new())
+            .unwrap();
+        memory
+            .learn_concept(id3, vec![3], None, 1.0, 0.9, std::collections::HashMap::new())
+            .unwrap();
 
         memory
             .learn_association(id1, id2, AssociationType::Semantic, 0.8)
@@ -1396,7 +1425,14 @@ mod tests {
             id_bytes[0..2].copy_from_slice(&i.to_le_bytes());
             let id = ConceptId(id_bytes);
             memory
-                .learn_concept(id, vec![i as u8], None, 1.0, 0.9)
+                .learn_concept(
+                    id,
+                    vec![i as u8],
+                    None,
+                    1.0,
+                    0.9,
+                    std::collections::HashMap::new(),
+                )
                 .unwrap();
         }
 
@@ -1446,7 +1482,7 @@ mod tests {
             for i in 0..100 {
                 let id = ConceptId([i; 16]);
                 memory_writer
-                    .learn_concept(id, vec![i], None, 1.0, 0.9)
+                    .learn_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
                     .ok();
                 thread::sleep(Duration::from_millis(1));
             }
@@ -1492,7 +1528,9 @@ mod tests {
         // Write some data
         for i in 0..10 {
             let id = ConceptId([i; 16]);
-            memory.learn_concept(id, vec![i], None, 1.0, 0.9).unwrap();
+            memory
+                .learn_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
+                .unwrap();
         }
 
         // Wait for reconciliation
@@ -1529,7 +1567,14 @@ mod tests {
             // Write concepts (goes to WAL + WriteLog)
             for (id, content) in &concepts_to_write {
                 memory
-                    .learn_concept(*id, content.clone(), None, 1.0, 0.9)
+                    .learn_concept(
+                        *id,
+                        content.clone(),
+                        None,
+                        1.0,
+                        0.9,
+                        std::collections::HashMap::new(),
+                    )
                     .unwrap();
             }
 
@@ -1573,7 +1618,14 @@ mod tests {
             // Write and FLUSH (makes data durable)
             let id = ConceptId([99; 16]);
             memory
-                .learn_concept(id, b"persistent concept".to_vec(), None, 1.0, 0.9)
+                .learn_concept(
+                    id,
+                    b"persistent concept".to_vec(),
+                    None,
+                    1.0,
+                    0.9,
+                    std::collections::HashMap::new(),
+                )
                 .unwrap();
             thread::sleep(Duration::from_millis(100));
 
@@ -1613,7 +1665,9 @@ mod tests {
         // Write concepts (goes to WAL)
         for i in 0..10 {
             let id = ConceptId([i; 16]);
-            memory.learn_concept(id, vec![i], None, 1.0, 0.9).unwrap();
+            memory
+                .learn_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
+                .unwrap();
         }
 
         thread::sleep(Duration::from_millis(100));

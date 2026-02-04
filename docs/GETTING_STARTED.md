@@ -1,6 +1,7 @@
 # Getting Started with Sutra Engine
 
-This guide will walk you through setting up Sutra Engine and making your first semantic search.
+This guide walks you through setting up Sutra Engine and making your first semantic search.
+If you want the shortest path, use `docs/STANDALONE_QUICKSTART.md`.
 
 ---
 
@@ -42,12 +43,12 @@ Sutra operates on two planes:
 
 ## 🛠 Your First Operation
 
-The engine uses a custom binary protocol. You can interact with it using any TCP client that supports MessagePack serialization.
+The engine uses a custom binary protocol. You can interact with it using any TCP client that supports `bincode` serialization.
 
 ### Basic Request Flow:
 1. Open a TCP connection to `localhost:50051`.
 2. Send a 4-byte big-endian length prefix.
-3. Send the MessagePack-encoded request body.
+3. Send the `bincode`-encoded request body.
 
 See the [**API Reference**](API_REFERENCE.md) for the full list of available commands and response formats.
 

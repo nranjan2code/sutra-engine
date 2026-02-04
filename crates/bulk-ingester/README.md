@@ -1,6 +1,6 @@
-# sutra | sed 's/\b\(.\)/\u\1/g'bulk | sed 's/\b\(.\)/\u\1/g'ingester
+# Sutra Bulk Ingester
 
-**sutra-bulk-ingester - Part of Sutra AI ecosystem**
+**sutra-bulk-ingester - Standalone bulk ingestion service**
 
 License: MIT
 
@@ -14,16 +14,14 @@ See main documentation for details.
 
 ## Quick Start
 
+1. Start the storage server.
+2. Run the ingester service:
+
 ```bash
-# Docker
-docker-compose -f docker-compose-grid.yml up -d sutra-bulk-ingester
+cargo run --release -p sutra-bulk-ingester
 ```
 
----
-
-## Configuration
-
-See `docker-compose-grid.yml` for environment variables.
+Configure the storage endpoint via environment variables documented in the crate.
 
 ---
 

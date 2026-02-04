@@ -23,7 +23,6 @@ Sutra Storage is a custom storage engine built specifically for temporal, contin
 - **🧠 AI-Native**: Self-optimizing adaptive reconciler with EMA trend analysis
 - **🌐 Distributed**: TCP binary protocol (10-50× lower latency than gRPC)
 - **🏢 Multi-Tenant**: Native support for namespaces/independent collections
-- **📊 Observable**: 17 Grid event types for self-monitoring
 
 ### Architecture at a Glance
 
@@ -178,15 +177,13 @@ MessagePack binary format for durability:
 | `semantic_extractor.rs` | - | NLP-based association extraction |
 | `learning_pipeline.rs` | - | Orchestrates embedding + extraction + storage |
 
-### Self-Monitoring & Network (3 modules)
+### Network (1 module)
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
-| `event_emitter.rs` | - | StorageEventEmitter for Grid events |
 | `tcp_server.rs` | 400+ | Production TCP server (custom binary protocol) |
-| `reasoning_store.rs` | - | Reasoning-specific storage API |
 
-**Total**: 37 modules, 17,500+ LOC
+**Total**: 34 modules, 16,000+ LOC
 
 **Recent Cleanup (2025-11-05)**:
 - ✅ Removed deprecated `reconciler.rs` (replaced by `adaptive_reconciler.rs`)
@@ -435,7 +432,6 @@ export VECTOR_DIMENSION=768
 export SUTRA_STORAGE_MODE=sharded  # or "single"
 export SUTRA_NUM_SHARDS=4
 export SUTRA_EMBEDDING_SERVICE_URL=http://embedding-ha:8888
-export EVENT_STORAGE=grid-event-storage:50051  # Optional: Grid events
 
 # Run server
 cargo run --release --bin storage-server
@@ -444,7 +440,7 @@ cargo run --release --bin storage-server
 #### Docker Deployment
 
 ```yaml
-# docker-compose-grid.yml
+# infra/docker/standalone.yml
 storage-server:
   image: sutra-storage-server:latest
   ports:
@@ -454,9 +450,9 @@ storage-server:
   environment:
     - STORAGE_PATH=/data
     - VECTOR_DIMENSION=768
-    - SUTRA_STORAGE_MODE=sharded
-    - SUTRA_NUM_SHARDS=4
-    - SUTRA_EMBEDDING_SERVICE_URL=http://embedding-ha:8888
+    - SUTRA_STORAGE_MODE=single
+    # Optional: external embedding service
+    # - SUTRA_EMBEDDING_SERVICE_URL=http://embedding:8888
 ```
 
 // Request types (MessagePack serialization)
@@ -546,13 +542,6 @@ See [TCP Protocol Specification](../../docs/storage/TCP_BINARY_PROTOCOL.md) for 
 | `SUTRA_MIN_ASSOCIATION_CONFIDENCE` | `0.5` | Minimum confidence for extracted associations |
 | `SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT` | `10` | Max associations to extract per concept |
 
-#### Self-Monitoring (Optional)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `STORAGE_NODE_ID` | `storage-{pid}` | Node identifier for events |
-| `EVENT_STORAGE` | - | Grid event storage address (e.g., `localhost:50052`) |
-
 ---
 
 ## Performance Characteristics
@@ -592,7 +581,7 @@ See [TCP Protocol Specification](../../docs/storage/TCP_BINARY_PROTOCOL.md) for 
 
 ### Docker Compose (Recommended)
 
-See root `docker-compose-grid.yml` for complete setup.
+See `infra/docker/standalone.yml` for a minimal standalone setup.
 
 ### Standalone Binary
 
@@ -617,17 +606,6 @@ docker exec storage-server nc -z localhost 50051
 ---
 
 ## Monitoring & Observability
-
-### Grid Events (17 Event Types)
-
-Storage automatically emits events when `EVENT_STORAGE` configured:
-
-- `StorageMetrics` - Real-time concept/edge count, throughput, memory
-- `QueryPerformance` - Query depth, latency, confidence tracking
-- `EmbeddingLatency` - Batch processing with cache hit rates
-- `HnswIndexBuilt/Loaded` - Vector index build/load metrics
-- `PathfindingMetrics` - Graph traversal performance
-- `ReconciliationComplete` - Background reconciliation tracking
 
 ### Adaptive Reconciler Health
 

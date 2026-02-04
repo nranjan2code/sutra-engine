@@ -464,7 +464,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ingester_creation() {
-        let config = IngesterConfig::default();
+        let _config = IngesterConfig::default();
         // Test would need mock storage server
         // let ingester = BulkIngester::new(config).await.unwrap();
     }

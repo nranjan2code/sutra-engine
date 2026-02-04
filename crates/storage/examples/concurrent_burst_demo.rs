@@ -30,7 +30,9 @@ fn main() {
     for i in 0..1000 {
         let id = ConceptId([i as u8; 16]);
         let content = format!("Concept {}: Knowledge data", i).into_bytes();
-        memory.learn_concept(id, content, None, 1.0, 0.9).ok();
+        memory
+            .learn_concept(id, content, None, 1.0, 0.9, std::collections::HashMap::new())
+            .ok();
     }
     let elapsed = start.elapsed();
     println!("  ⚡ Wrote 1,000 concepts in {:?}", elapsed);
@@ -107,7 +109,7 @@ fn main() {
             let id = ConceptId([i as u8; 16]);
             let content = format!("New concept {}", i).into_bytes();
             memory_writer
-                .learn_concept(id, content, None, 1.0, 0.9)
+                .learn_concept(id, content, None, 1.0, 0.9, std::collections::HashMap::new())
                 .ok();
             thread::sleep(Duration::from_micros(100));
         }

@@ -1,10 +1,7 @@
 mod index;
-mod lsm;
 mod manifest;
 mod quantization;
-mod reasoning_store;
 mod segment;
-mod store;
 /// Sutra Storage - Next-Generation Knowledge Graph Storage
 ///
 /// A custom storage engine designed specifically for temporal,
@@ -19,9 +16,6 @@ mod store;
 mod types;
 mod vectors;
 mod wal;
-
-// 🔥 NEW: Schema definitions for conversation-first UI
-pub mod schema;
 
 // 🔥 NEW: Semantic understanding module
 pub mod semantic;
@@ -65,12 +59,9 @@ pub use types::{
 };
 
 pub use index::{ConceptLocation, GraphIndex, IndexStats};
-pub use lsm::{CompactionConfig, LSMStats, LSMTree};
 pub use manifest::{Manifest, SegmentMetadata};
 pub use quantization::ProductQuantizer;
-pub use reasoning_store::{AssociationData, ConceptData, ReasoningContext, ReasoningStore};
 pub use segment::{ConceptIterator, Segment, SegmentStats};
-pub use store::GraphStore;
 pub use vectors::{VectorConfig, VectorMetadata, VectorStats, VectorStore};
 pub use wal::{LogEntry, Operation, WriteAheadLog};
 

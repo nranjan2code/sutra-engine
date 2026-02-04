@@ -10,7 +10,7 @@
 /// - Exponential Moving Average (EMA) for trend detection
 /// - Predictive queue depth forecasting
 /// - Self-healing interval adjustment
-/// - Comprehensive telemetry via Grid event system
+/// - Hooks for telemetry and monitoring
 use crate::read_view::{ConceptNode, GraphSnapshot, ReadView};
 use crate::write_log::{WriteEntry, WriteLog};
 use std::collections::VecDeque;
@@ -764,7 +764,7 @@ mod tests {
         for i in 0..100 {
             let id = ConceptId([i; 16]);
             write_log
-                .append_concept(id, vec![i], None, 1.0, 0.9)
+                .append_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
                 .unwrap();
         }
 

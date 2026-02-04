@@ -8,7 +8,6 @@
 //! [4 bytes: message length][N bytes: bincode-serialized payload]
 //! ```
 
-pub mod client;
 pub mod error;
 
 use serde::{Deserialize, Serialize};
@@ -18,7 +17,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
-pub use client::{GridClient, GridClientPool};
 pub use error::{ProtocolError, Result};
 
 /// Protocol version for compatibility checking
@@ -31,170 +29,8 @@ const MAX_MESSAGE_SIZE: u32 = 16 * 1024 * 1024;
 // Core Data Types
 // ============================================================================
 
-/// Concept types for different data categories
-/// Supports dual storage architecture: domain concepts vs. user/conversation data
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum ConceptType {
-    // Domain-specific concepts (original behavior, stored in domain-storage.dat)
-    DomainConcept = 0, // General knowledge concepts
-
-    // User/organization data (stored in user-storage.dat)
-    User = 10,         // User account
-    Session = 11,      // Login session
-    Organization = 12, // Organization/tenant
-
-    // Conversation data (stored in user-storage.dat)
-    Conversation = 20, // Chat conversation thread
-    Message = 21,      // Individual message in conversation
-    Space = 22,        // Workspace/channel/project grouping
-
-    // Access control (stored in user-storage.dat)
-    Permission = 30, // RBAC permission
-    Role = 31,       // User role
-
-    // Audit/compliance (stored in user-storage.dat)
-    AuditLog = 40, // System audit event
-}
-
-impl ConceptType {
-    /// Check if this concept type belongs in user storage (vs. domain storage)
-    pub fn is_user_storage_type(&self) -> bool {
-        !matches!(self, ConceptType::DomainConcept)
-    }
-
-    /// Get human-readable name
-    pub fn name(&self) -> &'static str {
-        match self {
-            ConceptType::DomainConcept => "domain_concept",
-            ConceptType::User => "user",
-            ConceptType::Session => "session",
-            ConceptType::Organization => "organization",
-            ConceptType::Conversation => "conversation",
-            ConceptType::Message => "message",
-            ConceptType::Space => "space",
-            ConceptType::Permission => "permission",
-            ConceptType::Role => "role",
-            ConceptType::AuditLog => "audit_log",
-        }
-    }
-
-    pub fn from_u8(value: u8) -> Option<Self> {
-        match value {
-            0 => Some(ConceptType::DomainConcept),
-            10 => Some(ConceptType::User),
-            11 => Some(ConceptType::Session),
-            12 => Some(ConceptType::Organization),
-            20 => Some(ConceptType::Conversation),
-            21 => Some(ConceptType::Message),
-            22 => Some(ConceptType::Space),
-            30 => Some(ConceptType::Permission),
-            31 => Some(ConceptType::Role),
-            40 => Some(ConceptType::AuditLog),
-            _ => None,
-        }
-    }
-}
-
-/// Metadata for concepts with organization/multi-tenancy support
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConceptMetadata {
-    /// Concept type classification
-    pub concept_type: ConceptType,
-
-    /// Organization ID for multi-tenancy (required for non-domain concepts)
-    pub organization_id: Option<String>,
-
-    /// User ID who created this concept
-    pub created_by: Option<String>,
-
-    /// Custom tags for filtering/search
-    pub tags: Vec<String>,
-
-    /// Extensible key-value metadata
-    pub attributes: std::collections::HashMap<String, String>,
-
-    /// Soft delete flag (for audit trail preservation)
-    pub deleted: bool,
-
-    /// Schema version for forward compatibility
-    pub schema_version: u32,
-}
-
-impl ConceptMetadata {
-    /// Create new metadata with required fields
-    pub fn new(concept_type: ConceptType) -> Self {
-        Self {
-            concept_type,
-            organization_id: None,
-            created_by: None,
-            tags: Vec::new(),
-            attributes: std::collections::HashMap::new(),
-            deleted: false,
-            schema_version: 1,
-        }
-    }
-
-    /// Create with organization (for multi-tenant concepts)
-    pub fn with_organization(concept_type: ConceptType, org_id: String) -> Self {
-        Self {
-            concept_type,
-            organization_id: Some(org_id),
-            created_by: None,
-            tags: Vec::new(),
-            attributes: std::collections::HashMap::new(),
-            deleted: false,
-            schema_version: 1,
-        }
-    }
-
-    /// Validate metadata requirements
-    pub fn validate(&self) -> Result<()> {
-        // User storage types MUST have organization_id
-        if self.concept_type.is_user_storage_type() && self.organization_id.is_none() {
-            return Err(ProtocolError::ValidationError(format!(
-                "Concept type '{}' requires organization_id",
-                self.concept_type.name()
-            )));
-        }
-
-        // Validate organization_id format (if present)
-        if let Some(ref org_id) = self.organization_id {
-            if org_id.is_empty() {
-                return Err(ProtocolError::ValidationError(
-                    "organization_id cannot be empty".to_string(),
-                ));
-            }
-            if org_id.len() > 128 {
-                return Err(ProtocolError::ValidationError(
-                    "organization_id too long (max 128 chars)".to_string(),
-                ));
-            }
-        }
-
-        // Validate tags
-        if self.tags.len() > 100 {
-            return Err(ProtocolError::ValidationError(
-                "Too many tags (max 100)".to_string(),
-            ));
-        }
-
-        // Validate attributes
-        if self.attributes.len() > 100 {
-            return Err(ProtocolError::ValidationError(
-                "Too many attributes (max 100)".to_string(),
-            ));
-        }
-
-        Ok(())
-    }
-}
-
-impl Default for ConceptMetadata {
-    fn default() -> Self {
-        Self::new(ConceptType::DomainConcept)
-    }
-}
+/// Extensible metadata for concepts (standalone engine).
+pub type ConceptMetadata = std::collections::HashMap<String, String>;
 
 // ============================================================================
 // Storage Protocol Messages
@@ -208,7 +44,7 @@ pub enum StorageMessage {
         embedding: Vec<f32>,
         strength: f32,
         confidence: f32,
-        /// Optional metadata for concept classification and organization
+        /// Optional metadata for concept classification
         metadata: Option<ConceptMetadata>,
     },
     LearnAssociation {
@@ -232,13 +68,9 @@ pub enum StorageMessage {
         query_vector: Vec<f32>,
         k: u32,
         ef_search: u32,
-        /// Optional organization filter for multi-tenant search
-        organization_id: Option<String>,
     },
     /// Query concepts by metadata filters
     QueryByMetadata {
-        concept_type: Option<ConceptType>,
-        organization_id: Option<String>,
         tags: Vec<String>,
         attributes: std::collections::HashMap<String, String>,
         limit: u32,
@@ -311,104 +143,6 @@ pub struct ConceptSummary {
     pub metadata: ConceptMetadata,
     pub created: u64,
     pub last_accessed: u64,
-}
-
-// ============================================================================
-// Grid Protocol Messages
-// ============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum GridMessage {
-    // Agent lifecycle
-    RegisterAgent {
-        agent_id: String,
-        hostname: String,
-        platform: String,
-        max_storage_nodes: u32,
-        version: String,
-        agent_endpoint: String,
-    },
-    Heartbeat {
-        agent_id: String,
-        storage_node_count: u32,
-        timestamp: u64,
-    },
-    UnregisterAgent {
-        agent_id: String,
-    },
-
-    // Node management
-    SpawnStorageNode {
-        agent_id: String,
-        storage_path: String,
-        memory_limit_mb: u64,
-        port: u32,
-    },
-    StopStorageNode {
-        agent_id: String,
-        node_id: String,
-    },
-    GetStorageNodeStatus {
-        node_id: String,
-    },
-
-    // Cluster info
-    ListAgents,
-    GetClusterStatus,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum GridResponse {
-    RegisterAgentOk {
-        success: bool,
-        master_version: String,
-        error_message: Option<String>,
-    },
-    HeartbeatOk {
-        acknowledged: bool,
-        timestamp: u64,
-    },
-    UnregisterAgentOk,
-    SpawnStorageNodeOk {
-        node_id: String,
-        endpoint: String,
-        success: bool,
-        error_message: Option<String>,
-    },
-    StopStorageNodeOk {
-        success: bool,
-        error_message: Option<String>,
-    },
-    GetStorageNodeStatusOk {
-        node_id: String,
-        status: String,
-        pid: u32,
-        endpoint: String,
-    },
-    ListAgentsOk {
-        agents: Vec<AgentRecord>,
-    },
-    GetClusterStatusOk {
-        total_agents: u32,
-        healthy_agents: u32,
-        total_storage_nodes: u32,
-        running_storage_nodes: u32,
-        status: String,
-    },
-    Error {
-        message: String,
-    },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentRecord {
-    pub agent_id: String,
-    pub hostname: String,
-    pub platform: String,
-    pub status: String,
-    pub max_storage_nodes: u32,
-    pub current_storage_nodes: u32,
-    pub last_heartbeat: u64,
 }
 
 // ============================================================================
@@ -548,109 +282,11 @@ mod tests {
     }
 
     #[test]
-    fn test_grid_message_size() {
-        let msg = GridMessage::Heartbeat {
-            agent_id: "agent-001".to_string(),
-            storage_node_count: 5,
-            timestamp: 1234567890,
-        };
-
-        let bytes = bincode::serialize(&msg).unwrap();
-        println!("GridMessage heartbeat size: {} bytes", bytes.len());
-        assert!(bytes.len() < 50); // Tiny!
-    }
-
-    #[test]
-    fn test_concept_type_classification() {
-        // Domain concepts go to domain storage
-        assert!(!ConceptType::DomainConcept.is_user_storage_type());
-
-        // User/org concepts go to user storage
-        assert!(ConceptType::User.is_user_storage_type());
-        assert!(ConceptType::Session.is_user_storage_type());
-        assert!(ConceptType::Organization.is_user_storage_type());
-        assert!(ConceptType::Conversation.is_user_storage_type());
-        assert!(ConceptType::Message.is_user_storage_type());
-        assert!(ConceptType::Space.is_user_storage_type());
-        assert!(ConceptType::Permission.is_user_storage_type());
-        assert!(ConceptType::Role.is_user_storage_type());
-        assert!(ConceptType::AuditLog.is_user_storage_type());
-    }
-
-    #[test]
-    fn test_concept_metadata_validation() {
-        // Domain concepts don't need organization
-        let mut meta = ConceptMetadata::new(ConceptType::DomainConcept);
-        assert!(meta.validate().is_ok());
-
-        // User storage types REQUIRE organization
-        meta.concept_type = ConceptType::User;
-        assert!(meta.validate().is_err());
-
-        // Adding organization makes it valid
-        meta.organization_id = Some("org-123".to_string());
-        assert!(meta.validate().is_ok());
-
-        // Empty organization is invalid
-        meta.organization_id = Some("".to_string());
-        assert!(meta.validate().is_err());
-
-        // Too long organization is invalid
-        meta.organization_id = Some("x".repeat(200));
-        assert!(meta.validate().is_err());
-    }
-
-    #[test]
-    fn test_concept_metadata_limits() {
-        let mut meta =
-            ConceptMetadata::with_organization(ConceptType::Conversation, "org-123".to_string());
-
-        // Max 100 tags
-        for i in 0..100 {
-            meta.tags.push(format!("tag-{}", i));
-        }
-        assert!(meta.validate().is_ok());
-
-        meta.tags.push("one-too-many".to_string());
-        assert!(meta.validate().is_err());
-
-        // Max 100 attributes
-        meta.tags.clear();
-        for i in 0..100 {
-            meta.attributes
-                .insert(format!("key-{}", i), format!("value-{}", i));
-        }
-        assert!(meta.validate().is_ok());
-
-        meta.attributes
-            .insert("overflow".to_string(), "value".to_string());
-        assert!(meta.validate().is_err());
-    }
-
-    #[test]
-    fn test_concept_type_roundtrip() {
-        for &concept_type in &[
-            ConceptType::DomainConcept,
-            ConceptType::User,
-            ConceptType::Session,
-            ConceptType::Organization,
-            ConceptType::Conversation,
-            ConceptType::Message,
-            ConceptType::Space,
-            ConceptType::Permission,
-            ConceptType::Role,
-            ConceptType::AuditLog,
-        ] {
-            let value = concept_type as u8;
-            let restored = ConceptType::from_u8(value).unwrap();
-            assert_eq!(concept_type, restored);
-        }
-    }
-
-    #[test]
     fn test_message_with_metadata() {
-        let metadata =
-            ConceptMetadata::with_organization(ConceptType::Message, "org-456".to_string());
+        let metadata = ConceptMetadata::from([
+            ("type".to_string(), "message".to_string()),
+            ("origin".to_string(), "unit-test".to_string()),
+        ]);
 
         let msg = StorageMessage::LearnConcept {
             concept_id: "msg-001".to_string(),
@@ -672,8 +308,8 @@ mod tests {
                 metadata: Some(meta),
                 ..
             } => {
-                assert_eq!(meta.concept_type, ConceptType::Message);
-                assert_eq!(meta.organization_id, Some("org-456".to_string()));
+                assert_eq!(meta.get("type"), Some(&"message".to_string()));
+                assert_eq!(meta.get("origin"), Some(&"unit-test".to_string()));
             }
             _ => panic!("Unexpected message type"),
         }

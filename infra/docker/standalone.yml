@@ -1,0 +1,23 @@
+services:
+  storage-server:
+    build:
+      context: ../..
+      dockerfile: ./crates/storage/Dockerfile
+    image: sutra-storage-server:latest
+    ports:
+      - "50051:50051"
+    volumes:
+      - storage-data:/data
+    environment:
+      - RUST_LOG=info
+      - STORAGE_PATH=/data
+      - STORAGE_HOST=0.0.0.0
+      - STORAGE_PORT=50051
+      - VECTOR_DIMENSION=768
+      - SUTRA_STORAGE_MODE=single
+      # Optional: external embedding service
+      # - SUTRA_EMBEDDING_SERVICE_URL=http://embedding:8888
+    restart: unless-stopped
+
+volumes:
+  storage-data:

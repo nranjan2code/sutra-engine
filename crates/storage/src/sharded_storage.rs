@@ -388,7 +388,14 @@ mod tests {
             let vector = vec![i as f32 / 100.0; 768];
 
             storage
-                .learn_concept(id, content, Some(vector), 1.0, 0.9)
+                .learn_concept(
+                    id,
+                    content,
+                    Some(vector),
+                    1.0,
+                    0.9,
+                    std::collections::HashMap::new(),
+                )
                 .unwrap();
         }
 
@@ -432,7 +439,14 @@ mod tests {
             let id = ConceptId([i as u8; 16]);
             let vector = vec![i as f32 / 50.0; 10];
             storage
-                .learn_concept(id, format!("C{}", i).into_bytes(), Some(vector), 1.0, 0.9)
+                .learn_concept(
+                    id,
+                    format!("C{}", i).into_bytes(),
+                    Some(vector),
+                    1.0,
+                    0.9,
+                    std::collections::HashMap::new(),
+                )
                 .unwrap();
         }
 
