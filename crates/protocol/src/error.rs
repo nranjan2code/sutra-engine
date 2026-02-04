@@ -7,28 +7,28 @@ use thiserror::Error;
 pub enum ProtocolError {
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(String),
-    
+
     #[error("Connection timeout")]
     Timeout,
-    
+
     #[error("Connection closed")]
     ConnectionClosed,
-    
+
     #[error("Message too large: {0} bytes (max {1})")]
     MessageTooLarge(usize, usize),
-    
+
     #[error("Protocol version mismatch: got {0}, expected {1}")]
     VersionMismatch(u32, u32),
-    
+
     #[error("Server error: {0}")]
     ServerError(String),
-    
+
     #[error("Client error: {0}")]
     ClientError(String),
-    
+
     #[error("Validation error: {0}")]
     ValidationError(String),
 }

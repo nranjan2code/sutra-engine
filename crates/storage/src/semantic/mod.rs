@@ -1,20 +1,19 @@
+pub mod analyzer;
+pub mod pathfinding;
+pub mod query;
 /// Semantic Understanding Module
-/// 
+///
 /// Production-grade semantic analysis built into storage layer.
 /// Provides domain-aware type classification, temporal reasoning,
 /// causal analysis, and negation detection.
 pub mod types;
-pub mod analyzer;
-pub mod query;
-pub mod pathfinding;
 
-pub use types::{
-    SemanticType, SemanticMetadata, TemporalBounds, TemporalRelation,
-    CausalRelation, CausalType, DomainContext, NegationScope, NegationType,
-};
 pub use analyzer::SemanticAnalyzer;
+pub use pathfinding::{SemanticPath, SemanticPathFinder};
 pub use query::{
-    SemanticFilter, SemanticQuery, TemporalConstraint, CausalFilter, SortOrder,
-    queries,
+    queries, CausalFilter, SemanticFilter, SemanticQuery, SortOrder, TemporalConstraint,
 };
-pub use pathfinding::{SemanticPathFinder, SemanticPath};
+pub use types::{
+    CausalRelation, CausalType, DomainContext, NegationScope, NegationType, SemanticMetadata,
+    SemanticType, TemporalBounds, TemporalRelation,
+};

@@ -2,11 +2,11 @@
 
 use crate::BulkIngester;
 use axum::{
-    extract::{Json, Path, State}, 
-    http::StatusCode, 
+    extract::{Json, Path, State},
+    http::StatusCode,
     response::{IntoResponse, Json as ResponseJson},
-    routing::{get, post}, 
-    Router
+    routing::{get, post},
+    Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -44,7 +44,7 @@ pub struct BulkIngestResponse {
 
 pub async fn create_server(ingester: BulkIngester) -> Router {
     let shared_ingester = Arc::new(Mutex::new(ingester));
-    
+
     Router::new()
         .route("/health", get(health_check))
         .route("/jobs", post(create_job))
@@ -70,11 +70,13 @@ async fn create_job(
 ) -> impl IntoResponse {
     // Simplified implementation for testing
     let job_id = uuid::Uuid::new_v4().to_string();
-    
+
     // Log the request
-    println!("Received job request: source_type={}, adapter={}, config={:?}", 
-        request.source_type, request.adapter_name, request.source_config);
-    
+    println!(
+        "Received job request: source_type={}, adapter={}, config={:?}",
+        request.source_type, request.adapter_name, request.source_config
+    );
+
     // Return immediate success response
     let response = JobResponse {
         id: job_id.clone(),
@@ -84,7 +86,7 @@ async fn create_job(
             "total_items": null
         }),
     };
-    
+
     ResponseJson(response)
 }
 
@@ -93,72 +95,70 @@ async fn get_job(
     Path(job_id): Path<String>,
 ) -> impl IntoResponse {
     match ingester.lock() {
-        Ok(ing) => {
-            match ing.get_job(&job_id) {
-                Some(job) => {
-                    Json(json!({
-                        "id": job.id,
-                        "status": format!("{:?}", job.status).to_lowercase(),
-                        "progress": {
-                            "processed_items": job.progress.processed_items,
-                            "total_items": job.progress.total_items,
-                            "failed_items": job.progress.failed_items,
-                            "concepts_created": job.progress.concepts_created,
-                            "bytes_processed": job.progress.bytes_processed,
-                            "current_rate": job.progress.current_rate
-                        },
-                        "started_at": job.started_at,
-                        "completed_at": job.completed_at,
-                        "error": job.error
-                    })).into_response()
-                }
-                None => StatusCode::NOT_FOUND.into_response()
-            }
-        }
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Ok(ing) => match ing.get_job(&job_id) {
+            Some(job) => Json(json!({
+                "id": job.id,
+                "status": format!("{:?}", job.status).to_lowercase(),
+                "progress": {
+                    "processed_items": job.progress.processed_items,
+                    "total_items": job.progress.total_items,
+                    "failed_items": job.progress.failed_items,
+                    "concepts_created": job.progress.concepts_created,
+                    "bytes_processed": job.progress.bytes_processed,
+                    "current_rate": job.progress.current_rate
+                },
+                "started_at": job.started_at,
+                "completed_at": job.completed_at,
+                "error": job.error
+            }))
+            .into_response(),
+            None => StatusCode::NOT_FOUND.into_response(),
+        },
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 
-async fn list_jobs(
-    State(ingester): State<SharedIngester>,
-) -> impl IntoResponse {
+async fn list_jobs(State(ingester): State<SharedIngester>) -> impl IntoResponse {
     match ingester.lock() {
         Ok(ing) => {
-            let jobs: Vec<Value> = ing.list_jobs()
+            let jobs: Vec<Value> = ing
+                .list_jobs()
                 .iter()
-                .map(|job| json!({
-                    "id": job.id,
-                    "status": format!("{:?}", job.status).to_lowercase(),
-                    "adapter_name": job.adapter_name,
-                    "started_at": job.started_at,
-                    "progress": {
-                        "processed_items": job.progress.processed_items,
-                        "concepts_created": job.progress.concepts_created
-                    }
-                }))
+                .map(|job| {
+                    json!({
+                        "id": job.id,
+                        "status": format!("{:?}", job.status).to_lowercase(),
+                        "adapter_name": job.adapter_name,
+                        "started_at": job.started_at,
+                        "progress": {
+                            "processed_items": job.progress.processed_items,
+                            "concepts_created": job.progress.concepts_created
+                        }
+                    })
+                })
                 .collect();
-                
+
             Json(json!({
                 "jobs": jobs,
                 "total": jobs.len()
-            })).into_response()
+            }))
+            .into_response()
         }
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 
-async fn list_adapters(
-    State(ingester): State<SharedIngester>,
-) -> impl IntoResponse {
+async fn list_adapters(State(ingester): State<SharedIngester>) -> impl IntoResponse {
     match ingester.lock() {
         Ok(ing) => {
             let adapters = ing.plugin_registry.list_adapters();
             Json(json!({
                 "adapters": adapters,
                 "total": adapters.len()
-            })).into_response()
+            }))
+            .into_response()
         }
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 
@@ -173,30 +173,49 @@ async fn bulk_ingest(
     };
 
     // Build concepts
-    let concepts: Vec<crate::storage::Concept> = payload.contents.into_iter().map(|c| crate::storage::Concept {
-        content: c,
-        metadata: std::collections::HashMap::new(),
-        embedding: None,
-    }).collect();
+    let concepts: Vec<crate::storage::Concept> = payload
+        .contents
+        .into_iter()
+        .map(|c| crate::storage::Concept {
+            content: c,
+            metadata: std::collections::HashMap::new(),
+            embedding: None,
+        })
+        .collect();
 
     // Call storage directly
     match crate::storage::TcpStorageClient::new(&addr).await {
         Ok(mut client) => match client.batch_learn_concepts(concepts).await {
-            Ok(concept_ids) => ResponseJson(BulkIngestResponse { count: concept_ids.len(), concept_ids }).into_response(),
-            Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({"error": e.to_string()}))).into_response(),
+            Ok(concept_ids) => ResponseJson(BulkIngestResponse {
+                count: concept_ids.len(),
+                concept_ids,
+            })
+            .into_response(),
+            Err(e) => (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         },
-        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({"error": format!("connect failed: {}", e)}))).into_response(),
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error": format!("connect failed: {}", e)})),
+        )
+            .into_response(),
     }
 }
 
-pub async fn run_server(ingester: BulkIngester, port: u16) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_server(
+    ingester: BulkIngester,
+    port: u16,
+) -> Result<(), Box<dyn std::error::Error>> {
     let app = create_server(ingester).await;
     let addr = format!("0.0.0.0:{}", port);
-    
+
     info!("Starting bulk ingester server on {}", addr);
-    
+
     let listener = TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }

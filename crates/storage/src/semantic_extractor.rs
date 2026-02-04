@@ -25,13 +25,13 @@ use crate::types::AssociationType;
 pub struct SemanticExtractor {
     /// Embedding client (HA service or local provider)
     embedding_client: Arc<dyn EmbeddingProvider>,
-    
+
     /// Pre-computed embeddings for relation types
     relation_embeddings: HashMap<AssociationType, Vec<f32>>,
-    
+
     /// Minimum similarity threshold for classification
     similarity_threshold: f32,
-    
+
     /// Minimum entity length (characters)
     min_entity_length: usize,
 }
@@ -41,10 +41,10 @@ pub struct SemanticExtractor {
 pub struct SemanticAssociation {
     /// Target entity
     pub target: String,
-    
+
     /// Association type
     pub assoc_type: AssociationType,
-    
+
     /// Confidence score (0.0-1.0)
     pub confidence: f32,
 }
@@ -56,46 +56,46 @@ impl SemanticExtractor {
     /// Call this once during initialization and reuse the instance.
     pub async fn new(embedding_client: Arc<dyn EmbeddingProvider>) -> Result<Self> {
         info!("Initializing SemanticExtractor with embedding provider (lazy relation embeddings)");
-        
+
         // Define relation type descriptions for embedding (but don't generate embeddings yet)
         let relation_descriptions = [
             (
                 AssociationType::Semantic,
-                "is a type of, is an example of, belongs to category, classified as, instance of"
+                "is a type of, is an example of, belongs to category, classified as, instance of",
             ),
             (
                 AssociationType::Causal,
-                "causes, leads to, results in, because of, due to, triggers, produces, creates"
+                "causes, leads to, results in, because of, due to, triggers, produces, creates",
             ),
             (
                 AssociationType::Temporal,
-                "happens before, occurs after, during, while, when, then, followed by, preceded by"
+                "happens before, occurs after, during, while, when, then, followed by, preceded by",
             ),
             (
                 AssociationType::Hierarchical,
-                "parent of, child of, superclass, subclass, inherits from, extends, derived from"
+                "parent of, child of, superclass, subclass, inherits from, extends, derived from",
             ),
             (
                 AssociationType::Compositional,
-                "part of, contains, consists of, made of, component of, includes, comprises"
+                "part of, contains, consists of, made of, component of, includes, comprises",
             ),
         ];
-        
+
         // Start with empty relation embeddings - will be populated on first use
         let mut relation_embeddings = HashMap::new();
-        
+
         // Try to pre-compute relation embeddings, but don't fail if embedding service is unavailable
         let descriptions: Vec<String> = relation_descriptions
             .iter()
             .map(|(_, desc)| desc.to_string())
             .collect();
-        
+
         // Try to pre-compute relation embeddings, but don't fail if embedding service is unavailable
         let embeddings_result = embedding_client.generate_batch(&descriptions, true).await;
-        
+
         // Check if any embeddings failed (indicates service issues)
         let has_failures = embeddings_result.iter().any(|emb_opt| emb_opt.is_none());
-        
+
         if !has_failures {
             // Successfully pre-computed relation embeddings
             for ((rel_type, _), emb_opt) in relation_descriptions.iter().zip(embeddings_result) {
@@ -103,17 +103,20 @@ impl SemanticExtractor {
                     relation_embeddings.insert(*rel_type, emb);
                 }
             }
-            info!("Pre-computed {} relation embeddings", relation_embeddings.len());
+            info!(
+                "Pre-computed {} relation embeddings",
+                relation_embeddings.len()
+            );
         } else {
             // Embedding service unavailable or partial failures - continue with empty relation embeddings
             warn!("Could not pre-compute all relation embeddings (embedding service issues). Will compute lazily.");
         }
-        
+
         info!(
             "✅ SemanticExtractor initialized with {} relation types",
             relation_embeddings.len()
         );
-        
+
         Ok(Self {
             embedding_client,
             relation_embeddings,
@@ -121,67 +124,71 @@ impl SemanticExtractor {
             min_entity_length: 3,
         })
     }
-    
+
     /// Lazily initialize relation embeddings if they're missing
     #[allow(dead_code)]
     async fn ensure_relation_embeddings(&mut self) -> Result<()> {
         if !self.relation_embeddings.is_empty() {
             return Ok(()); // Already initialized
         }
-        
+
         info!("Lazily computing relation embeddings...");
-        
+
         // Define relation type descriptions
         let relation_descriptions = [
             (
                 AssociationType::Semantic,
-                "is a type of, is an example of, belongs to category, classified as, instance of"
+                "is a type of, is an example of, belongs to category, classified as, instance of",
             ),
             (
                 AssociationType::Causal,
-                "causes, leads to, results in, because of, due to, triggers, produces, creates"
+                "causes, leads to, results in, because of, due to, triggers, produces, creates",
             ),
             (
                 AssociationType::Temporal,
-                "happens before, occurs after, during, while, when, then, followed by, preceded by"
+                "happens before, occurs after, during, while, when, then, followed by, preceded by",
             ),
             (
                 AssociationType::Hierarchical,
-                "parent of, child of, superclass, subclass, inherits from, extends, derived from"
+                "parent of, child of, superclass, subclass, inherits from, extends, derived from",
             ),
             (
                 AssociationType::Compositional,
-                "part of, contains, consists of, made of, component of, includes, comprises"
+                "part of, contains, consists of, made of, component of, includes, comprises",
             ),
         ];
-        
+
         // Batch embed all relation descriptions
         let descriptions: Vec<String> = relation_descriptions
             .iter()
             .map(|(_, desc)| desc.to_string())
             .collect();
-        
-        let embeddings = self.embedding_client
+
+        let embeddings = self
+            .embedding_client
             .generate_batch(&descriptions, true)
             .await;
-        
+
         // Check if any embeddings failed
         let has_failures = embeddings.iter().any(|emb_opt| emb_opt.is_none());
         if has_failures {
             anyhow::bail!("Failed to generate some relation embeddings - embedding service may be unavailable");
         }
-        
+
         // Build relation embedding map
         for ((rel_type, _), emb_opt) in relation_descriptions.iter().zip(embeddings) {
             if let Some(emb) = emb_opt {
                 self.relation_embeddings.insert(*rel_type, emb);
             }
         }
-        
-        info!("✅ Lazy-computed {} relation embeddings", self.relation_embeddings.len());
+
+        info!(
+            "✅ Lazy-computed {} relation embeddings",
+            self.relation_embeddings.len()
+        );
         Ok(())
     }
-    
+
     /// Extract semantic associations from text
     ///
     /// Returns a vector of associations with confidence scores.
@@ -190,34 +197,32 @@ impl SemanticExtractor {
         if text.trim().is_empty() {
             return Ok(Vec::new());
         }
-        
+
         debug!("Extracting associations from text (len={})", text.len());
-        
+
         // Step 1: Split into sentences
         let sentences = self.split_sentences(text);
-        
+
         if sentences.is_empty() {
             return Ok(Vec::new());
         }
-        
+
         // Step 2: Batch embed all sentences (uses HA service!)
-        let sentence_embeddings = self.embedding_client
-            .generate_batch(&sentences, true)
-            .await;
-        
+        let sentence_embeddings = self.embedding_client.generate_batch(&sentences, true).await;
+
         // Step 3: Process each sentence
         let mut associations = Vec::new();
-        
+
         for (sentence, emb_opt) in sentences.iter().zip(sentence_embeddings) {
             if let Some(emb) = emb_opt {
                 // Classify relation type by similarity
                 let (assoc_type, confidence) = self.classify_relation(&emb);
-                
+
                 // Only process if above threshold
                 if confidence >= self.similarity_threshold {
                     // Extract entities from sentence
                     let entities = self.extract_entities(sentence);
-                    
+
                     // Create associations between entities
                     if entities.len() >= 2 {
                         // First entity is usually the subject, rest are targets
@@ -232,35 +237,34 @@ impl SemanticExtractor {
                 }
             }
         }
-        
+
         // Deduplicate by (target, type)
         associations.sort_by(|a, b| {
-            a.target.cmp(&b.target)
+            a.target
+                .cmp(&b.target)
                 .then_with(|| (a.assoc_type as u8).cmp(&(b.assoc_type as u8)))
         });
-        associations.dedup_by(|a, b| {
-            a.target == b.target && a.assoc_type == b.assoc_type
-        });
-        
+        associations.dedup_by(|a, b| a.target == b.target && a.assoc_type == b.assoc_type);
+
         debug!("Extracted {} associations", associations.len());
-        
+
         Ok(associations)
     }
-    
+
     /// Classify relation type by finding most similar pre-computed embedding
     fn classify_relation(&self, sentence_embedding: &[f32]) -> (AssociationType, f32) {
         let mut best_match = (AssociationType::Semantic, 0.0);
-        
+
         for (rel_type, rel_embedding) in &self.relation_embeddings {
             let similarity = cosine_similarity(sentence_embedding, rel_embedding);
             if similarity > best_match.1 {
                 best_match = (*rel_type, similarity);
             }
         }
-        
+
         best_match
     }
-    
+
     /// Extract entity candidates from sentence
     ///
     /// Simple but effective heuristics:
@@ -272,21 +276,21 @@ impl SemanticExtractor {
             .split_whitespace()
             .filter(|w| w.len() >= self.min_entity_length)
             .collect();
-        
+
         let mut entities = Vec::new();
         let mut current_entity = String::new();
-        
+
         for word in words {
             // Clean punctuation
             let clean_word: String = word
                 .chars()
                 .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '-')
                 .collect();
-            
+
             if clean_word.is_empty() {
                 continue;
             }
-            
+
             // Check if starts with capital
             if clean_word.chars().next().unwrap().is_uppercase() {
                 if current_entity.is_empty() {
@@ -304,15 +308,15 @@ impl SemanticExtractor {
                 }
             }
         }
-        
+
         // Don't forget last entity
         if !current_entity.is_empty() && current_entity.len() >= self.min_entity_length {
             entities.push(current_entity);
         }
-        
+
         entities
     }
-    
+
     /// Split text into sentences
     ///
     /// Simple split on sentence terminators.
@@ -331,30 +335,21 @@ impl SemanticExtractor {
 /// Returns value in range [0.0, 1.0] where 1.0 is identical.
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "Vector dimensions must match");
-    
+
     if a.is_empty() {
         return 0.0;
     }
-    
-    let dot: f32 = a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| x * y)
-        .sum();
-    
-    let norm_a: f32 = a.iter()
-        .map(|x| x * x)
-        .sum::<f32>()
-        .sqrt();
-    
-    let norm_b: f32 = b.iter()
-        .map(|y| y * y)
-        .sum::<f32>()
-        .sqrt();
-    
+
+    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+    let norm_b: f32 = b.iter().map(|y| y * y).sum::<f32>().sqrt();
+
     if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
     }
-    
+
     // Clamp to [0, 1] range
     (dot / (norm_a * norm_b)).clamp(0.0, 1.0)
 }
@@ -362,25 +357,25 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_cosine_similarity() {
         // Identical vectors
         let v1 = vec![1.0, 0.0, 0.0];
         let v2 = vec![1.0, 0.0, 0.0];
         assert!((cosine_similarity(&v1, &v2) - 1.0).abs() < 0.001);
-        
+
         // Orthogonal vectors
         let v3 = vec![1.0, 0.0, 0.0];
         let v4 = vec![0.0, 1.0, 0.0];
         assert!((cosine_similarity(&v3, &v4) - 0.0).abs() < 0.001);
-        
+
         // Opposite vectors
         let v5 = vec![1.0, 0.0];
         let v6 = vec![-1.0, 0.0];
         assert!(cosine_similarity(&v5, &v6) < 0.1); // Should be clamped to 0
     }
-    
+
     #[test]
     fn test_split_sentences() {
         use crate::embedding_client::HttpEmbeddingClient;
@@ -391,16 +386,16 @@ mod tests {
             similarity_threshold: 0.65,
             min_entity_length: 3,
         };
-        
+
         let text = "This is sentence one. This is sentence two! And a question?";
         let sentences = extractor.split_sentences(text);
-        
+
         assert_eq!(sentences.len(), 3);
         assert_eq!(sentences[0], "This is sentence one");
         assert_eq!(sentences[1], "This is sentence two");
         assert_eq!(sentences[2], "And a question");
     }
-    
+
     #[test]
     fn test_extract_entities() {
         use crate::embedding_client::HttpEmbeddingClient;
@@ -411,16 +406,16 @@ mod tests {
             similarity_threshold: 0.65,
             min_entity_length: 3,
         };
-        
+
         let sentence = "Paris is the capital of France and home to the Eiffel Tower";
         let entities = extractor.extract_entities(sentence);
-        
+
         assert!(!entities.is_empty());
         assert!(entities.contains(&"Paris".to_string()));
         assert!(entities.contains(&"France".to_string()));
         assert!(entities.contains(&"Eiffel Tower".to_string()));
     }
-    
+
     #[tokio::test]
     async fn test_semantic_extraction_integration() {
         // Skip if embedding service not available
@@ -428,19 +423,20 @@ mod tests {
             println!("Skipping integration test - SUTRA_EMBEDDING_SERVICE_URL not set");
             return;
         }
-        
+
         use crate::embedding_client::HttpEmbeddingClient;
         let client = Arc::new(HttpEmbeddingClient::with_defaults().unwrap());
         let extractor = SemanticExtractor::new(client).await.unwrap();
-        
+
         let text = "Paris is the capital of France. The Eiffel Tower is located in Paris.";
         let associations = extractor.extract(text).await.unwrap();
-        
+
         assert!(!associations.is_empty());
-        
+
         // Should find at least one hierarchical or semantic relation
-        assert!(associations.iter().any(|a| 
-            matches!(a.assoc_type, AssociationType::Hierarchical | AssociationType::Semantic)
-        ));
+        assert!(associations.iter().any(|a| matches!(
+            a.assoc_type,
+            AssociationType::Hierarchical | AssociationType::Semantic
+        )));
     }
 }

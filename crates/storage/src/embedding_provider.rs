@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 
 /// Trait for embedding providers
 ///
@@ -9,7 +9,7 @@ use anyhow::Result;
 pub trait EmbeddingProvider: Send + Sync {
     /// Generate embedding for a single text
     async fn generate(&self, text: &str, normalize: bool) -> Result<Vec<f32>>;
-    
+
     /// Generate embeddings for multiple texts in batch
     async fn generate_batch(&self, texts: &[String], normalize: bool) -> Vec<Option<Vec<f32>>>;
 }

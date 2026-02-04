@@ -15,24 +15,28 @@ impl ConceptId {
     pub fn from_bytes(bytes: [u8; 16]) -> Self {
         Self(bytes)
     }
-    
+
     pub fn from_string(s: &str) -> Self {
         use std::convert::TryInto;
-        
+
         // Handle odd-length hex strings by padding with leading zero
         let hex_str = if s.len() % 2 == 1 {
             format!("0{}", s)
         } else {
             s.to_string()
         };
-        
+
         let bytes = hex::decode(&hex_str).unwrap_or_else(|e| {
-            log::warn!("Failed to decode hex '{}', using MD5 hash instead: {}", s, e);
+            log::warn!(
+                "Failed to decode hex '{}', using MD5 hash instead: {}",
+                s,
+                e
+            );
             // Fallback: use MD5 hash of the string
             let hash = md5::compute(s.as_bytes());
             hash.to_vec()
         });
-        
+
         // Handle different byte lengths
         if bytes.len() <= 8 {
             // Pad to 16 bytes with zeros
@@ -48,7 +52,7 @@ impl ConceptId {
             Self(bytes[..16].try_into().expect("Invalid length"))
         }
     }
-    
+
     pub fn to_hex(&self) -> String {
         hex::encode(self.0)
     }
@@ -86,22 +90,22 @@ impl AssociationType {
 
 /// Fixed-size concept record (128 bytes)
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
-#[repr(C, packed)]  // packed to avoid padding
+#[repr(C, packed)] // packed to avoid padding
 pub struct ConceptRecord {
-    pub concept_id: ConceptId,       // 16 bytes
-    pub strength: f32,                // 4 bytes
-    pub confidence: f32,              // 4 bytes
-    pub access_count: u32,            // 4 bytes
-    pub created: u64,                 // 8 bytes
-    pub last_accessed: u64,           // 8 bytes
-    pub content_offset: u64,          // 8 bytes
-    pub content_length: u32,          // 4 bytes
-    pub embedding_offset: u64,        // 8 bytes
-    pub source_hash: u32,             // 4 bytes
-    pub flags: u32,                   // 4 bytes
-    pub reserved1: [u8; 32],          // 32 bytes
-    pub reserved2: [u8; 24],          // 24 bytes to reach 128
-}  // Total: 128 bytes
+    pub concept_id: ConceptId, // 16 bytes
+    pub strength: f32,         // 4 bytes
+    pub confidence: f32,       // 4 bytes
+    pub access_count: u32,     // 4 bytes
+    pub created: u64,          // 8 bytes
+    pub last_accessed: u64,    // 8 bytes
+    pub content_offset: u64,   // 8 bytes
+    pub content_length: u32,   // 4 bytes
+    pub embedding_offset: u64, // 8 bytes
+    pub source_hash: u32,      // 4 bytes
+    pub flags: u32,            // 4 bytes
+    pub reserved1: [u8; 32],   // 32 bytes
+    pub reserved2: [u8; 24],   // 24 bytes to reach 128
+} // Total: 128 bytes
 
 impl ConceptRecord {
     pub fn new(
@@ -114,7 +118,7 @@ impl ConceptRecord {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         Self {
             concept_id: id,
             strength: 1.0,
@@ -135,18 +139,18 @@ impl ConceptRecord {
 
 /// Fixed-size association record (64 bytes)
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
-#[repr(C, packed)]  // packed to avoid padding
+#[repr(C, packed)] // packed to avoid padding
 pub struct AssociationRecord {
-    pub source_id: ConceptId,         // 16 bytes
-    pub target_id: ConceptId,         // 16 bytes
-    pub assoc_type: u8,               // 1 byte
-    pub confidence: f32,              // 4 bytes
-    pub weight: f32,                  // 4 bytes
-    pub created: u64,                 // 8 bytes
-    pub last_used: u64,               // 8 bytes
-    pub flags: u8,                    // 1 byte
-    pub reserved: [u8; 6],            // 6 bytes padding to reach 64
-}  // Total: 64 bytes
+    pub source_id: ConceptId, // 16 bytes
+    pub target_id: ConceptId, // 16 bytes
+    pub assoc_type: u8,       // 1 byte
+    pub confidence: f32,      // 4 bytes
+    pub weight: f32,          // 4 bytes
+    pub created: u64,         // 8 bytes
+    pub last_used: u64,       // 8 bytes
+    pub flags: u8,            // 1 byte
+    pub reserved: [u8; 6],    // 6 bytes padding to reach 64
+} // Total: 64 bytes
 
 impl AssociationRecord {
     pub fn new(
@@ -159,7 +163,7 @@ impl AssociationRecord {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         Self {
             source_id: source,
             target_id: target,
@@ -190,17 +194,17 @@ pub struct GraphPath {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_concept_record_size() {
         assert_eq!(std::mem::size_of::<ConceptRecord>(), 128);
     }
-    
+
     #[test]
     fn test_association_record_size() {
         assert_eq!(std::mem::size_of::<AssociationRecord>(), 64);
     }
-    
+
     #[test]
     fn test_segment_header_size() {
         assert_eq!(std::mem::size_of::<SegmentHeader>(), 256);

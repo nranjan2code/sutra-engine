@@ -69,7 +69,7 @@ impl LogEntry {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_micros() as u64;
-        
+
         Self {
             sequence,
             timestamp,
@@ -99,15 +99,15 @@ impl WriteAheadLog {
     /// Create a new WAL
     pub fn create<P: AsRef<Path>>(path: P, fsync: bool) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        
+
         let file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)
             .context("Failed to create WAL file")?;
-        
+
         let writer = BufWriter::new(file);
-        
+
         Ok(Self {
             path,
             writer,
@@ -117,23 +117,23 @@ impl WriteAheadLog {
             next_transaction_id: Arc::new(AtomicU64::new(1)),
         })
     }
-    
+
     /// Open existing WAL
     pub fn open<P: AsRef<Path>>(path: P, fsync: bool) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        
+
         // Read existing entries to determine next sequence
         let entries = Self::read_entries(&path)?;
         let next_sequence = entries.last().map(|e| e.sequence + 1).unwrap_or(0);
-        
+
         let file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)
             .context("Failed to open WAL file")?;
-        
+
         let writer = BufWriter::new(file);
-        
+
         Ok(Self {
             path,
             writer,
@@ -143,93 +143,104 @@ impl WriteAheadLog {
             next_transaction_id: Arc::new(AtomicU64::new(1)),
         })
     }
-    
+
     /// Append an operation to the log
     pub fn append(&mut self, operation: Operation) -> Result<u64> {
         let sequence = self.next_sequence.fetch_add(1, Ordering::SeqCst);
         let entry = LogEntry::new(sequence, operation, self.current_transaction);
-        
+
         // Serialize as MessagePack (binary format - matches TCP protocol)
         let bytes = rmp_serde::to_vec(&entry).context("Failed to serialize entry")?;
-        
+
         // Write length prefix (4 bytes, little-endian)
         let len_bytes = (bytes.len() as u32).to_le_bytes();
-        self.writer.write_all(&len_bytes).context("Failed to write length")?;
-        
+        self.writer
+            .write_all(&len_bytes)
+            .context("Failed to write length")?;
+
         // Write entry data
-        self.writer.write_all(&bytes).context("Failed to write entry")?;
-        
+        self.writer
+            .write_all(&bytes)
+            .context("Failed to write entry")?;
+
         if self.fsync {
             self.writer.flush().context("Failed to flush")?;
-            self.writer.get_ref().sync_all().context("Failed to fsync")?;
+            self.writer
+                .get_ref()
+                .sync_all()
+                .context("Failed to fsync")?;
         }
-        
+
         Ok(sequence)
     }
-    
+
     /// Begin a transaction
     pub fn begin_transaction(&mut self) -> Result<u64> {
         if self.current_transaction.is_some() {
             anyhow::bail!("Transaction already in progress");
         }
-        
+
         let transaction_id = self.next_transaction_id.fetch_add(1, Ordering::SeqCst);
         self.current_transaction = Some(transaction_id);
-        
+
         self.append(Operation::BeginTransaction { transaction_id })?;
-        
+
         Ok(transaction_id)
     }
-    
+
     /// Commit current transaction
     pub fn commit_transaction(&mut self) -> Result<()> {
-        let transaction_id = self.current_transaction
+        let transaction_id = self
+            .current_transaction
             .ok_or_else(|| anyhow::anyhow!("No transaction in progress"))?;
-        
+
         self.append(Operation::CommitTransaction { transaction_id })?;
         self.current_transaction = None;
-        
+
         Ok(())
     }
-    
+
     /// Rollback current transaction
     pub fn rollback_transaction(&mut self) -> Result<()> {
-        let transaction_id = self.current_transaction
+        let transaction_id = self
+            .current_transaction
             .ok_or_else(|| anyhow::anyhow!("No transaction in progress"))?;
-        
+
         self.append(Operation::RollbackTransaction { transaction_id })?;
         self.current_transaction = None;
-        
+
         Ok(())
     }
-    
+
     /// Flush buffered writes
     pub fn flush(&mut self) -> Result<()> {
         self.writer.flush().context("Failed to flush WAL")?;
         Ok(())
     }
-    
+
     /// Sync to disk
     pub fn sync(&mut self) -> Result<()> {
         self.writer.flush().context("Failed to flush WAL")?;
-        self.writer.get_ref().sync_all().context("Failed to sync WAL")?;
+        self.writer
+            .get_ref()
+            .sync_all()
+            .context("Failed to sync WAL")?;
         Ok(())
     }
-    
+
     /// Read all entries from the log
     pub fn read_entries<P: AsRef<Path>>(path: P) -> Result<Vec<LogEntry>> {
         use std::io::Read;
-        
-        let mut file = File::open(path)
-            .context("Failed to open WAL file")?;
-        
+
+        let mut file = File::open(path).context("Failed to open WAL file")?;
+
         let mut entries = Vec::new();
-        
+
         loop {
             // Read length prefix (4 bytes, little-endian)
             let mut len_buf = [0u8; 4];
             match file.read_exact(&mut len_buf) {
-                Ok(()) => {},
+                Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     // End of file reached
                     break;
@@ -237,29 +248,29 @@ impl WriteAheadLog {
                 Err(e) => return Err(e).context("Failed to read length prefix"),
             }
             let len = u32::from_le_bytes(len_buf) as usize;
-            
+
             // Read entry data
             let mut entry_buf = vec![0u8; len];
             file.read_exact(&mut entry_buf)
                 .context("Failed to read entry data")?;
-            
+
             // Deserialize from MessagePack
-            let entry: LogEntry = rmp_serde::from_slice(&entry_buf)
-                .context("Failed to deserialize WAL entry")?;
+            let entry: LogEntry =
+                rmp_serde::from_slice(&entry_buf).context("Failed to deserialize WAL entry")?;
             entries.push(entry);
         }
-        
+
         Ok(entries)
     }
-    
+
     /// Replay the log and return committed operations
     pub fn replay<P: AsRef<Path>>(path: P) -> Result<Vec<LogEntry>> {
         let entries = Self::read_entries(path)?;
-        
+
         let mut committed = Vec::new();
-        let mut transaction_ops: std::collections::HashMap<u64, Vec<LogEntry>> = 
+        let mut transaction_ops: std::collections::HashMap<u64, Vec<LogEntry>> =
             std::collections::HashMap::new();
-        
+
         for entry in entries {
             match &entry.operation {
                 Operation::BeginTransaction { transaction_id } => {
@@ -278,7 +289,8 @@ impl WriteAheadLog {
                 _ => {
                     if let Some(txn_id) = entry.transaction_id {
                         // Add to transaction buffer
-                        transaction_ops.entry(txn_id)
+                        transaction_ops
+                            .entry(txn_id)
                             .or_default()
                             .push(entry.clone());
                     } else {
@@ -288,26 +300,27 @@ impl WriteAheadLog {
                 }
             }
         }
-        
+
         Ok(committed)
     }
-    
+
     /// Truncate the log (remove all entries)
     pub fn truncate(&mut self) -> Result<()> {
-        drop(std::mem::replace(&mut self.writer, BufWriter::new(
-            File::create(&self.path).context("Failed to truncate WAL")?
-        )));
-        
+        drop(std::mem::replace(
+            &mut self.writer,
+            BufWriter::new(File::create(&self.path).context("Failed to truncate WAL")?),
+        ));
+
         self.next_sequence.store(0, Ordering::SeqCst);
-        
+
         Ok(())
     }
-    
+
     /// Get current sequence number
     pub fn sequence(&self) -> u64 {
         self.next_sequence.load(Ordering::SeqCst)
     }
-    
+
     /// Get path
     pub fn path(&self) -> &Path {
         &self.path
@@ -318,85 +331,93 @@ impl WriteAheadLog {
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    
+
     fn test_concept_id(id: u64) -> ConceptId {
         let mut bytes = [0u8; 16];
         bytes[0..8].copy_from_slice(&id.to_le_bytes());
         ConceptId(bytes)
     }
-    
+
     #[test]
     fn test_create_wal() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.wal");
-        
+
         let wal = WriteAheadLog::create(&path, false).unwrap();
         assert_eq!(wal.sequence(), 0);
         assert!(path.exists());
     }
-    
+
     #[test]
     fn test_append_operations() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.wal");
-        
+
         let mut wal = WriteAheadLog::create(&path, false).unwrap();
-        
+
         // Append concept write
-        let seq1 = wal.append(Operation::WriteConcept {
-            concept_id: test_concept_id(1),
-            content_len: 100,
-            vector_len: 384,
-            created: 1000,
-            modified: 1000,
-        }).unwrap();
+        let seq1 = wal
+            .append(Operation::WriteConcept {
+                concept_id: test_concept_id(1),
+                content_len: 100,
+                vector_len: 384,
+                created: 1000,
+                modified: 1000,
+            })
+            .unwrap();
         assert_eq!(seq1, 0);
-        
+
         // Append association write
-        let seq2 = wal.append(Operation::WriteAssociation {
-            source: test_concept_id(1),
-            target: test_concept_id(2),
-            association_id: 100,
-            strength: 0.8,
-            created: 1001,
-        }).unwrap();
+        let seq2 = wal
+            .append(Operation::WriteAssociation {
+                source: test_concept_id(1),
+                target: test_concept_id(2),
+                association_id: 100,
+                strength: 0.8,
+                created: 1001,
+            })
+            .unwrap();
         assert_eq!(seq2, 1);
-        
+
         assert_eq!(wal.sequence(), 2);
     }
-    
+
     #[test]
     fn test_read_entries() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.wal");
-        
+
         let mut wal = WriteAheadLog::create(&path, false).unwrap();
-        
+
         wal.append(Operation::WriteConcept {
             concept_id: test_concept_id(1),
             content_len: 100,
             vector_len: 384,
             created: 1000,
             modified: 1000,
-        }).unwrap();
-        
-        wal.append(Operation::DeleteConcept { concept_id: test_concept_id(1) }).unwrap();
-        
+        })
+        .unwrap();
+
+        wal.append(Operation::DeleteConcept {
+            concept_id: test_concept_id(1),
+        })
+        .unwrap();
+
         wal.flush().unwrap();
-        
+
         let entries = WriteAheadLog::read_entries(&path).unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].sequence, 0);
         assert_eq!(entries[1].sequence, 1);
     }
-    
+
     #[test]
     fn test_replay() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.wal");
-        
+
         let mut wal = WriteAheadLog::create(&path, false).unwrap();
-        
+
         // Non-transactional operations
         wal.append(Operation::WriteConcept {
             concept_id: test_concept_id(1),
@@ -404,25 +425,29 @@ mod tests {
             vector_len: 384,
             created: 1000,
             modified: 1000,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         wal.flush().unwrap();
-        
+
         let committed = WriteAheadLog::replay(&path).unwrap();
         assert_eq!(committed.len(), 1);
-        assert!(matches!(committed[0].operation, Operation::WriteConcept { .. }));
+        assert!(matches!(
+            committed[0].operation,
+            Operation::WriteConcept { .. }
+        ));
     }
-    
+
     #[test]
     fn test_transaction_commit() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.wal");
-        
+
         let mut wal = WriteAheadLog::create(&path, false).unwrap();
-        
+
         // Begin transaction
         let txn_id = wal.begin_transaction().unwrap();
-        
+
         // Operations within transaction
         wal.append(Operation::WriteConcept {
             concept_id: test_concept_id(1),
@@ -430,50 +455,52 @@ mod tests {
             vector_len: 384,
             created: 1000,
             modified: 1000,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         wal.append(Operation::WriteConcept {
             concept_id: test_concept_id(2),
             content_len: 200,
             vector_len: 384,
             created: 1001,
             modified: 1001,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         // Commit transaction
         wal.commit_transaction().unwrap();
-        
+
         wal.flush().unwrap();
-        
+
         // Replay should include both operations
         let committed = WriteAheadLog::replay(&path).unwrap();
         assert_eq!(committed.len(), 2);
-        
+
         // Check concept IDs match
         if let Operation::WriteConcept { concept_id, .. } = committed[0].operation {
             assert_eq!(concept_id, test_concept_id(1));
         } else {
             panic!("Expected WriteConcept operation");
         }
-        
+
         if let Operation::WriteConcept { concept_id, .. } = committed[1].operation {
             assert_eq!(concept_id, test_concept_id(2));
         } else {
             panic!("Expected WriteConcept operation");
         }
-        
+
         // Both should have same transaction ID
         assert_eq!(committed[0].transaction_id, Some(txn_id));
         assert_eq!(committed[1].transaction_id, Some(txn_id));
     }
-    
+
     #[test]
     fn test_transaction_rollback() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.wal");
-        
+
         let mut wal = WriteAheadLog::create(&path, false).unwrap();
-        
+
         // Non-transactional operation
         wal.append(Operation::WriteConcept {
             concept_id: test_concept_id(1),
@@ -481,11 +508,12 @@ mod tests {
             vector_len: 384,
             created: 1000,
             modified: 1000,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         // Begin transaction
         wal.begin_transaction().unwrap();
-        
+
         // Operations within transaction
         wal.append(Operation::WriteConcept {
             concept_id: test_concept_id(2),
@@ -493,57 +521,59 @@ mod tests {
             vector_len: 384,
             created: 1001,
             modified: 1001,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         // Rollback transaction
         wal.rollback_transaction().unwrap();
-        
+
         wal.flush().unwrap();
-        
+
         // Replay should only include the first operation
         let committed = WriteAheadLog::replay(&path).unwrap();
         assert_eq!(committed.len(), 1);
-        
+
         if let Operation::WriteConcept { concept_id, .. } = committed[0].operation {
             assert_eq!(concept_id, test_concept_id(1));
         } else {
             panic!("Expected WriteConcept operation");
         }
     }
-    
+
     #[test]
     fn test_truncate() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.wal");
-        
+
         let mut wal = WriteAheadLog::create(&path, false).unwrap();
-        
+
         wal.append(Operation::WriteConcept {
             concept_id: test_concept_id(1),
             content_len: 100,
             vector_len: 384,
             created: 1000,
             modified: 1000,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         wal.flush().unwrap();
-        
+
         // Truncate
         wal.truncate().unwrap();
-        
+
         assert_eq!(wal.sequence(), 0);
-        
+
         let entries = WriteAheadLog::read_entries(&path).unwrap();
         assert_eq!(entries.len(), 0);
     }
-    
+
     #[test]
     fn test_fsync() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.wal");
-        
+
         let mut wal = WriteAheadLog::create(&path, true).unwrap();
-        
+
         // This should fsync automatically
         wal.append(Operation::WriteConcept {
             concept_id: test_concept_id(1),
@@ -551,8 +581,9 @@ mod tests {
             vector_len: 384,
             created: 1000,
             modified: 1000,
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         // Data should be on disk immediately
         let entries = WriteAheadLog::read_entries(&path).unwrap();
         assert_eq!(entries.len(), 1);

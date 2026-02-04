@@ -90,7 +90,7 @@ impl TransactionCoordinator {
     /// Start new transaction
     pub fn begin(&self, operation: TxnOperation) -> u64 {
         let txn_id = generate_txn_id();
-        
+
         let participants = match &operation {
             TxnOperation::CreateAssociation {
                 source_shard,
@@ -102,7 +102,7 @@ impl TransactionCoordinator {
                     state: TxnState::Preparing,
                     prepared_at: None,
                 }];
-                
+
                 // Only add target shard if different (cross-shard case)
                 if source_shard != target_shard {
                     parts.push(Participant {
@@ -111,7 +111,7 @@ impl TransactionCoordinator {
                         prepared_at: None,
                     });
                 }
-                
+
                 parts
             }
         };
@@ -126,16 +126,14 @@ impl TransactionCoordinator {
 
         self.active.write().insert(txn_id, txn);
         log::debug!("🔄 2PC: Started transaction {}", txn_id);
-        
+
         txn_id
     }
 
     /// Mark participant as prepared
     pub fn mark_prepared(&self, txn_id: u64, shard_id: u32) -> Result<(), TxnError> {
         let mut active = self.active.write();
-        let txn = active
-            .get_mut(&txn_id)
-            .ok_or(TxnError::NotFound(txn_id))?;
+        let txn = active.get_mut(&txn_id).ok_or(TxnError::NotFound(txn_id))?;
 
         // Check timeout
         if txn.started_at.elapsed() > self.timeout {
@@ -186,9 +184,7 @@ impl TransactionCoordinator {
     /// Commit transaction (Phase 2)
     pub fn commit(&self, txn_id: u64) -> Result<(), TxnError> {
         let mut active = self.active.write();
-        let txn = active
-            .get_mut(&txn_id)
-            .ok_or(TxnError::NotFound(txn_id))?;
+        let txn = active.get_mut(&txn_id).ok_or(TxnError::NotFound(txn_id))?;
 
         if txn.state != TxnState::Prepared {
             return Err(TxnError::InvalidState {
@@ -199,7 +195,7 @@ impl TransactionCoordinator {
         }
 
         txn.state = TxnState::Committed;
-        
+
         // Mark all participants as committed
         for participant in &mut txn.participants {
             participant.state = TxnState::Committed;
@@ -212,12 +208,10 @@ impl TransactionCoordinator {
     /// Abort transaction (rollback)
     pub fn abort(&self, txn_id: u64) -> Result<(), TxnError> {
         let mut active = self.active.write();
-        let txn = active
-            .get_mut(&txn_id)
-            .ok_or(TxnError::NotFound(txn_id))?;
+        let txn = active.get_mut(&txn_id).ok_or(TxnError::NotFound(txn_id))?;
 
         txn.state = TxnState::Aborted;
-        
+
         // Mark all participants as aborted
         for participant in &mut txn.participants {
             participant.state = TxnState::Aborted;
@@ -249,7 +243,7 @@ impl TransactionCoordinator {
     pub fn cleanup_timedout(&self) -> usize {
         let mut active = self.active.write();
         let now = Instant::now();
-        
+
         let timed_out: Vec<u64> = active
             .iter()
             .filter(|(_, txn)| now.duration_since(txn.started_at) > self.timeout)
@@ -264,7 +258,7 @@ impl TransactionCoordinator {
         }
 
         let count = timed_out.len();
-        
+
         // Remove aborted transactions
         for txn_id in timed_out {
             active.remove(&txn_id);
@@ -276,7 +270,7 @@ impl TransactionCoordinator {
     /// Get statistics
     pub fn stats(&self) -> TxnCoordinatorStats {
         let active = self.active.read();
-        
+
         let mut preparing = 0;
         let mut prepared = 0;
         let mut committed = 0;
@@ -364,7 +358,7 @@ mod tests {
     #[test]
     fn test_same_shard_transaction() {
         let coordinator = TransactionCoordinator::new(5);
-        
+
         let txn_id = coordinator.begin(TxnOperation::CreateAssociation {
             source: ConceptId([1; 16]),
             target: ConceptId([2; 16]),
@@ -383,7 +377,7 @@ mod tests {
     #[test]
     fn test_cross_shard_transaction() {
         let coordinator = TransactionCoordinator::new(5);
-        
+
         let txn_id = coordinator.begin(TxnOperation::CreateAssociation {
             source: ConceptId([1; 16]),
             target: ConceptId([2; 16]),
@@ -403,7 +397,7 @@ mod tests {
     #[test]
     fn test_2pc_protocol() {
         let coordinator = TransactionCoordinator::new(5);
-        
+
         let txn_id = coordinator.begin(TxnOperation::CreateAssociation {
             source: ConceptId([1; 16]),
             target: ConceptId([2; 16]),
@@ -415,16 +409,16 @@ mod tests {
 
         // Phase 1: Prepare
         assert!(!coordinator.is_ready_to_commit(txn_id).unwrap());
-        
+
         coordinator.mark_prepared(txn_id, 0).unwrap();
         assert!(!coordinator.is_ready_to_commit(txn_id).unwrap()); // Not all prepared yet
-        
+
         coordinator.mark_prepared(txn_id, 1).unwrap();
         assert!(coordinator.is_ready_to_commit(txn_id).unwrap()); // All prepared
 
         // Phase 2: Commit
         coordinator.commit(txn_id).unwrap();
-        
+
         let txn = coordinator.get_transaction(txn_id).unwrap();
         assert_eq!(txn.state, TxnState::Committed);
     }
@@ -432,7 +426,7 @@ mod tests {
     #[test]
     fn test_abort_transaction() {
         let coordinator = TransactionCoordinator::new(5);
-        
+
         let txn_id = coordinator.begin(TxnOperation::CreateAssociation {
             source: ConceptId([1; 16]),
             target: ConceptId([2; 16]),
@@ -444,10 +438,10 @@ mod tests {
 
         // Prepare first shard
         coordinator.mark_prepared(txn_id, 0).unwrap();
-        
+
         // Second shard fails - abort
         coordinator.abort(txn_id).unwrap();
-        
+
         let txn = coordinator.get_transaction(txn_id).unwrap();
         assert_eq!(txn.state, TxnState::Aborted);
     }
@@ -455,7 +449,7 @@ mod tests {
     #[test]
     fn test_timeout() {
         let coordinator = TransactionCoordinator::new(1); // 1 second timeout
-        
+
         let txn_id = coordinator.begin(TxnOperation::CreateAssociation {
             source: ConceptId([1; 16]),
             target: ConceptId([2; 16]),
@@ -466,7 +460,7 @@ mod tests {
         });
 
         std::thread::sleep(Duration::from_millis(1100));
-        
+
         // Should timeout
         let result = coordinator.mark_prepared(txn_id, 0);
         assert!(matches!(result, Err(TxnError::Timeout(_))));
@@ -475,7 +469,7 @@ mod tests {
     #[test]
     fn test_cleanup_timedout() {
         let coordinator = TransactionCoordinator::new(1);
-        
+
         // Create multiple transactions
         for _ in 0..5 {
             coordinator.begin(TxnOperation::CreateAssociation {
@@ -489,9 +483,9 @@ mod tests {
         }
 
         assert_eq!(coordinator.stats().active_count, 5);
-        
+
         std::thread::sleep(Duration::from_millis(1100));
-        
+
         let cleaned = coordinator.cleanup_timedout();
         assert_eq!(cleaned, 5);
         assert_eq!(coordinator.stats().active_count, 0);

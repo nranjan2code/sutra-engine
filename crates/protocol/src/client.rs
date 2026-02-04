@@ -1,6 +1,6 @@
 //! Production-grade Grid client with connection pooling and automatic reconnection
 
-use crate::{GridMessage, GridResponse, request_with_timeout};
+use crate::{request_with_timeout, GridMessage, GridResponse};
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
@@ -43,22 +43,22 @@ impl GridClient {
         // Configure TCP settings for low latency
         let stream = TcpStream::connect(&self.endpoint).await?;
         stream.set_nodelay(true)?; // Disable Nagle's algorithm
-        
+
         // Set keepalive to detect dead connections
         let socket = socket2::Socket::from(stream.into_std()?);
         let keepalive = socket2::TcpKeepalive::new()
             .with_time(Duration::from_secs(30))
             .with_interval(Duration::from_secs(10));
         socket.set_tcp_keepalive(&keepalive)?;
-        
-        Ok(TcpStream::from_std(socket.into())?)
+
+        TcpStream::from_std(socket.into())
     }
 
     /// Get or create connection
     async fn get_connection(&self) -> io::Result<TcpStream> {
         // Try to reuse existing connection
         let mut conn_guard = self.connection.write().await;
-        
+
         if let Some(stream) = conn_guard.take() {
             // Test if connection is still alive
             if stream.peer_addr().is_ok() {
@@ -80,13 +80,13 @@ impl GridClient {
                 Ok(response) => return Ok(response),
                 Err(e) => {
                     last_error = Some(e);
-                    
+
                     // Don't retry on final attempt
                     if attempt < self.max_retries {
                         // Exponential backoff
                         let backoff = Duration::from_millis(100 * 2_u64.pow(attempt));
                         tokio::time::sleep(backoff).await;
-                        
+
                         // Clear connection to force reconnect
                         *self.connection.write().await = None;
                     }
@@ -94,20 +94,18 @@ impl GridClient {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Max retries exceeded")
-        }))
+        Err(last_error.unwrap_or_else(|| io::Error::other("Max retries exceeded")))
     }
 
     /// Single request attempt
     async fn try_request(&self, message: &GridMessage) -> io::Result<GridResponse> {
         let mut stream = self.get_connection().await?;
-        
+
         let response = request_with_timeout(&mut stream, message, self.timeout).await?;
-        
+
         // Return connection to pool
         *self.connection.write().await = Some(stream);
-        
+
         Ok(response)
     }
 
@@ -158,7 +156,9 @@ impl GridClientPool {
 
     /// Get next client using round-robin
     pub fn get(&self) -> Arc<GridClient> {
-        let idx = self.next_idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let idx = self
+            .next_idx
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.clients[idx % self.clients.len()].clone()
     }
 
@@ -194,12 +194,10 @@ mod tests {
     #[tokio::test]
     async fn test_pool_round_robin() {
         let pool = GridClientPool::new("localhost:7002", 3);
-        
+
         // Verify round-robin distribution
-        let addrs: Vec<_> = (0..6).map(|_| {
-            Arc::as_ptr(&pool.get())
-        }).collect();
-        
+        let addrs: Vec<_> = (0..6).map(|_| Arc::as_ptr(&pool.get())).collect();
+
         // First 3 should be different, then repeat
         assert_ne!(addrs[0], addrs[1]);
         assert_ne!(addrs[1], addrs[2]);

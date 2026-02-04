@@ -1,36 +1,37 @@
+#![allow(dead_code)]
 //! Google Sheets adapter for financial data ingestion
-//! 
+//!
 //! Supports GOOGLEFINANCE function data and historical stock information
 //! Built for high-performance bulk ingestion of financial time series
 
-use super::{DataItem, DataStream, IngestionAdapter, AdapterInfo};
+use super::{AdapterInfo, DataItem, DataStream, IngestionAdapter};
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::{Datelike, NaiveDate};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value as JsonValue, json};
+use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;
-use tracing::{info, warn, debug};
-use chrono::{NaiveDate, Datelike};
+use tracing::{debug, info, warn};
 
 /// Google Sheets API configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct GoogleSheetsConfig {
     /// Spreadsheet ID (from URL)
     pub spreadsheet_id: String,
-    
+
     /// Sheet name or ID
     pub sheet_name: String,
-    
+
     /// Range to read (A1 notation, e.g., "A1:Z1000")
     pub range: String,
-    
+
     /// Google API Key (for read-only access)
     pub api_key: String,
-    
+
     /// Data format interpretation
     pub format: GoogleSheetsFormat,
-    
+
     /// Optional value filters
     pub filters: Option<Vec<DataFilter>>,
 }
@@ -40,10 +41,10 @@ pub struct GoogleSheetsConfig {
 pub enum GoogleSheetsFormat {
     /// GOOGLEFINANCE function output (ticker, date, price, volume, etc.)
     GoogleFinance,
-    
+
     /// Custom financial time series
     FinancialTimeSeries,
-    
+
     /// Generic tabular data
     Tabular,
 }
@@ -122,31 +123,31 @@ impl FinancialDataPoint {
             format!("Date: {}", self.date),
             format!("Data type: {}", self.data_type),
         ];
-        
+
         if let Some(price) = self.price {
             content_parts.push(format!("Stock price: ${:.2}", price));
         }
-        
+
         if let Some(volume) = self.volume {
             content_parts.push(format!("Trading volume: {} shares", volume));
         }
-        
+
         if let Some(market_cap) = self.market_cap {
             content_parts.push(format!("Market capitalization: ${:.0}", market_cap));
         }
-        
+
         if let Some(pe) = self.pe_ratio {
             content_parts.push(format!("P/E ratio: {:.2}", pe));
         }
-        
+
         if let Some(div_yield) = self.dividend_yield {
             content_parts.push(format!("Dividend yield: {:.2}%", div_yield * 100.0));
         }
-        
+
         if let Some(beta) = self.beta {
             content_parts.push(format!("Beta: {:.2}", beta));
         }
-        
+
         // Create semantic relationships for Sutra to learn
         let semantic_content = format!(
             "On {}, {} had the following financial metrics: {}. This represents {} market data for {}.",
@@ -156,41 +157,44 @@ impl FinancialDataPoint {
             self.data_type,
             self.ticker
         );
-        
+
         semantic_content
     }
-    
+
     /// Generate metadata for enhanced learning
     pub fn to_metadata(&self) -> HashMap<String, JsonValue> {
         let mut metadata = HashMap::new();
-        
+
         metadata.insert("ticker".to_string(), json!(self.ticker));
         metadata.insert("date".to_string(), json!(self.date));
         metadata.insert("data_type".to_string(), json!(self.data_type));
         metadata.insert("source_row".to_string(), json!(self.source_row));
         metadata.insert("domain".to_string(), json!("finance"));
         metadata.insert("entity_type".to_string(), json!("stock_data"));
-        
+
         if let Some(price) = self.price {
             metadata.insert("price".to_string(), json!(price));
         }
-        
+
         if let Some(volume) = self.volume {
             metadata.insert("volume".to_string(), json!(volume));
         }
-        
+
         if let Some(market_cap) = self.market_cap {
             metadata.insert("market_cap".to_string(), json!(market_cap));
         }
-        
+
         // Add temporal metadata for Sutra's temporal reasoning
         if let Ok(parsed_date) = NaiveDate::parse_from_str(&self.date, "%Y-%m-%d") {
             metadata.insert("year".to_string(), json!(parsed_date.year()));
             metadata.insert("month".to_string(), json!(parsed_date.month()));
             metadata.insert("day".to_string(), json!(parsed_date.day()));
-            metadata.insert("weekday".to_string(), json!(parsed_date.weekday().to_string()));
+            metadata.insert(
+                "weekday".to_string(),
+                json!(parsed_date.weekday().to_string()),
+            );
         }
-        
+
         metadata
     }
 }
@@ -200,23 +204,29 @@ pub struct GoogleSheetsAdapter {
     client: Client,
 }
 
+impl Default for GoogleSheetsAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GoogleSheetsAdapter {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
         }
     }
-    
+
     /// Test Google Sheets API connectivity
     async fn test_connection(&self, config: &GoogleSheetsConfig) -> Result<()> {
         let url = format!(
             "https://sheets.googleapis.com/v4/spreadsheets/{}?key={}",
             config.spreadsheet_id, config.api_key
         );
-        
+
         let response = self.client.get(&url).send().await?;
         let status = response.status();
-        
+
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!(
@@ -225,26 +235,26 @@ impl GoogleSheetsAdapter {
                 error_text
             ));
         }
-        
+
         Ok(())
     }
-    
+
     /// Get sheet metadata
     async fn get_sheet_metadata(&self, config: &GoogleSheetsConfig) -> Result<GridProperties> {
         let url = format!(
             "https://sheets.googleapis.com/v4/spreadsheets/{}?key={}",
             config.spreadsheet_id, config.api_key
         );
-        
+
         let response = self.client.get(&url).send().await?;
         let metadata: SpreadsheetMetadata = response.json().await?;
-        
+
         for sheet in metadata.sheets {
             if sheet.properties.title == config.sheet_name {
                 return Ok(sheet.properties.grid_properties);
             }
         }
-        
+
         Err(anyhow::anyhow!("Sheet '{}' not found", config.sheet_name))
     }
 }
@@ -254,42 +264,43 @@ impl IngestionAdapter for GoogleSheetsAdapter {
     fn name(&self) -> &str {
         "google_sheets"
     }
-    
+
     fn supported_types(&self) -> Vec<&str> {
         vec!["google_sheets", "finance", "spreadsheet"]
     }
-    
+
     async fn validate_config(&self, config: &JsonValue) -> Result<()> {
         let sheets_config: GoogleSheetsConfig = serde_json::from_value(config.clone())?;
-        
+
         // Validate required fields
         if sheets_config.spreadsheet_id.is_empty() {
             return Err(anyhow::anyhow!("spreadsheet_id is required"));
         }
-        
+
         if sheets_config.api_key.is_empty() {
             return Err(anyhow::anyhow!("api_key is required"));
         }
-        
+
         // Test API connectivity
         self.test_connection(&sheets_config).await?;
-        
+
         info!("Google Sheets configuration validated successfully");
         Ok(())
     }
-    
+
     async fn create_stream(&self, config: &JsonValue) -> Result<Box<dyn DataStream>> {
         let sheets_config: GoogleSheetsConfig = serde_json::from_value(config.clone())?;
-        
+
         Ok(Box::new(
-            GoogleSheetsStream::new(self.client.clone(), sheets_config).await?
+            GoogleSheetsStream::new(self.client.clone(), sheets_config).await?,
         ))
     }
-    
+
     fn info(&self) -> AdapterInfo {
         AdapterInfo {
             name: "google_sheets".to_string(),
-            description: "Google Sheets adapter for financial data (GOOGLEFINANCE function)".to_string(),
+            description: "Google Sheets adapter for financial data (GOOGLEFINANCE function)"
+                .to_string(),
             version: "1.0.0".to_string(),
             supported_types: vec![
                 "google_sheets".to_string(),
@@ -304,7 +315,7 @@ impl IngestionAdapter for GoogleSheetsAdapter {
                         "description": "Google Sheets spreadsheet ID (from URL)"
                     },
                     "sheet_name": {
-                        "type": "string", 
+                        "type": "string",
                         "description": "Sheet name or ID"
                     },
                     "range": {
@@ -339,22 +350,22 @@ pub struct GoogleSheetsStream {
 
 impl GoogleSheetsStream {
     async fn new(client: Client, config: GoogleSheetsConfig) -> Result<Self> {
-        info!("Creating Google Sheets stream for {}", config.spreadsheet_id);
-        
+        info!(
+            "Creating Google Sheets stream for {}",
+            config.spreadsheet_id
+        );
+
         // Fetch data from Google Sheets API
         let url = format!(
             "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}!{}?key={}",
-            config.spreadsheet_id,
-            config.sheet_name,
-            config.range,
-            config.api_key
+            config.spreadsheet_id, config.sheet_name, config.range, config.api_key
         );
-        
+
         debug!("Fetching data from: {}", url);
-        
+
         let response = client.get(&url).send().await?;
         let status = response.status();
-        
+
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!(
@@ -363,22 +374,22 @@ impl GoogleSheetsStream {
                 error_text
             ));
         }
-        
+
         let api_response: SheetsApiResponse = response.json().await?;
         let data = api_response.values.unwrap_or_default();
-        
+
         let total_rows = data.len() as u64;
         let headers = if !data.is_empty() {
             data[0].clone()
         } else {
             vec![]
         };
-        
+
         info!(
             "Loaded {} rows from Google Sheets (sheet: {}, range: {})",
             total_rows, config.sheet_name, config.range
         );
-        
+
         Ok(Self {
             client,
             config,
@@ -388,7 +399,7 @@ impl GoogleSheetsStream {
             headers,
         })
     }
-    
+
     /// Parse row into financial data point
     fn parse_financial_row(&self, row: &[String], row_index: usize) -> Result<FinancialDataPoint> {
         // Handle different Google Finance formats
@@ -396,26 +407,30 @@ impl GoogleSheetsStream {
             GoogleSheetsFormat::GoogleFinance => {
                 // Expected columns: Date, Ticker, Price, Volume, Market Cap, P/E, Dividend Yield, Beta
                 let ticker = row.get(1).cloned().unwrap_or_default();
-                let date = row.get(0).cloned().unwrap_or_default();
-                
-                let price = row.get(2)
-                    .and_then(|s| s.parse::<f64>().ok());
-                    
-                let volume = row.get(3)
+                let date = row.first().cloned().unwrap_or_default();
+
+                let price = row.get(2).and_then(|s| s.parse::<f64>().ok());
+
+                let volume = row
+                    .get(3)
                     .and_then(|s| s.replace(",", "").parse::<i64>().ok());
-                    
-                let market_cap = row.get(4)
-                    .and_then(|s| s.replace(",", "").replace("B", "000000000").replace("M", "000000").parse::<f64>().ok());
-                    
-                let pe_ratio = row.get(5)
-                    .and_then(|s| s.parse::<f64>().ok());
-                    
-                let dividend_yield = row.get(6)
+
+                let market_cap = row.get(4).and_then(|s| {
+                    s.replace(",", "")
+                        .replace("B", "000000000")
+                        .replace("M", "000000")
+                        .parse::<f64>()
+                        .ok()
+                });
+
+                let pe_ratio = row.get(5).and_then(|s| s.parse::<f64>().ok());
+
+                let dividend_yield = row
+                    .get(6)
                     .and_then(|s| s.replace("%", "").parse::<f64>().map(|v| v / 100.0).ok());
-                    
-                let beta = row.get(7)
-                    .and_then(|s| s.parse::<f64>().ok());
-                
+
+                let beta = row.get(7).and_then(|s| s.parse::<f64>().ok());
+
                 Ok(FinancialDataPoint {
                     ticker,
                     date,
@@ -431,10 +446,10 @@ impl GoogleSheetsStream {
             }
             GoogleSheetsFormat::FinancialTimeSeries => {
                 // Custom format - adapt as needed
-                let ticker = row.get(0).cloned().unwrap_or_default();
+                let ticker = row.first().cloned().unwrap_or_default();
                 let date = row.get(1).cloned().unwrap_or_default();
                 let price = row.get(2).and_then(|s| s.parse::<f64>().ok());
-                
+
                 Ok(FinancialDataPoint {
                     ticker,
                     date,
@@ -450,7 +465,7 @@ impl GoogleSheetsStream {
             }
             GoogleSheetsFormat::Tabular => {
                 // Generic tabular format
-                let content = row.join(", ");
+                let _content = row.join(", ");
                 Ok(FinancialDataPoint {
                     ticker: "UNKNOWN".to_string(),
                     date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
@@ -474,21 +489,21 @@ impl DataStream for GoogleSheetsStream {
         if self.position >= self.data.len() {
             return None;
         }
-        
+
         let row = &self.data[self.position];
         let row_index = self.position;
         self.position += 1;
-        
+
         // Skip empty rows
         if row.is_empty() || row.iter().all(|cell| cell.trim().is_empty()) {
             return self.next().await;
         }
-        
+
         match self.parse_financial_row(row, row_index) {
             Ok(financial_data) => {
                 let content = financial_data.to_semantic_content();
                 let metadata = financial_data.to_metadata();
-                
+
                 Some(Ok(DataItem {
                     content,
                     metadata,
@@ -504,12 +519,12 @@ impl DataStream for GoogleSheetsStream {
             }
         }
     }
-    
+
     async fn estimate_total(&self) -> Result<Option<u64>> {
         // We already loaded all data, so we know the exact count
         Ok(Some(self.total_rows.saturating_sub(1))) // Subtract header row
     }
-    
+
     fn position(&self) -> u64 {
         self.position as u64
     }
@@ -518,7 +533,7 @@ impl DataStream for GoogleSheetsStream {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_financial_data_point_to_content() {
         let data_point = FinancialDataPoint {
@@ -533,14 +548,14 @@ mod tests {
             data_type: "market_data".to_string(),
             source_row: 1,
         };
-        
+
         let content = data_point.to_semantic_content();
         assert!(content.contains("NVDA"));
         assert!(content.contains("2025-11-07"));
         assert!(content.contains("$142.50"));
         assert!(content.contains("45000000 shares"));
     }
-    
+
     #[test]
     fn test_financial_data_point_metadata() {
         let data_point = FinancialDataPoint {
@@ -555,7 +570,7 @@ mod tests {
             data_type: "price".to_string(),
             source_row: 42,
         };
-        
+
         let metadata = data_point.to_metadata();
         assert_eq!(metadata.get("ticker").unwrap(), &json!("GOOGL"));
         assert_eq!(metadata.get("price").unwrap(), &json!(175.25));

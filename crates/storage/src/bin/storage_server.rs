@@ -11,12 +11,13 @@ use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sutra_storage::{AdaptiveReconcilerConfig, ConcurrentConfig, ConcurrentMemory, ShardedStorage, ShardConfig};
-use sutra_storage::tcp_server::{StorageServer, ShardedStorageServer};
-use sutra_storage::secure_tcp_server::SecureStorageServer;
 use sutra_storage::auth::AuthManager;
-use tracing::{info, error, warn};
-use tracing_subscriber;
+use sutra_storage::secure_tcp_server::SecureStorageServer;
+use sutra_storage::tcp_server::{ShardedStorageServer, StorageServer};
+use sutra_storage::{
+    AdaptiveReconcilerConfig, ConcurrentConfig, ConcurrentMemory, ShardConfig, ShardedStorage,
+};
+use tracing::{error, info, warn};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,15 +33,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Security mode configuration
     let secure_mode = env::var("SUTRA_SECURE_MODE")
         .unwrap_or_else(|_| "false".to_string())
-        .to_lowercase() == "true";
+        .to_lowercase()
+        == "true";
 
     // Load configuration from environment
-    let storage_path = env::var("STORAGE_PATH")
-        .unwrap_or_else(|_| "/data/storage.dat".to_string());
-    
-    let host = env::var("STORAGE_HOST")
-        .unwrap_or_else(|_| "0.0.0.0".to_string());
-    
+    let storage_path = env::var("STORAGE_PATH").unwrap_or_else(|_| "/data/storage.dat".to_string());
+
+    let host = env::var("STORAGE_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+
     let port = env::var("STORAGE_PORT")
         .unwrap_or_else(|_| "50051".to_string())
         .parse::<u16>()
@@ -61,28 +61,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "768".to_string())
         .parse::<usize>()
         .unwrap_or(768);
-    
+
     // Sharding configuration
-    let storage_mode = env::var("SUTRA_STORAGE_MODE")
-        .unwrap_or_else(|_| "single".to_string());
-    
+    let storage_mode = env::var("SUTRA_STORAGE_MODE").unwrap_or_else(|_| "single".to_string());
+
     let num_shards = env::var("SUTRA_NUM_SHARDS")
         .unwrap_or_else(|_| "16".to_string())
         .parse::<u32>()
         .unwrap_or(16);
 
     info!("Configuration:");
-    info!("  Security mode: {}", if secure_mode { "🔒 SECURE (auth + TLS)" } else { "⚠️  DEVELOPMENT (no auth, no TLS)" });
+    info!(
+        "  Security mode: {}",
+        if secure_mode {
+            "🔒 SECURE (auth + TLS)"
+        } else {
+            "⚠️  DEVELOPMENT (no auth, no TLS)"
+        }
+    );
     info!("  Storage mode: {}", storage_mode);
     info!("  Storage path: {}", storage_path);
     info!("  Listen address: {}:{}", host, port);
-    info!("  Base reconcile interval: {}ms (adaptive: 1-100ms)", base_interval_ms);
+    info!(
+        "  Base reconcile interval: {}ms (adaptive: 1-100ms)",
+        base_interval_ms
+    );
     info!("  Memory threshold: {} writes", memory_threshold);
     info!("  Vector dimension: {}", vector_dimension);
     if storage_mode == "sharded" {
         info!("  Number of shards: {}", num_shards);
     }
-    
+
     if !secure_mode {
         warn!("🚨 SECURITY WARNING: Running in DEVELOPMENT mode");
         warn!("   This mode has NO authentication and NO encryption");
@@ -97,11 +106,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         base_interval_ms,
         ..Default::default()
     };
-    
+
     // Initialize authentication manager if secure mode is enabled
     let auth_manager = if secure_mode {
         info!("🔒 Initializing authentication...");
-        
+
         // Load from environment (validates secret strength)
         match AuthManager::from_env() {
             Ok(manager) => {
@@ -122,24 +131,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match storage_mode.as_str() {
         "sharded" => {
             info!("Initializing SHARDED storage with {} shards...", num_shards);
-            
+
             let shard_config = ConcurrentConfig {
                 storage_path: PathBuf::from(&storage_path), // Will be overridden per shard
                 memory_threshold,
                 vector_dimension,
                 adaptive_reconciler_config: adaptive_config.clone(),
-                ..Default::default()
             };
-            
+
             let config = ShardConfig {
                 num_shards,
                 base_path: PathBuf::from(&storage_path),
                 shard_config,
             };
-            
+
             let sharded_storage = ShardedStorage::new(config)
                 .map_err(|e| format!("Failed to initialize sharded storage: {}", e))?;
-            
+
             let stats = sharded_storage.stats();
             info!("✅ Sharded storage initialized:");
             info!("  Total concepts: {}", stats.total_concepts);
@@ -147,7 +155,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("  Total vectors: {}", stats.total_vectors);
             info!("  Total writes: {}", stats.total_writes);
             info!("  Shards: {}", stats.num_shards);
-            
+
             // Create sharded server
             //
             // Note: Secure sharded server is not yet implemented. This is acceptable because:
@@ -161,40 +169,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 warn!("   Falling back to standard sharded server");
                 warn!("   For production security, use single storage mode with TLS + HMAC");
             }
-            
+
             let server = Arc::new(ShardedStorageServer::new(sharded_storage).await);
-            
+
             info!("🚀 Starting SHARDED TCP server on {}", addr);
-            
+
             // Start server (blocks until shutdown)
             if let Err(e) = server.serve(addr).await {
                 error!("Server error: {}", e);
                 return Err(e.into());
             }
         }
-        "single" | _ => {
+        _ => {
             if storage_mode != "single" {
-                warn!("Unknown storage mode '{}', defaulting to 'single'", storage_mode);
+                warn!(
+                    "Unknown storage mode '{}', defaulting to 'single'",
+                    storage_mode
+                );
             }
-            
+
             info!("Initializing SINGLE storage...");
-            
+
             let config = ConcurrentConfig {
                 storage_path: storage_path.into(),
                 memory_threshold,
                 vector_dimension,
                 adaptive_reconciler_config: adaptive_config,
-                ..Default::default()
             };
-            
+
             let storage = ConcurrentMemory::new(config);
-            
+
             let stats = storage.stats();
             info!("✅ Single storage initialized:");
             info!("  Concepts: {}", stats.snapshot.concept_count);
             info!("  Edges: {}", stats.snapshot.edge_count);
             info!("  Sequence: {}", stats.snapshot.sequence);
-            
+
             // Create server (secure or insecure based on mode)
             if secure_mode {
                 // Wrap with secure server
@@ -203,9 +213,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .map_err(|e| format!("Failed to create secure server: {}", e))?;
                 let server = Arc::new(secure_server);
-                
+
                 info!("🚀 Starting SECURE SINGLE TCP server on {}", addr);
-                
+
                 // Start server (blocks until shutdown)
                 if let Err(e) = server.serve(addr).await {
                     error!("Server error: {}", e);
@@ -214,9 +224,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 // Use insecure server directly
                 let server = Arc::new(StorageServer::new(storage).await);
-                
-                info!("🚀 Starting SINGLE TCP server on {} (DEVELOPMENT MODE - NO SECURITY)", addr);
-                
+
+                info!(
+                    "🚀 Starting SINGLE TCP server on {} (DEVELOPMENT MODE - NO SECURITY)",
+                    addr
+                );
+
                 // Start server (blocks until shutdown)
                 if let Err(e) = server.serve(addr).await {
                     error!("Server error: {}", e);

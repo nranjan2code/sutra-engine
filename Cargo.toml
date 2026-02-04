@@ -3,13 +3,7 @@ resolver = "2"
 members = [
     "crates/storage",
     "crates/protocol",
-    "crates/grid-master",
-    "crates/grid-agent",
-    "crates/grid-events",
     "crates/bulk-ingester",
-    "crates/embedder",
-    "crates/model",
-    "crates/model/crates/*",
 ]
 
 [workspace.package]
@@ -34,5 +28,4 @@ rayon = "1.10"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
 # Internal mapped dependencies
-sutra-core = { path = "crates/model/crates/sutra-core" }
 sutra-protocol = { path = "crates/protocol" }

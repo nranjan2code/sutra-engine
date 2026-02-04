@@ -14,14 +14,14 @@
 /// - Bit/byte efficient, aligned
 use anyhow::{Context, Result};
 use memmap2::{MmapMut, MmapOptions};
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::ptr::copy_nonoverlapping;
-use std::collections::HashMap;
 
-use crate::types::{AssociationRecord, ConceptRecord, ConceptId};
+use crate::types::{AssociationRecord, ConceptId, ConceptRecord};
 
 const MAGIC: [u8; 8] = *b"SUTRAALL"; // "All-in-one"
 const FILE_VERSION: u32 = 1;
@@ -30,33 +30,33 @@ const HEADER_SIZE: usize = 256;
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
 struct FileHeader {
-    magic: [u8; 8],      // 8
-    version: u32,        // 4
-    _pad0: u32,          // 4
+    magic: [u8; 8], // 8
+    version: u32,   // 4
+    _pad0: u32,     // 4
 
     // Offsets (from file start)
-    concept_off: u64,    // 8
-    edge_off: u64,       // 8
-    vector_off: u64,     // 8
-    content_off: u64,    // 8
+    concept_off: u64, // 8
+    edge_off: u64,    // 8
+    vector_off: u64,  // 8
+    content_off: u64, // 8
 
     // Sizes / counts
-    concept_count: u64,  // 8
-    edge_count: u64,     // 8
-    vector_bytes: u64,   // 8 (total bytes written in vector blob)
-    content_bytes: u64,  // 8 (total bytes written in content blob)
+    concept_count: u64, // 8
+    edge_count: u64,    // 8
+    vector_bytes: u64,  // 8 (total bytes written in vector blob)
+    content_bytes: u64, // 8 (total bytes written in content blob)
 
     // Write epoch (monotonic)
-    epoch: u64,          // 8
+    epoch: u64, // 8
 
     // Footer index offsets (written after arenas, for fast lookups)
-    bloom_off: u64,      // 8 (Bloom filter start)
-    bloom_bytes: u32,    // 4 (Bloom filter size)
-    index_off: u64,      // 8 (ConceptID->offset index)
-    index_count: u32,    // 4 (number of index entries)
+    bloom_off: u64,   // 8 (Bloom filter start)
+    bloom_bytes: u32, // 4 (Bloom filter size)
+    index_off: u64,   // 8 (ConceptID->offset index)
+    index_count: u32, // 4 (number of index entries)
 
     // Reserved
-    reserved: [u8; 256 - (8 + 4 + 4 + 8*6 + 8*4 + 8 + 8 + 4 + 8 + 4)],
+    reserved: [u8; 256 - (8 + 4 + 4 + 8 * 6 + 8 * 4 + 8 + 8 + 4 + 8 + 4)],
 }
 
 impl Default for FileHeader {
@@ -78,14 +78,16 @@ impl Default for FileHeader {
             bloom_bytes: 0,
             index_off: 0,
             index_count: 0,
-            reserved: [0; 256 - (8 + 4 + 4 + 8*6 + 8*4 + 8 + 8 + 4 + 8 + 4)],
+            reserved: [0; 256 - (8 + 4 + 4 + 8 * 6 + 8 * 4 + 8 + 8 + 4 + 8 + 4)],
         }
     }
 }
 
 /// Align `offset` up to `alignment` bytes.
 fn align_up(offset: u64, alignment: u64) -> u64 {
-    if alignment == 0 { return offset; }
+    if alignment == 0 {
+        return offset;
+    }
     let mask = alignment - 1;
     (offset + mask) & !mask
 }
@@ -125,19 +127,19 @@ impl MmapStore {
             // Compute arena base offsets with alignment
             let mut off = HEADER_SIZE as u64;
             header.concept_off = align_up(off, 128); // ConceptRecord alignment
-            // Reserve 64MB for concepts initially
+                                                     // Reserve 64MB for concepts initially
             off = header.concept_off + 64 * 1024 * 1024;
 
             header.edge_off = align_up(off, 64); // AssociationRecord alignment
-            // Reserve 64MB for edges
+                                                 // Reserve 64MB for edges
             off = header.edge_off + 64 * 1024 * 1024;
 
             header.vector_off = align_up(off, 4); // f32 alignment
-            // Reserve 128MB for vectors
+                                                  // Reserve 128MB for vectors
             off = header.vector_off + 128 * 1024 * 1024;
 
             header.content_off = align_up(off, 4); // u32 len prefix alignment
-            // Remaining for content blob
+                                                   // Remaining for content blob
 
             // Persist header
             write_header(&mut file, &header)?;
@@ -159,10 +161,10 @@ impl MmapStore {
             HashMap::new()
         };
 
-        Ok(Self { 
-            path, 
-            file, 
-            mmap, 
+        Ok(Self {
+            path,
+            file,
+            mmap,
             header,
             concept_index,
         })
@@ -171,7 +173,9 @@ impl MmapStore {
     /// Ensure file has enough capacity, grow if needed
     fn ensure_capacity(&mut self, min_size: u64) -> Result<()> {
         let current = self.file.metadata()?.len();
-        if current >= min_size { return Ok(()); }
+        if current >= min_size {
+            return Ok(());
+        }
         let new_size = (min_size.next_power_of_two()).max(current * 2);
         self.file.set_len(new_size)?;
         // Remap
@@ -252,7 +256,9 @@ impl MmapStore {
         // Compute concept write position
         let concept_base = self.header.concept_off;
         // ✅ PRODUCTION: Use checked_mul() to prevent integer overflow
-        let record_offset = self.header.concept_count
+        let record_offset = self
+            .header
+            .concept_count
             .checked_mul(size_of::<ConceptRecord>() as u64)
             .ok_or_else(|| anyhow::anyhow!("Concept count overflow"))?;
         let offset = concept_base
@@ -271,10 +277,10 @@ impl MmapStore {
         }
 
         self.header.concept_count += 1;
-        
+
         // Update in-memory index
         self.concept_index.insert(record.concept_id, offset);
-        
+
         Ok(offset)
     }
 
@@ -282,7 +288,9 @@ impl MmapStore {
     pub fn append_association(&mut self, record: &AssociationRecord) -> Result<u64> {
         let edge_base = self.header.edge_off;
         // ✅ PRODUCTION: Use checked_mul() to prevent integer overflow
-        let record_offset = self.header.edge_count
+        let record_offset = self
+            .header
+            .edge_count
             .checked_mul(size_of::<AssociationRecord>() as u64)
             .ok_or_else(|| anyhow::anyhow!("Edge count overflow"))?;
         let offset = edge_base
@@ -322,7 +330,11 @@ impl MmapStore {
         unsafe {
             let ptr = self.mmap.as_ptr().add(offset as usize);
             let mut record = ConceptRecord::new(*id, 0, 0, 0);
-            copy_nonoverlapping(ptr, (&mut record as *mut ConceptRecord) as *mut u8, size_of::<ConceptRecord>());
+            copy_nonoverlapping(
+                ptr,
+                (&mut record as *mut ConceptRecord) as *mut u8,
+                size_of::<ConceptRecord>(),
+            );
             Ok(Some(record))
         }
     }
@@ -451,7 +463,9 @@ fn write_header_with_mmap(mmap: &mut MmapMut, header: &FileHeader) -> Result<()>
 }
 
 fn read_header(mmap: &MmapMut) -> Result<FileHeader> {
-    if mmap.len() < HEADER_SIZE { anyhow::bail!("file too small"); }
+    if mmap.len() < HEADER_SIZE {
+        anyhow::bail!("file too small");
+    }
     let mut header = FileHeader::default();
     unsafe {
         copy_nonoverlapping(
@@ -463,13 +477,17 @@ fn read_header(mmap: &MmapMut) -> Result<FileHeader> {
     Ok(header)
 }
 
-fn load_concept_index(mmap: &MmapMut, index_off: u64, count: usize) -> Result<HashMap<ConceptId, u64>> {
+fn load_concept_index(
+    mmap: &MmapMut,
+    index_off: u64,
+    count: usize,
+) -> Result<HashMap<ConceptId, u64>> {
     let mut index = HashMap::with_capacity(count);
-    
+
     if index_off as usize + count * 24 > mmap.len() {
         anyhow::bail!("Index footer out of bounds");
     }
-    
+
     unsafe {
         let mut ptr = mmap.as_ptr().add(index_off as usize);
         for _ in 0..count {
@@ -478,15 +496,15 @@ fn load_concept_index(mmap: &MmapMut, index_off: u64, count: usize) -> Result<Ha
             copy_nonoverlapping(ptr, id_bytes.as_mut_ptr(), 16);
             let concept_id = ConceptId(id_bytes);
             ptr = ptr.add(16);
-            
+
             // Read offset (8 bytes LE)
             let offset = u64::from_le(*(ptr as *const u64));
             ptr = ptr.add(8);
-            
+
             index.insert(concept_id, offset);
         }
     }
-    
+
     Ok(index)
 }
 
@@ -521,7 +539,9 @@ mod tests {
         let content = b"hello world".as_ref();
         let vector = vec![1.0f32, 2.0, 3.0];
 
-        store.append_concept_full(rec, Some(content), Some(&vector)).unwrap();
+        store
+            .append_concept_full(rec, Some(content), Some(&vector))
+            .unwrap();
         store.sync().unwrap();
 
         let stats = store.stats();
@@ -560,9 +580,13 @@ mod tests {
             let mut store = MmapStore::open(&path, 16 * 1024 * 1024).unwrap();
             let rec1 = ConceptRecord::new(id1, 0, 0, 0);
             let rec2 = ConceptRecord::new(id2, 0, 0, 0);
-            
-            store.append_concept_full(rec1, Some(b"concept1"), None).unwrap();
-            store.append_concept_full(rec2, Some(b"concept2"), None).unwrap();
+
+            store
+                .append_concept_full(rec1, Some(b"concept1"), None)
+                .unwrap();
+            store
+                .append_concept_full(rec2, Some(b"concept2"), None)
+                .unwrap();
             store.sync().unwrap();
 
             let stats = store.stats();
@@ -574,7 +598,7 @@ mod tests {
         // Reopen and verify index loaded
         {
             let store = MmapStore::open(&path, 16 * 1024 * 1024).unwrap();
-            
+
             // Should find concepts via index
             let found1 = store.read_concept(&id1).unwrap();
             assert!(found1.is_some());

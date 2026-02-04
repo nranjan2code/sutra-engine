@@ -3,8 +3,8 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{info, warn};
@@ -13,7 +13,7 @@ use tracing::{info, warn};
 pub struct Concept {
     pub content: String,
     pub metadata: HashMap<String, JsonValue>,
-    pub embedding: Option<Vec<f32>>,  // Deprecated: storage server generates embeddings
+    pub embedding: Option<Vec<f32>>, // Deprecated: storage server generates embeddings
 }
 
 // Learning options for unified API
@@ -32,7 +32,7 @@ impl Default for LearnOptions {
     fn default() -> Self {
         Self {
             generate_embedding: true,
-            embedding_model: None,  // Use server default
+            embedding_model: None, // Use server default
             extract_associations: true,
             min_association_confidence: 0.5,
             max_associations_per_concept: 10,
@@ -76,8 +76,14 @@ impl From<LearnOptions> for LearnOptionsWire {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum StorageRequest {
-    LearnConceptV2 { content: String, options: LearnOptionsWire },
-    LearnBatch { contents: Vec<String>, options: LearnOptionsWire },
+    LearnConceptV2 {
+        content: String,
+        options: LearnOptionsWire,
+    },
+    LearnBatch {
+        contents: Vec<String>,
+        options: LearnOptionsWire,
+    },
     GetStats,
     Flush,
     HealthCheck,
@@ -85,8 +91,12 @@ enum StorageRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum StorageResponse {
-    LearnConceptV2Ok { concept_id: String },
-    LearnBatchOk { concept_ids: Vec<String> },
+    LearnConceptV2Ok {
+        concept_id: String,
+    },
+    LearnBatchOk {
+        concept_ids: Vec<String>,
+    },
     StatsOk {
         concepts: u64,
         edges: u64,
@@ -98,8 +108,14 @@ enum StorageResponse {
         uptime_seconds: u64,
     },
     FlushOk,
-    HealthCheckOk { healthy: bool, status: String, uptime_seconds: u64 },
-    Error { message: String },
+    HealthCheckOk {
+        healthy: bool,
+        status: String,
+        uptime_seconds: u64,
+    },
+    Error {
+        message: String,
+    },
 }
 
 // Wrapper for the actual storage client
@@ -131,7 +147,8 @@ impl TcpStorageClient {
             Err(e) => {
                 // Check if mock mode is explicitly allowed (for testing only)
                 let allow_mock = std::env::var("SUTRA_ALLOW_MOCK_MODE")
-                    .unwrap_or_else(|_| "0".to_string()) == "1";
+                    .unwrap_or_else(|_| "0".to_string())
+                    == "1";
 
                 if allow_mock {
                     warn!("⚠️  Failed to connect to storage server: {}", e);
@@ -155,13 +172,15 @@ impl TcpStorageClient {
                          \n\
                          For testing ONLY, set SUTRA_ALLOW_MOCK_MODE=1 to enable mock fallback.\n\
                          WARNING: Mock mode DISCARDS all data!",
-                        server_address, e, server_address
+                        server_address,
+                        e,
+                        server_address
                     ))
                 }
             }
         }
     }
-    
+
     async fn try_connect(server_address: &str) -> Result<StorageClientWrapper> {
         // Simple connectivity check
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -172,7 +191,7 @@ impl TcpStorageClient {
             Err(anyhow::anyhow!("Cannot connect to storage server"))
         }
     }
-    
+
     /// Batch learn concepts using unified learning API
     /// Storage server handles: embedding generation + association extraction + storage
     pub async fn batch_learn_concepts(&mut self, concepts: Vec<Concept>) -> Result<Vec<String>> {
@@ -184,53 +203,65 @@ impl TcpStorageClient {
             self.batch_learn_mock(concepts).await
         }
     }
-    
+
     /// Real TCP batch learning using unified API (v2)
     async fn batch_learn_real_v2(&mut self, concepts: Vec<Concept>) -> Result<Vec<String>> {
-        info!("Learning {} concepts via unified TCP API (embeddings + associations)", concepts.len());
-        
+        info!(
+            "Learning {} concepts via unified TCP API (embeddings + associations)",
+            concepts.len()
+        );
+
         // Extract contents
         let contents: Vec<String> = concepts.iter().map(|c| c.content.clone()).collect();
         let options_wire: LearnOptionsWire = LearnOptions::default().into();
-        
+
         // Connect
         let addr = self.server_address.clone();
-        let mut stream = TcpStream::connect(&addr).await
+        let mut stream = TcpStream::connect(&addr)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to connect to storage at {}: {}", addr, e))?;
         stream.set_nodelay(true)?;
-        
+
         // Build request
-        let request = StorageRequest::LearnBatch { contents, options: options_wire };
+        let request = StorageRequest::LearnBatch {
+            contents,
+            options: options_wire,
+        };
         let bytes = rmp_serde::to_vec(&request)?;
-        
+
         // Send length-prefixed MsgPack
         stream.write_u32(bytes.len() as u32).await?;
         stream.write_all(&bytes).await?;
         stream.flush().await?;
-        
+
         // Read response
         let len = stream.read_u32().await?;
         let mut buf = vec![0u8; len as usize];
         stream.read_exact(&mut buf).await?;
-        
+
         // Deserialize response
         let resp: StorageResponse = rmp_serde::from_slice(&buf)
             .map_err(|e| anyhow::anyhow!("Invalid response from storage: {}", e))?;
-        
+
         match resp {
             StorageResponse::LearnBatchOk { concept_ids } => Ok(concept_ids),
-            StorageResponse::Error { message } => Err(anyhow::anyhow!("Storage error: {}", message)),
+            StorageResponse::Error { message } => {
+                Err(anyhow::anyhow!("Storage error: {}", message))
+            }
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }
     }
-    
+
     /// Mock storage for testing ONLY
     ///
     /// ⚠️  WARNING: This method DISCARDS all data!
     /// ⚠️  Only enabled when SUTRA_ALLOW_MOCK_MODE=1
     /// ⚠️  Never use in production!
     async fn batch_learn_mock(&mut self, concepts: Vec<Concept>) -> Result<Vec<String>> {
-        warn!("⚠️  ⚠️  ⚠️  MOCK STORAGE: DISCARDING {} CONCEPTS ⚠️  ⚠️  ⚠️", concepts.len());
+        warn!(
+            "⚠️  ⚠️  ⚠️  MOCK STORAGE: DISCARDING {} CONCEPTS ⚠️  ⚠️  ⚠️",
+            concepts.len()
+        );
         warn!("⚠️  DATA WILL NOT BE PERSISTED!");
         warn!("⚠️  Set SUTRA_ALLOW_MOCK_MODE=0 and ensure storage server is running");
 
@@ -242,21 +273,24 @@ impl TcpStorageClient {
         // Simulate processing time
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
-        warn!("⚠️  Mock storage returned {} fake concept IDs (data discarded)", concept_ids.len());
+        warn!(
+            "⚠️  Mock storage returned {} fake concept IDs (data discarded)",
+            concept_ids.len()
+        );
         Ok(concept_ids)
     }
-    
+
     fn generate_concept_id(&self, content: &str) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
         let hash = hasher.finish();
-        
+
         format!("concept_{:016x}", hash)
     }
-    
+
     pub async fn health_check(&self) -> Result<bool> {
         match &self.client {
             Some(_) => {

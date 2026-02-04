@@ -29,20 +29,22 @@ report() {
 # 1. Python Code Quality
 echo ""
 echo "📋 Python Code Quality..."
+TARGETS="python crates/storage-client"
+
 if command -v black &> /dev/null; then
-    black --check packages/ && report "Black formatting" || report "Black formatting"
+    black --check $TARGETS && report "Black formatting" || report "Black formatting"
 else
     echo -e "${YELLOW}⚠${NC} Black not installed, skipping"
 fi
 
 if command -v isort &> /dev/null; then
-    isort --check-only packages/ && report "Import sorting" || report "Import sorting"
+    isort --check-only $TARGETS && report "Import sorting" || report "Import sorting"
 else
     echo -e "${YELLOW}⚠${NC} isort not installed, skipping"
 fi
 
 if command -v flake8 &> /dev/null; then
-    flake8 packages/ && report "Flake8 linting" || report "Flake8 linting"
+    flake8 $TARGETS && report "Flake8 linting" || report "Flake8 linting"
 else
     echo -e "${YELLOW}⚠${NC} Flake8 not installed, skipping"
 fi
@@ -51,7 +53,7 @@ fi
 echo ""
 echo "🔒 Python Security Scanning..."
 if command -v bandit &> /dev/null; then
-    bandit -r packages/ -c .bandit && report "Bandit security scan" || report "Bandit security scan"
+    bandit -r $TARGETS -c .bandit && report "Bandit security scan" || report "Bandit security scan"
 else
     echo -e "${YELLOW}⚠${NC} Bandit not installed, skipping"
 fi
@@ -65,12 +67,7 @@ fi
 # 3. JavaScript/TypeScript Quality
 echo ""
 echo "📋 JavaScript/TypeScript Quality..."
-for pkg in packages/sutra-client packages/sutra-control packages/sutra-explorer/frontend; do
-    if [ -d "$pkg" ] && [ -f "$pkg/package.json" ]; then
-        echo "  Checking $pkg..."
-        (cd "$pkg" && npm run lint) && report "$pkg linting" || report "$pkg linting"
-    fi
-done
+echo "Skipping JS check (Frontend moved to Product repo)."
 
 # 4. Rust Quality
 echo ""
@@ -94,43 +91,27 @@ fi
 # 6. Tests
 echo ""
 echo "🧪 Running Tests..."
-if [ -f "pytest.ini" ]; then
-    PYTHONPATH=packages/sutra-core pytest tests/ -v && report "Python tests" || report "Python tests"
-else
-    echo -e "${YELLOW}⚠${NC} pytest not configured, skipping"
-fi
-
-for pkg in packages/sutra-client packages/sutra-control; do
-    if [ -d "$pkg" ] && [ -f "$pkg/package.json" ]; then
-        if grep -q '"test"' "$pkg/package.json"; then
-            echo "  Testing $pkg..."
-            (cd "$pkg" && npm test) && report "$pkg tests" || report "$pkg tests"
-        fi
+if command -v pytest &> /dev/null; then
+    if [ -f "pytest.ini" ]; then
+        PYTHONPATH=python/core:python/hybrid:crates/storage-client pytest tests/ -v && report "Python tests" || report "Python tests"
+    else
+        echo -e "${YELLOW}⚠${NC} pytest.ini not found, skipping"
     fi
-done
+else
+    echo -e "${YELLOW}⚠${NC} pytest not installed, skipping"
+fi
 
 # 7. Bundle Size Check
 echo ""
 echo "📦 Bundle Size Validation..."
-for pkg in packages/sutra-client packages/sutra-control; do
-    if [ -d "$pkg/dist" ]; then
-        TOTAL_SIZE=$(du -sk "$pkg/dist" | cut -f1)
-        LIMIT_KB=1000
-        if [ "$TOTAL_SIZE" -lt "$LIMIT_KB" ]; then
-            report "$pkg bundle size (${TOTAL_SIZE}KB < ${LIMIT_KB}KB)"
-        else
-            echo -e "${RED}✗${NC} $pkg bundle size (${TOTAL_SIZE}KB > ${LIMIT_KB}KB limit)"
-            ((FAILURES++))
-        fi
-    fi
-done
+echo "Skipping (Frontend moved to Product repo)."
 
 # 8. Docker Image Validation
 echo ""
 echo "🐳 Docker Image Validation..."
 if command -v docker &> /dev/null; then
     # Check if images exist
-    for img in sutra-storage sutra-api sutra-hybrid; do
+    for img in sutra-storage; do
         if docker images | grep -q "$img"; then
             report "$img image exists"
         else

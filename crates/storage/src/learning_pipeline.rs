@@ -2,13 +2,13 @@
 //! This orchestrates the complete learning flow inside the storage server.
 
 use anyhow::Result;
-use tracing::{info, warn, debug};
 use std::sync::Arc;
+use tracing::{debug, info, warn};
 
-use crate::embedding_provider::EmbeddingProvider;
 use crate::embedding_client::HttpEmbeddingClient;
-use crate::semantic_extractor::SemanticExtractor;
+use crate::embedding_provider::EmbeddingProvider;
 use crate::semantic::{SemanticAnalyzer, SemanticMetadata};
+use crate::semantic_extractor::SemanticExtractor;
 use crate::storage_trait::LearningStorage;
 use crate::types::ConceptId;
 
@@ -31,8 +31,14 @@ impl Default for LearnOptions {
             embedding_model: None,
             extract_associations: true,
             analyze_semantics: true, // 🔥 NEW: Enabled by default
-            min_association_confidence: std::env::var("SUTRA_MIN_ASSOCIATION_CONFIDENCE").ok().and_then(|s| s.parse().ok()).unwrap_or(0.5),
-            max_associations_per_concept: std::env::var("SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT").ok().and_then(|s| s.parse().ok()).unwrap_or(10),
+            min_association_confidence: std::env::var("SUTRA_MIN_ASSOCIATION_CONFIDENCE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.5),
+            max_associations_per_concept: std::env::var("SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10),
             strength: 1.0,
             confidence: 1.0,
         }
@@ -54,13 +60,17 @@ impl LearningPipeline {
     pub async fn new_with_provider(embedding_client: Arc<dyn EmbeddingProvider>) -> Result<Self> {
         // Initialize semantic extractor (async - pre-computes relation embeddings)
         let semantic_extractor = SemanticExtractor::new(embedding_client.clone()).await?;
-        
+
         // Initialize semantic analyzer (deterministic, no async)
         let semantic_analyzer = SemanticAnalyzer::new();
-        
-        Ok(Self { embedding_client, semantic_extractor, semantic_analyzer })
+
+        Ok(Self {
+            embedding_client,
+            semantic_extractor,
+            semantic_analyzer,
+        })
     }
-    
+
     /// Analyze semantic metadata for content
     pub fn analyze_semantic(&self, content: &str) -> SemanticMetadata {
         self.semantic_analyzer.analyze(content)
@@ -79,9 +89,14 @@ impl LearningPipeline {
         let embedding_opt = if options.generate_embedding {
             match self.embedding_client.generate(content, true).await {
                 Ok(vec) => Some(vec),
-                Err(e) => { warn!("Embedding failed, continuing without: {}", e); None }
+                Err(e) => {
+                    warn!("Embedding failed, continuing without: {}", e);
+                    None
+                }
             }
-        } else { None };
+        } else {
+            None
+        };
 
         // Step 2: Generate ID
         let concept_id = self.generate_concept_id(content);
@@ -96,10 +111,12 @@ impl LearningPipeline {
 
         // Step 4: Store concept with semantic metadata
         let sequence = if let Some(semantic_meta) = semantic {
-            info!("💡 Semantic: type={}, domain={:?}, confidence={:.2}",
-                 semantic_meta.semantic_type,
-                 semantic_meta.domain_context,
-                 semantic_meta.classification_confidence);
+            info!(
+                "💡 Semantic: type={}, domain={:?}, confidence={:.2}",
+                semantic_meta.semantic_type,
+                semantic_meta.domain_context,
+                semantic_meta.classification_confidence
+            );
             storage.learn_concept_with_semantic(
                 id,
                 content.as_bytes().to_vec(),
@@ -124,24 +141,29 @@ impl LearningPipeline {
         if options.extract_associations {
             let extracted = self.semantic_extractor.extract(content).await?;
             let mut stored = 0usize;
-            
-            for assoc in extracted.into_iter().take(options.max_associations_per_concept) {
+
+            for assoc in extracted
+                .into_iter()
+                .take(options.max_associations_per_concept)
+            {
                 // Only store if confidence meets threshold
                 if assoc.confidence < options.min_association_confidence {
                     continue;
                 }
-                
+
                 // Map target term to concept id (deterministic)
                 let target_id_hex = self.generate_concept_id(&assoc.target);
                 let target_id = ConceptId::from_string(&target_id_hex);
 
-                if let Err(e) = storage.learn_association(id, target_id, assoc.assoc_type, assoc.confidence) {
+                if let Err(e) =
+                    storage.learn_association(id, target_id, assoc.assoc_type, assoc.confidence)
+                {
                     warn!("Association store failed: {}", e);
                 } else {
                     stored += 1;
                 }
             }
-            
+
             debug!("Stored {} semantic associations", stored);
         }
 
@@ -165,7 +187,8 @@ impl LearningPipeline {
         };
 
         let mut concept_ids = Vec::with_capacity(contents.len());
-        for (i, (content, embedding_opt)) in contents.iter().zip(embeddings.into_iter()).enumerate() {
+        for (i, (content, embedding_opt)) in contents.iter().zip(embeddings.into_iter()).enumerate()
+        {
             if let Some(ref emb) = embedding_opt {
                 info!("💡 Concept {}: embedding dimension = {}", i, emb.len());
             } else {
@@ -184,9 +207,12 @@ impl LearningPipeline {
 
             // Store concept with pre-computed embedding and semantic metadata
             let sequence = if let Some(semantic_meta) = semantic {
-                if i < 3 { // Log first 3 for visibility
-                    info!("💡 Batch[{}] Semantic: type={}, domain={:?}",
-                         i, semantic_meta.semantic_type, semantic_meta.domain_context);
+                if i < 3 {
+                    // Log first 3 for visibility
+                    info!(
+                        "💡 Batch[{}] Semantic: type={}, domain={:?}",
+                        i, semantic_meta.semantic_type, semantic_meta.domain_context
+                    );
                 }
                 storage.learn_concept_with_semantic(
                     id,
@@ -212,23 +238,28 @@ impl LearningPipeline {
             if options.extract_associations {
                 let extracted = self.semantic_extractor.extract(content).await?;
                 let mut stored = 0usize;
-                
-                for assoc in extracted.into_iter().take(options.max_associations_per_concept) {
+
+                for assoc in extracted
+                    .into_iter()
+                    .take(options.max_associations_per_concept)
+                {
                     // Only store if confidence meets threshold
                     if assoc.confidence < options.min_association_confidence {
                         continue;
                     }
-                    
+
                     let target_id_hex = self.generate_concept_id(&assoc.target);
                     let target_id = ConceptId::from_string(&target_id_hex);
 
-                    if let Err(e) = storage.learn_association(id, target_id, assoc.assoc_type, assoc.confidence) {
+                    if let Err(e) =
+                        storage.learn_association(id, target_id, assoc.assoc_type, assoc.confidence)
+                    {
                         warn!("Association store failed: {}", e);
                     } else {
                         stored += 1;
                     }
                 }
-                
+
                 debug!("Stored {} semantic associations", stored);
             }
 

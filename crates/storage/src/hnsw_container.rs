@@ -82,22 +82,19 @@ impl HnswContainer {
     /// Performance (USearch with true persistence):
     /// - Load from disk: <50ms for 1M vectors (mmap)
     /// - Build new: ~2-5 seconds for 1M vectors
-    pub fn load_or_build(
-        &self,
-        vectors: &HashMap<ConceptId, Vec<f32>>,
-    ) -> Result<()> {
+    pub fn load_or_build(&self, vectors: &HashMap<ConceptId, Vec<f32>>) -> Result<()> {
         let index_path = self.base_path.with_extension("usearch");
         let metadata_path = self.base_path.with_extension("hnsw.meta");
-        
+
         let start = Instant::now();
-        
+
         // Try loading from disk first
         if index_path.exists() && metadata_path.exists() {
             log::info!("Loading HNSW index from {:?}", index_path);
-            
+
             // Load metadata (ID mappings)
             self.load_mappings(&metadata_path)?;
-            
+
             // Load USearch index via mmap (FAST - no rebuild!)
             let index = Index::new(&IndexOptions {
                 dimensions: self.config.dimension,
@@ -107,54 +104,61 @@ impl HnswContainer {
                 expansion_add: self.config.ef_construction,
                 expansion_search: 40,
                 multi: false,
-            }).context("Failed to create USearch index")?;
-            
-            index.load(index_path.to_str().unwrap())
+            })
+            .context("Failed to create USearch index")?;
+
+            index
+                .load(index_path.to_str().unwrap())
                 .context("Failed to load index from disk")?;
-            
+
             let num_loaded = index.size();
             let elapsed = start.elapsed();
-            
+
             log::info!(
                 "✅ Loaded HNSW index with {} vectors in {:.2}ms",
                 num_loaded,
                 elapsed.as_secs_f64() * 1000.0
             );
-            
+
             // Check if we need to add new vectors incrementally
             if num_loaded < vectors.len() {
                 let num_missing = vectors.len() - num_loaded;
                 log::info!("Adding {} new vectors incrementally", num_missing);
-                
+
                 // Reserve capacity for new vectors (required by USearch)
-                index.reserve(num_missing)
+                index
+                    .reserve(num_missing)
                     .context("Failed to reserve capacity for incremental inserts")?;
-                
+
                 // Collect missing concept IDs first (avoid holding lock during insert)
                 let missing_concepts: Vec<(ConceptId, Vec<f32>)> = {
                     let reverse_mapping = self.reverse_mapping.read();
-                    vectors.iter()
+                    vectors
+                        .iter()
                         .filter(|(concept_id, _)| !reverse_mapping.contains_key(concept_id))
                         .map(|(id, vec)| (*id, vec.clone()))
                         .collect()
                 };
-                
+
                 // Insert missing vectors
                 for (concept_id, vector) in missing_concepts {
                     self.insert_into_index(&index, concept_id, &vector)?;
                 }
-                
+
                 *self.dirty.write() = true;
             }
-            
+
             *self.index.write() = Some(index);
             return Ok(());
         }
-        
+
         // No persisted index, build new one
-        log::info!("No persisted index found, building from {} vectors", vectors.len());
+        log::info!(
+            "No persisted index found, building from {} vectors",
+            vectors.len()
+        );
         self.build_from_vectors(vectors)?;
-        
+
         Ok(())
     }
 
@@ -170,25 +174,23 @@ impl HnswContainer {
         let hnsw_id = *next_id;
         *next_id += 1;
         drop(next_id);
-        
+
         // Insert into USearch
-        index.add(hnsw_id as u64, vector)
+        index
+            .add(hnsw_id as u64, vector)
             .context("Failed to add vector to index")?;
-        
+
         // Update mappings
         self.id_mapping.write().insert(hnsw_id, concept_id);
         self.reverse_mapping.write().insert(concept_id, hnsw_id);
-        
+
         Ok(())
     }
 
     /// Build index from vectors (USearch)
-    fn build_from_vectors(
-        &self,
-        vectors: &HashMap<ConceptId, Vec<f32>>,
-    ) -> Result<()> {
+    fn build_from_vectors(&self, vectors: &HashMap<ConceptId, Vec<f32>>) -> Result<()> {
         let start = Instant::now();
-        
+
         // Create USearch index
         let index = Index::new(&IndexOptions {
             dimensions: self.config.dimension,
@@ -198,53 +200,56 @@ impl HnswContainer {
             expansion_add: self.config.ef_construction,
             expansion_search: 40,
             multi: false,
-        }).context("Failed to create USearch index")?;
-        
+        })
+        .context("Failed to create USearch index")?;
+
         if vectors.is_empty() {
             log::info!("No vectors to index, creating empty HNSW");
             *self.index.write() = Some(index);
             return Ok(());
         }
-        
+
         log::info!("Building HNSW index for {} vectors", vectors.len());
-        
+
         // Reserve capacity for better performance
-        index.reserve(vectors.len())
+        index
+            .reserve(vectors.len())
             .context("Failed to reserve index capacity")?;
-        
+
         // Build mappings and insert all vectors
         let mut id_mapping = self.id_mapping.write();
         let mut reverse_mapping = self.reverse_mapping.write();
         let mut next_id = self.next_id.write();
-        
+
         for (concept_id, vector) in vectors.iter() {
             let hnsw_id = *next_id;
-            
+
             // Insert into USearch
-            index.add(hnsw_id as u64, vector)
+            index
+                .add(hnsw_id as u64, vector)
                 .context("Failed to add vector to index")?;
-            
+
             // Update mappings
             id_mapping.insert(hnsw_id, *concept_id);
             reverse_mapping.insert(*concept_id, hnsw_id);
-            
+
             *next_id += 1;
         }
-        
+
         drop(id_mapping);
         drop(reverse_mapping);
         drop(next_id);
-        
+
         let elapsed = start.elapsed();
         log::info!(
             "✅ Built HNSW index with {} vectors in {:.2}s",
             vectors.len(),
             elapsed.as_secs_f64()
         );
-        
+
         *self.index.write() = Some(index);
         *self.dirty.write() = true; // Needs saving
-        
+
         Ok(())
     }
 
@@ -263,22 +268,24 @@ impl HnswContainer {
             // Concept already indexed - rebuild index if update needed
             return Ok(());
         }
-        
+
         // Get index reference (keep lock while inserting)
         let index_lock = self.index.read();
-        let index = index_lock.as_ref()
+        let index = index_lock
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("HNSW index not initialized"))?;
-        
+
         // Reserve capacity for one more vector (required by USearch)
-        index.reserve(1)
+        index
+            .reserve(1)
             .context("Failed to reserve capacity for insert")?;
-        
+
         // Use helper to insert (lock is held)
         self.insert_into_index(index, concept_id, &vector)?;
-        
+
         // Mark dirty
         *self.dirty.write() = true;
-        
+
         Ok(())
     }
 
@@ -288,7 +295,7 @@ impl HnswContainer {
         let mut id_mapping = self.id_mapping.write();
         let mut reverse_mapping = self.reverse_mapping.write();
         let mut next_id = self.next_id.write();
-        
+
         // Reset USearch index
         let new_index = Index::new(&IndexOptions {
             dimensions: self.config.dimension,
@@ -298,16 +305,17 @@ impl HnswContainer {
             expansion_add: self.config.ef_construction,
             expansion_search: 40,
             multi: false,
-        }).context("Failed to create new USearch index for clear")?;
-        
+        })
+        .context("Failed to create new USearch index for clear")?;
+
         *index_lock = Some(new_index);
         id_mapping.clear();
         reverse_mapping.clear();
         *next_id = 0;
-        
+
         // Mark dirty so it gets saved to disk as empty
         *self.dirty.write() = true;
-        
+
         Ok(())
     }
 
@@ -323,7 +331,7 @@ impl HnswContainer {
                 return Vec::new();
             }
         };
-        
+
         // Search with USearch
         let matches = match index.search(query, k) {
             Ok(m) => m,
@@ -332,10 +340,12 @@ impl HnswContainer {
                 return Vec::new();
             }
         };
-        
+
         // Map back to ConceptIds
         let id_mapping = self.id_mapping.read();
-        matches.keys.iter()
+        matches
+            .keys
+            .iter()
             .zip(matches.distances.iter())
             .filter_map(|(hnsw_id, distance)| {
                 id_mapping.get(&(*hnsw_id as usize)).map(|concept_id| {
@@ -355,42 +365,44 @@ impl HnswContainer {
             log::debug!("HNSW index is clean, skipping save");
             return Ok(());
         }
-        
+
         let start = Instant::now();
         let index_path = self.base_path.with_extension("usearch");
         let metadata_path = self.base_path.with_extension("hnsw.meta");
-        
+
         log::info!("Saving HNSW index to {:?}", index_path);
-        
+
         let index_lock = self.index.read();
-        let index = index_lock.as_ref()
+        let index = index_lock
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("HNSW index not initialized"))?;
-        
+
         // Create directory if needed
         if let Some(parent) = index_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         // Save USearch index (single file)
-        index.save(index_path.to_str().unwrap())
+        index
+            .save(index_path.to_str().unwrap())
             .context("Failed to save USearch index")?;
-        
+
         drop(index_lock);
-        
+
         // Save mappings to metadata file
         self.save_mappings(&metadata_path)?;
-        
+
         let elapsed = start.elapsed();
         let num_vectors = self.id_mapping.read().len();
-        
+
         log::info!(
             "✅ Saved HNSW index with {} vectors in {:.2}ms",
             num_vectors,
             elapsed.as_secs_f64() * 1000.0
         );
-        
+
         *self.dirty.write() = false;
-        
+
         Ok(())
     }
 
@@ -407,11 +419,9 @@ impl HnswContainer {
             version: 1,
         };
 
-        let encoded = bincode::serialize(&metadata)
-            .context("Failed to serialize metadata")?;
+        let encoded = bincode::serialize(&metadata).context("Failed to serialize metadata")?;
 
-        let mut file = std::fs::File::create(path)
-            .context("Failed to create metadata file")?;
+        let mut file = std::fs::File::create(path).context("Failed to create metadata file")?;
         file.write_all(&encoded)
             .context("Failed to write metadata")?;
 
@@ -420,15 +430,14 @@ impl HnswContainer {
 
     /// Load ID mappings from metadata file
     fn load_mappings(&self, path: &Path) -> Result<()> {
-        let data = std::fs::read(path)
-            .context("Failed to read metadata file")?;
+        let data = std::fs::read(path).context("Failed to read metadata file")?;
 
-        let metadata: HnswMetadata = bincode::deserialize(&data)
-            .context("Failed to deserialize metadata")?;
+        let metadata: HnswMetadata =
+            bincode::deserialize(&data).context("Failed to deserialize metadata")?;
 
         // Restore mappings
         *self.id_mapping.write() = metadata.id_mapping.clone();
-        
+
         // Build reverse mapping
         let mut reverse_mapping = self.reverse_mapping.write();
         reverse_mapping.clear();
@@ -450,10 +459,8 @@ impl HnswContainer {
     /// Get index stats (USearch)
     pub fn stats(&self) -> HnswContainerStats {
         let index_lock = self.index.read();
-        let num_vectors = index_lock.as_ref()
-            .map(|idx| idx.size())
-            .unwrap_or(0);
-        
+        let num_vectors = index_lock.as_ref().map(|idx| idx.size()).unwrap_or(0);
+
         HnswContainerStats {
             num_vectors,
             dimension: self.config.dimension,
@@ -539,7 +546,7 @@ mod tests {
         // Load in new instance
         {
             let container = HnswContainer::new(&base_path, config);
-            
+
             let empty_vectors = HashMap::new();
             container.load_or_build(&empty_vectors).unwrap();
 

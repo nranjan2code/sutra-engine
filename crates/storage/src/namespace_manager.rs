@@ -1,12 +1,12 @@
-use anyhow::{Result, Context};
-use crate::concurrent_memory::{ConcurrentMemory, ConcurrentConfig};
+use crate::concurrent_memory::{ConcurrentConfig, ConcurrentMemory};
+use anyhow::{Context, Result};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 /// NamespaceManager - Multi-collection separation for Sutra
-/// 
+///
 /// Manages multiple independent ConcurrentMemory instances (collections).
 /// Each namespace has its own:
 /// - Write Log & WAL
@@ -25,7 +25,7 @@ impl NamespaceManager {
         if !base_path.exists() {
             std::fs::create_dir_all(&base_path)?;
         }
-        
+
         Ok(Self {
             base_path,
             config_template,
@@ -45,7 +45,7 @@ impl NamespaceManager {
 
         // SLOW PATH: Create new
         let mut namespaces = self.namespaces.write();
-        
+
         // Double check in case of race
         if let Some(storage) = namespaces.get(name) {
             return Arc::clone(storage);
@@ -57,7 +57,7 @@ impl NamespaceManager {
 
         let storage = Arc::new(ConcurrentMemory::new(ns_config));
         namespaces.insert(name.to_string(), Arc::clone(&storage));
-        
+
         log::info!("Created/Loaded namespace: {}", name);
         storage
     }
@@ -81,7 +81,9 @@ impl NamespaceManager {
         };
 
         if let Some(storage) = storage {
-            storage.clear().map_err(|e| anyhow::anyhow!("Clear failed: {:?}", e))?;
+            storage
+                .clear()
+                .map_err(|e| anyhow::anyhow!("Clear failed: {:?}", e))?;
             Ok(())
         } else {
             anyhow::bail!("Namespace {} not found", name)
@@ -92,7 +94,9 @@ impl NamespaceManager {
     pub fn flush_all(&self) -> Result<()> {
         let namespaces = self.namespaces.read();
         for (name, storage) in namespaces.iter() {
-            storage.flush().with_context(|| format!("Failed to flush namespace {}", name))?;
+            storage
+                .flush()
+                .with_context(|| format!("Failed to flush namespace {}", name))?;
         }
         Ok(())
     }

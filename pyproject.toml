@@ -49,21 +49,20 @@ cli = ["sutra-cli"]
 all = ["sutra-hybrid", "sutra-api", "sutra-cli"]
 
 [project.urls]
-Homepage = "https://github.com/sutraworks/sutra-memory"
-Repository = "https://github.com/sutraworks/sutra-memory"
-Documentation = "https://github.com/sutraworks/sutra-memory/docs"
-Issues = "https://github.com/sutraworks/sutra-memory/issues"
+Homepage = "https://github.com/sutraworks/sutra-engine"
+Repository = "https://github.com/sutraworks/sutra-engine"
+Documentation = "https://github.com/sutraworks/sutra-engine/docs"
+Issues = "https://github.com/sutraworks/sutra-engine/issues"
 
 [tool.setuptools.packages.find]
-where = ["packages"]
+where = ["python"]
 
 # Workspace configuration
 [tool.workspace]
 packages = [
-    "packages/sutra-core",
-    "packages/sutra-hybrid",  
-    "packages/sutra-api",
-    "packages/sutra-cli"
+    "python/core",
+    "python/hybrid",
+    "crates/storage-client", # It's a python package in crates/
 ]
 
 # Global tool configurations
