@@ -22,6 +22,7 @@ Sutra Storage is a custom storage engine built specifically for temporal, contin
 - **🔄 ACID Transactions**: 2PC coordinator for cross-shard atomicity
 - **🧠 AI-Native**: Self-optimizing adaptive reconciler with EMA trend analysis
 - **🌐 Distributed**: TCP binary protocol (10-50× lower latency than gRPC)
+- **🏢 Multi-Tenant**: Native support for namespaces/independent collections
 - **📊 Observable**: 17 Grid event types for self-monitoring
 
 ### Architecture at a Glance
@@ -61,6 +62,20 @@ Sutra Storage is a custom storage engine built specifically for temporal, contin
 ---
 
 ## Core Concepts
+
+### 0. **Multi-Tenancy (Namespaces)**
+
+Sutra Storage supports multiple independent knowledge collections within a single server instance using **namespaces**. Each namespace has its own:
+- Independent concept/edge graph
+- Dedicated HNSW vector index
+- Isolated WAL and persistence files
+
+By default, operations use the `default` namespace. All storage operations support a `namespace` parameter, allowing for seamless multi-tenancy.
+
+Ideal for:
+- Multi-agent systems with individual agent memories
+- Per-user or per-session data isolation
+- Separating short-term "working memory" from long-term "base knowledge"
 
 ### 1. **Log-Structured Storage**
 
@@ -228,10 +243,24 @@ let strength = 1.0;
 let confidence = 0.9;
 
 let sequence = storage
-    .learn_concept(concept_id, content, Some(embedding), strength, confidence)
+    .learn_concept(concept_id, content, Some(embedding), strength, confidence, std::collections::HashMap::new())
     .expect("Failed to learn concept");
 
 println!("Learned concept at sequence: {}", sequence);
+```
+
+#### CRUD Operations
+
+```rust
+// Delete a concept
+storage.delete_concept(concept_id)?;
+
+// Clear everything
+storage.clear()?;
+
+// List recent items (from ReadView)
+let snap = storage.read_view.load();
+let recent = snap.all_concepts();
 ```
 
 #### Querying
@@ -430,38 +459,65 @@ storage-server:
     - SUTRA_EMBEDDING_SERVICE_URL=http://embedding-ha:8888
 ```
 
-#### Protocol Messages
-
-```rust
-// Request types (bincode serialization)
+// Request types (MessagePack serialization)
 pub enum StorageRequest {
+    // V2 Unified Learning API
     LearnConceptV2 {
+        namespace: Option<String>,
         content: String,
         options: LearnOptionsMsg,
     },
+
+    // Batch Learning
     LearnBatch {
+        namespace: Option<String>,
         contents: Vec<String>,
         options: LearnOptionsMsg,
     },
-    QueryConcept { concept_id: String },
-    GetNeighbors { concept_id: String },
-    FindPath {
-        start_id: String,
-        end_id: String,
-        max_depth: u32,
+
+    // Learn with pre-computed embedding
+    LearnWithEmbedding {
+        id: Option<String>,
+        namespace: String,
+        content: String,
+        embedding: Vec<f32>,
+        metadata: HashMap<String, String>,
+        timestamp: Option<i64>,
     },
-    VectorSearch {
-        query_vector: Vec<f32>,
-        k: u32,
-        ef_search: u32,
+
+    // Query Operations
+    QueryConcept {
+        namespace: Option<String>,
+        concept_id: String,
     },
-    GetStats,
+
+    // CRUD Operations
+    DeleteConcept {
+        namespace: String,
+        id: String,           // Hex string
+    },
+ 
+    ClearCollection {
+        namespace: String,
+    },
+ 
+    ListRecent {
+        namespace: String,
+        limit: u32,
+    },
+ 
+    GetStats { namespace: Option<String> },
     Flush,
     HealthCheck,
 }
 ```
 
-See [TCP Protocol Specification](../../docs/TCP_PROTOCOL_SPECIFICATION.md) for complete details.
+See [TCP Protocol Specification](../../docs/storage/TCP_BINARY_PROTOCOL.md) for complete details.
+
+### Client Samples
+- **TypeScript**: [samples/typescript/client.ts](./samples/typescript/client.ts) - Modern async client for Node.js.
+- **Python**: (Coming Soon)
+- **Rust**: [src/tcp_server.rs](./src/tcp_server.rs) (See `SutraStorageClient` in tests)
 
 ---
 

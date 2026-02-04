@@ -27,6 +27,7 @@ pub enum WriteEntry {
         strength: f32,
         confidence: f32,
         timestamp: u64,
+        attributes: std::collections::HashMap<String, String>,
     },
     
     /// Add an association between concepts
@@ -51,6 +52,9 @@ pub enum WriteEntry {
         id: ConceptId,
         timestamp: u64,
     },
+
+    /// Clear all concepts and associations
+    Clear,
     
     /// Batch marker (for checkpointing)
     BatchMarker {
@@ -139,6 +143,7 @@ impl WriteLog {
         vector: Option<Vec<f32>>,
         strength: f32,
         confidence: f32,
+        attributes: std::collections::HashMap<String, String>, // Added
     ) -> Result<u64, WriteLogError> {
         let timestamp = current_timestamp_us();
         
@@ -149,6 +154,7 @@ impl WriteLog {
             strength,
             confidence,
             timestamp,
+            attributes,
         })
     }
     

@@ -97,17 +97,30 @@ const MAX_SEARCH_K: u32 = 1000;                        // Max k for vector searc
 pub enum StorageRequest {
     // V2 Unified Learning API
     LearnConceptV2 {
+        namespace: Option<String>,
         content: String,
         options: LearnOptionsMsg,
     },
     
     LearnBatch {
+        namespace: Option<String>,
         contents: Vec<String>,
         options: LearnOptionsMsg,
     },
+
+    // 🔥 NEW: Learn with precomputed embedding (Requested for Sutra Engine)
+    LearnWithEmbedding {
+        id: Option<String>,
+        namespace: String,
+        content: String,
+        embedding: Vec<f32>,
+        metadata: HashMap<String, String>,
+        timestamp: Option<i64>,
+    },
     
-    // Legacy Explicit Learning (still supported)
+    // Legacy Explicit Learning
     LearnConcept {
+        namespace: Option<String>,
         concept_id: String,
         content: String,
         embedding: Vec<f32>,
@@ -116,6 +129,7 @@ pub enum StorageRequest {
     },
     
     LearnAssociation {
+        namespace: Option<String>,
         source_id: String,
         target_id: String,
         assoc_type: u32,
@@ -124,27 +138,47 @@ pub enum StorageRequest {
     
     // Query Operations
     QueryConcept {
+        namespace: Option<String>,
         concept_id: String,
     },
     
     GetNeighbors {
+        namespace: Option<String>,
         concept_id: String,
     },
     
     FindPath {
+        namespace: Option<String>,
         start_id: String,
         end_id: String,
         max_depth: u32,
     },
     
     VectorSearch {
+        namespace: Option<String>,
         query_vector: Vec<f32>,
         k: u32,
         ef_search: u32,
     },
+
+    // 🔥 NEW: CRUD Operations
+    DeleteConcept {
+        namespace: String,
+        id: String,
+    },
+
+    ClearCollection {
+        namespace: String,
+    },
+
+    ListRecent {
+        namespace: String,
+        limit: u32,
+    },
     
     // Semantic Operations (V2)
     FindPathSemantic {
+        namespace: Option<String>,
         start_id: String,
         end_id: String,
         filter: SemanticFilterMsg,
@@ -153,28 +187,32 @@ pub enum StorageRequest {
     },
     
     FindTemporalChain {
+        namespace: Option<String>,
         domain: Option<String>,
         start_time: i64,
         end_time: i64,
     },
     
     FindCausalChain {
+        namespace: Option<String>,
         start_id: String,
         causal_type: String,
         max_depth: u32,
     },
     
     FindContradictions {
+        namespace: Option<String>,
         domain: String,
     },
     
     QueryBySemantic {
+        namespace: Option<String>,
         filter: SemanticFilterMsg,
         limit: Option<usize>,
     },
     
     // Management Operations
-    GetStats,
+    GetStats { namespace: Option<String> },
     Flush,
     HealthCheck,
 }
@@ -201,6 +239,11 @@ pub enum StorageResponse {
     LearnAssociationOk {
         sequence: u64,
     },
+
+    // 🔥 NEW: CRUD Responses
+    DeleteConceptOk { id: String },
+    ClearCollectionOk { namespace: String },
+    ListRecentOk { items: Vec<RecentItemMsg> },
     
     // Query Responses
     QueryConceptOk {
@@ -209,6 +252,7 @@ pub enum StorageResponse {
         content: String,
         strength: f32,
         confidence: f32,
+        attributes: HashMap<String, String>,
     },
     
     GetNeighborsOk {
@@ -247,23 +291,36 @@ pub enum StorageResponse {
     
     // Management Responses
     GetStatsOk {
-        concept_count: usize,
-        edge_count: usize,
-        vector_count: usize,
-        write_log_pending: usize,
-        reconciler_health: f64,
+        concepts: u64,
+        edges: u64,
+        vectors: u64,
+        written: u64,
+        dropped: u64,
+        pending: u64,
+        reconciliations: u64,
+        uptime_seconds: u64,
     },
     
-    FlushOk {
-        concepts_flushed: usize,
-    },
+    FlushOk,
     
-    HealthCheckOk,
+    HealthCheckOk {
+        healthy: bool,
+        status: String,
+        uptime_seconds: u64,
+    },
     
     // Error Response
     Error {
         message: String,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentItemMsg {
+    pub id: String,
+    pub content_preview: String,
+    pub created: u64,
+    pub attributes: HashMap<String, String>,
 }
 ```
 

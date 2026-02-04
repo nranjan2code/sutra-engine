@@ -5,6 +5,7 @@
 
 use crate::concurrent_memory::ConcurrentMemory;
 use crate::sharded_storage::ShardedStorage;
+use crate::namespace_manager::NamespaceManager;
 use crate::learning_pipeline::{LearningPipeline, LearnOptions};
 use crate::semantic::{SemanticType, DomainContext, CausalType};
 use std::net::SocketAddr;
@@ -99,45 +100,82 @@ impl Default for LearnOptionsMsg {
 pub enum StorageRequest {
     // Legacy explicit learn (still supported)
     // New unified learning API (V2)
+    /// Learn a concept with optional automatic embedding generation
     LearnConceptV2 {
+        namespace: Option<String>,
         content: String,
         options: LearnOptionsMsg,
     },
+    /// Learn a batch of concepts
     LearnBatch {
+        namespace: Option<String>,
         contents: Vec<String>,
         options: LearnOptionsMsg,
     },
+    /// 🔥 NEW: Learn with precomputed embedding (Requested for Sutra)
+    LearnWithEmbedding {
+        id: Option<String>,
+        namespace: String,
+        content: String,
+        embedding: Vec<f32>,
+        metadata: std::collections::HashMap<String, String>,
+        timestamp: Option<i64>,
+    },
     LearnConcept {
+        namespace: Option<String>,
         concept_id: String,
         content: String,
         embedding: Vec<f32>,
         strength: f32,
         confidence: f32,
     },
+    /// Learn association between concepts
     LearnAssociation {
+        namespace: Option<String>,
         source_id: String,
         target_id: String,
         assoc_type: u32,
         confidence: f32,
     },
+    /// Get concept by ID
     QueryConcept {
+        namespace: Option<String>,
         concept_id: String,
     },
+    /// 🔥 NEW: Delete concept by ID (Requested for Sutra)
+    DeleteConcept {
+        namespace: String,
+        id: String,
+    },
+    /// 🔥 NEW: Clear an entire collection (Requested for Sutra)
+    ClearCollection {
+        namespace: String,
+    },
+    /// Get neighbor IDs
     GetNeighbors {
+        namespace: Option<String>,
         concept_id: String,
     },
     FindPath {
+        namespace: Option<String>,
         start_id: String,
         end_id: String,
         max_depth: u32,
     },
     VectorSearch {
+        namespace: Option<String>,
         query_vector: Vec<f32>,
         k: u32,
         ef_search: u32,
     },
+    /// 🔥 NEW: List recent items without vector search (Requested for Sutra)
+    ListRecent {
+        namespace: String,
+        limit: u32,
+    },
     // 🔥 NEW: Semantic query operations
     FindPathSemantic {
+        namespace: Option<String>,
         start_id: String,
         end_id: String,
         filter: SemanticFilterMsg,
@@ -145,27 +183,34 @@ pub enum StorageRequest {
         max_paths: u32,
     },
     FindTemporalChain {
+        namespace: Option<String>,
         domain: Option<String>,  // "medical", "legal", etc.
         start_time: i64,
         end_time: i64,
     },
     FindCausalChain {
+        namespace: Option<String>,
         start_id: String,
         causal_type: String,  // "direct", "indirect", "enabling", etc.
         max_depth: u32,
     },
     FindContradictions {
+        namespace: Option<String>,
         domain: String,
     },
     QueryBySemantic {
+        namespace: Option<String>,
         filter: SemanticFilterMsg,
         limit: Option<usize>,
     },
     TextSearch {
+        namespace: Option<String>,
         query: String,
         limit: u32,
     },
-    GetStats,
+    GetStats {
+        namespace: Option<String>,
+    },
     Flush,
     HealthCheck,
 }
@@ -194,16 +239,22 @@ pub enum StorageResponse {
     LearnBatchOk { concept_ids: Vec<String> },
     LearnConceptOk { sequence: u64 },
     LearnAssociationOk { sequence: u64 },
+    DeleteConceptOk { id: String },
+    ClearCollectionOk { namespace: String },
     QueryConceptOk {
         found: bool,
         concept_id: String,
         content: String,
         strength: f32,
         confidence: f32,
+        attributes: std::collections::HashMap<String, String>,
     },
     GetNeighborsOk { neighbor_ids: Vec<String> },
     FindPathOk { found: bool, path: Vec<String> },
     VectorSearchOk { results: Vec<(String, f32)> },
+    ListRecentOk {
+        items: Vec<RecentItemMsg>,
+    },
     // 🔥 NEW: Semantic query responses
     FindPathSemanticOk {
         paths: Vec<SemanticPathMsg>,
@@ -242,9 +293,18 @@ pub enum StorageResponse {
     Error { message: String },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentItemMsg {
+    pub id: String,
+    pub content_preview: String,
+    pub created: u64,
+    pub attributes: std::collections::HashMap<String, String>,
+}
+
+
 /// Storage server state
 pub struct StorageServer {
-    storage: Arc<ConcurrentMemory>,
+    namespaces: Arc<NamespaceManager>,
     start_time: std::time::Instant,
     pipeline: LearningPipeline,
 }
@@ -252,13 +312,29 @@ pub struct StorageServer {
 impl StorageServer {
     /// Create new storage server
     pub async fn new(storage: ConcurrentMemory) -> Self {
+        let config = storage.config().clone();
+        let base_path = config.storage_path.parent().unwrap_or(&std::path::Path::new(".")).to_path_buf();
+        
+        // Fix: correctly pass 2 args to NamespaceManager::new
+        let manager = NamespaceManager::new(base_path, config.clone())
+            .expect("Failed to init namespace manager");
+        
+        // Wrap existing storage into "default" namespace
+        manager.add_namespace("default", Arc::new(storage));
+        
         let pipeline = LearningPipeline::new().await
             .expect("Failed to init learning pipeline");
+            
         Self {
-            storage: Arc::new(storage),
+            namespaces: Arc::new(manager),
             start_time: std::time::Instant::now(),
             pipeline,
         }
+    }
+    
+    /// Get storage for a namespace (falls back to "default")
+    fn get_storage(&self, ns: Option<String>) -> Arc<ConcurrentMemory> {
+        self.namespaces.get_namespace(ns.as_deref().unwrap_or("default"))
     }
 
     /// Start TCP server
@@ -289,7 +365,7 @@ impl StorageServer {
                 }
                 _ = &mut shutdown => {
                     eprintln!("Shutdown signal received, flushing storage...");
-                    if let Err(e) = self.storage.flush() {
+                    if let Err(e) = self.namespaces.flush_all() {
                         eprintln!("Flush error: {:?}", e);
                     }
                     break;
@@ -379,7 +455,8 @@ impl StorageServer {
         use crate::types::{ConceptId, AssociationType};
 
         match request {
-            StorageRequest::LearnConceptV2 { content, options } => {
+            StorageRequest::LearnConceptV2 { namespace, content, options } => {
+                let storage = self.get_storage(namespace);
                 // ✅ PRODUCTION: Validate content size
                 if content.len() > MAX_CONTENT_SIZE {
                     return StorageResponse::Error {
@@ -387,12 +464,13 @@ impl StorageServer {
                     };
                 }
                 
-                match self.pipeline.learn_concept(&self.storage, &content, &options.into()).await {
+                match self.pipeline.learn_concept(&storage, &content, &options.into()).await {
                     Ok(concept_id) => StorageResponse::LearnConceptV2Ok { concept_id },
                     Err(e) => StorageResponse::Error { message: format!("LearnConceptV2 failed: {}", e) },
                 }
             }
-            StorageRequest::LearnBatch { contents, options } => {
+            StorageRequest::LearnBatch { namespace, contents, options } => {
+                let storage = self.get_storage(namespace);
                 // ✅ PRODUCTION: Validate batch size
                 if contents.len() > MAX_BATCH_SIZE {
                     return StorageResponse::Error {
@@ -409,18 +487,36 @@ impl StorageServer {
                     }
                 }
                 
-                match self.pipeline.learn_batch(&self.storage, &contents, &options.into()).await {
+                match self.pipeline.learn_batch(&storage, &contents, &options.into()).await {
                     Ok(concept_ids) => StorageResponse::LearnBatchOk { concept_ids },
                     Err(e) => StorageResponse::Error { message: format!("LearnBatch failed: {}", e) },
                 }
             }
+            StorageRequest::LearnWithEmbedding { id, namespace, content, embedding, metadata, timestamp: _ } => {
+                let storage = self.get_storage(Some(namespace));
+                let concept_id = id.map(|s| ConceptId::from_string(&s))
+                    .unwrap_or_else(|| ConceptId::from_string(&content));
+                
+                match storage.learn_concept(
+                    concept_id, 
+                    content.into_bytes(), 
+                    Some(embedding), 
+                    1.0, 1.0, 
+                    metadata
+                ) {
+                    Ok(_) => StorageResponse::LearnConceptV2Ok { concept_id: concept_id.to_hex() },
+                    Err(e) => StorageResponse::Error { message: format!("LearnWithEmbedding failed: {:?}", e) },
+                }
+            }
             StorageRequest::LearnConcept {
+                namespace,
                 concept_id,
                 content,
                 embedding,
                 strength,
                 confidence,
             } => {
+                let storage = self.get_storage(namespace);
                 // ✅ PRODUCTION: Validate content size
                 if content.len() > MAX_CONTENT_SIZE {
                     return StorageResponse::Error {
@@ -439,7 +535,7 @@ impl StorageServer {
                 let content_bytes = content.into_bytes();
                 let vector = if embedding.is_empty() { None } else { Some(embedding) };
 
-                match self.storage.learn_concept(id, content_bytes, vector, strength, confidence) {
+                match storage.learn_concept(id, content_bytes, vector, strength, confidence, std::collections::HashMap::new()) {
                     Ok(sequence) => StorageResponse::LearnConceptOk { sequence },
                     Err(e) => StorageResponse::Error {
                         message: format!("Learn concept failed: {:?}", e),
@@ -448,17 +544,19 @@ impl StorageServer {
             }
 
             StorageRequest::LearnAssociation {
+                namespace,
                 source_id,
                 target_id,
                 assoc_type,
                 confidence,
             } => {
+                let storage = self.get_storage(namespace);
                 let source = ConceptId::from_string(&source_id);
                 let target = ConceptId::from_string(&target_id);
                 let atype = AssociationType::from_u8(assoc_type as u8)
                     .unwrap_or(AssociationType::Semantic);
 
-                match self.storage.learn_association(source, target, atype, confidence) {
+                match storage.learn_association(source, target, atype, confidence) {
                     Ok(sequence) => StorageResponse::LearnAssociationOk { sequence },
                     Err(e) => StorageResponse::Error {
                         message: format!("Learn association failed: {:?}", e),
@@ -466,16 +564,18 @@ impl StorageServer {
                 }
             }
 
-            StorageRequest::QueryConcept { concept_id } => {
+            StorageRequest::QueryConcept { namespace, concept_id } => {
+                let storage = self.get_storage(namespace);
                 let id = ConceptId::from_string(&concept_id);
 
-                if let Some(node) = self.storage.query_concept(&id) {
+                if let Some(node) = storage.query_concept(&id) {
                     StorageResponse::QueryConceptOk {
                         found: true,
                         concept_id: id.to_hex(),
                         content: String::from_utf8_lossy(&node.content).to_string(),
                         strength: node.strength,
                         confidence: node.confidence,
+                        attributes: node.attributes.clone(),
                     }
                 } else {
                     StorageResponse::QueryConceptOk {
@@ -484,23 +584,44 @@ impl StorageServer {
                         content: String::new(),
                         strength: 0.0,
                         confidence: 0.0,
+                        attributes: std::collections::HashMap::new(),
                     }
                 }
             }
 
-            StorageRequest::GetNeighbors { concept_id } => {
+            StorageRequest::DeleteConcept { namespace, id } => {
+                let storage = self.get_storage(Some(namespace));
+                let concept_id = ConceptId::from_string(&id);
+                match storage.delete_concept(concept_id) {
+                    Ok(_) => StorageResponse::DeleteConceptOk { id: id.to_string() },
+                    Err(e) => StorageResponse::Error { message: format!("Delete failed: {:?}", e) },
+                }
+            }
+
+            StorageRequest::ClearCollection { namespace } => {
+                let storage = self.get_storage(Some(namespace.clone()));
+                match storage.clear() {
+                    Ok(_) => StorageResponse::ClearCollectionOk { namespace: namespace.to_string() },
+                    Err(e) => StorageResponse::Error { message: format!("Clear failed: {:?}", e) },
+                }
+            }
+
+            StorageRequest::GetNeighbors { namespace, concept_id } => {
+                let storage = self.get_storage(namespace);
                 let id = ConceptId::from_string(&concept_id);
-                let neighbors = self.storage.query_neighbors(&id);
-                let neighbor_ids = neighbors.iter().map(|id| id.to_hex()).collect();
+                let neighbors = storage.query_neighbors(&id);
+                let neighbor_ids = neighbors.iter().map(|id: &ConceptId| id.to_hex()).collect();
 
                 StorageResponse::GetNeighborsOk { neighbor_ids }
             }
 
             StorageRequest::FindPath {
+                namespace,
                 start_id,
                 end_id,
                 max_depth,
             } => {
+                let storage = self.get_storage(namespace);
                 // ✅ PRODUCTION: Validate path depth to prevent expensive queries
                 if max_depth > MAX_PATH_DEPTH {
                     return StorageResponse::Error {
@@ -511,7 +632,7 @@ impl StorageServer {
                 let start = ConceptId::from_string(&start_id);
                 let end = ConceptId::from_string(&end_id);
 
-                if let Some(path) = self.storage.find_path(start, end, max_depth as usize) {
+                if let Some(path) = storage.find_path(start, end, max_depth as usize) {
                     let path_ids = path.iter().map(|id| id.to_hex()).collect();
                     StorageResponse::FindPathOk {
                         found: true,
@@ -526,10 +647,12 @@ impl StorageServer {
             }
 
             StorageRequest::VectorSearch {
+                namespace,
                 query_vector,
                 k,
                 ef_search,
             } => {
+                let storage = self.get_storage(namespace);
                 // ✅ PRODUCTION: Validate query vector dimension
                 if query_vector.len() > MAX_EMBEDDING_DIM {
                     return StorageResponse::Error {
@@ -544,9 +667,7 @@ impl StorageServer {
                     };
                 }
                 
-                let results = self
-                    .storage
-                    .vector_search(&query_vector, k as usize, ef_search as usize);
+                let results = storage.vector_search(&query_vector, k as usize, ef_search as usize);
                 let results_vec = results
                     .into_iter()
                     .map(|(id, sim)| (id.to_hex(), sim))
@@ -555,9 +676,29 @@ impl StorageServer {
                 StorageResponse::VectorSearchOk { results: results_vec }
             }
 
-            StorageRequest::GetStats => {
-                let stats = self.storage.stats();
-                let hnsw_stats = self.storage.hnsw_stats();
+            StorageRequest::ListRecent { namespace, limit } => {
+                let storage = self.get_storage(Some(namespace));
+                let snapshot = storage.get_snapshot();
+                let mut items: Vec<RecentItemMsg> = snapshot.concepts.values().map(|node| {
+                    RecentItemMsg {
+                        id: node.id.to_hex(),
+                        content_preview: String::from_utf8_lossy(&node.content).chars().take(200).collect(),
+                        created: node.created,
+                        attributes: node.attributes.clone(),
+                    }
+                }).collect();
+                
+                // Sort by created timestamp descending
+                items.sort_by(|a, b| b.created.cmp(&a.created));
+                items.truncate(limit as usize);
+                
+                StorageResponse::ListRecentOk { items }
+            }
+
+            StorageRequest::GetStats { namespace } => {
+                let storage = self.get_storage(namespace);
+                let stats = storage.stats();
+                let hnsw_stats = storage.hnsw_stats();
                 let uptime = self.start_time.elapsed().as_secs();
 
                 StorageResponse::StatsOk {
@@ -572,7 +713,7 @@ impl StorageServer {
                 }
             }
 
-            StorageRequest::Flush => match self.storage.flush() {
+            StorageRequest::Flush => match self.namespaces.flush_all() {
                 Ok(_) => StorageResponse::FlushOk,
                 Err(e) => StorageResponse::Error {
                     message: format!("Flush failed: {:?}", e),
@@ -583,33 +724,34 @@ impl StorageServer {
                 let uptime = self.start_time.elapsed().as_secs();
                 StorageResponse::HealthCheckOk {
                     healthy: true,
-                    status: "ok".to_string(),
+                    status: format!("Multi-namespace active, namespaces: {}", self.namespaces.list_namespaces().len()),
                     uptime_seconds: uptime,
                 }
             }
             
             // 🔥 NEW: Semantic query handlers
-            StorageRequest::FindPathSemantic { start_id, end_id, filter, max_depth, max_paths } => {
-                self.handle_find_path_semantic(start_id, end_id, filter, max_depth, max_paths)
+            StorageRequest::FindPathSemantic { namespace, start_id, end_id, filter, max_depth, max_paths } => {
+                self.handle_find_path_semantic(namespace, start_id, end_id, filter, max_depth, max_paths)
             }
             
-            StorageRequest::FindTemporalChain { domain, start_time, end_time } => {
-                self.handle_find_temporal_chain(domain, start_time, end_time)
+            StorageRequest::FindTemporalChain { namespace, domain, start_time, end_time } => {
+                self.handle_find_temporal_chain(namespace, domain, start_time, end_time)
             }
             
-            StorageRequest::FindCausalChain { start_id, causal_type, max_depth } => {
-                self.handle_find_causal_chain(start_id, causal_type, max_depth)
+            StorageRequest::FindCausalChain { namespace, start_id, causal_type, max_depth } => {
+                self.handle_find_causal_chain(namespace, start_id, causal_type, max_depth)
             }
             
-            StorageRequest::FindContradictions { domain } => {
-                self.handle_find_contradictions(domain)
+            StorageRequest::FindContradictions { namespace, domain } => {
+                self.handle_find_contradictions(namespace, domain)
             }
             
-            StorageRequest::QueryBySemantic { filter, limit } => {
-                self.handle_query_by_semantic(filter, limit)
+            StorageRequest::QueryBySemantic { namespace, filter, limit } => {
+                self.handle_query_by_semantic(namespace, filter, limit)
             }
-            StorageRequest::TextSearch { query, limit } => {
-                match self.pipeline.search(&self.storage, &query, limit as usize).await {
+            StorageRequest::TextSearch { namespace, query, limit } => {
+                let storage = self.get_storage(namespace);
+                match self.pipeline.search(&storage, &query, limit as usize).await {
                     Ok(results) => StorageResponse::TextSearchOk { 
                         results: results.into_iter().map(|(id, score)| (id.to_hex(), score)).collect() 
                     },
@@ -622,12 +764,14 @@ impl StorageServer {
     // 🔥 NEW: Semantic query implementation methods
     fn handle_find_path_semantic(
         &self,
+        namespace: Option<String>,
         start_id: String,
         end_id: String,
         filter_msg: SemanticFilterMsg,
         max_depth: u32,
         max_paths: u32,
     ) -> StorageResponse {
+        let storage = self.get_storage(namespace);
         use crate::semantic::{SemanticPathFinder, SemanticFilter, TemporalConstraint, CausalFilter};
         
         let start = ConceptId::from_string(&start_id);
@@ -668,7 +812,7 @@ impl StorageServer {
         
         // Create pathfinder
         let pathfinder = SemanticPathFinder::new(max_depth as usize, max_paths as usize);
-        let snapshot = self.storage.get_snapshot();
+        let snapshot = storage.get_snapshot();
         
         // Find paths
         let paths = pathfinder.find_paths_filtered(snapshot, start, end, &filter);
@@ -691,15 +835,17 @@ impl StorageServer {
     
     fn handle_find_temporal_chain(
         &self,
+        namespace: Option<String>,
         domain: Option<String>,
         start_time: i64,
         end_time: i64,
     ) -> StorageResponse {
+        let storage = self.get_storage(namespace);
         use crate::semantic::SemanticPathFinder;
         
         let domain_ctx = domain.and_then(|d| parse_domain_context(&d));
         let pathfinder = SemanticPathFinder::default();
-        let snapshot = self.storage.get_snapshot();
+        let snapshot = storage.get_snapshot();
         
         let paths = pathfinder.find_temporal_chain(snapshot, domain_ctx, start_time, end_time);
         
@@ -720,17 +866,19 @@ impl StorageServer {
     
     fn handle_find_causal_chain(
         &self,
+        namespace: Option<String>,
         start_id: String,
         causal_type: String,
         max_depth: u32,
     ) -> StorageResponse {
+        let storage = self.get_storage(namespace);
         use crate::semantic::SemanticPathFinder;
         
         let start = ConceptId::from_string(&start_id);
         let causal = parse_causal_type(&causal_type).unwrap_or(CausalType::Direct);
         
         let pathfinder = SemanticPathFinder::new(max_depth as usize, 100);
-        let snapshot = self.storage.get_snapshot();
+        let snapshot = storage.get_snapshot();
         
         let paths = pathfinder.find_causal_chain(snapshot, start, causal);
         
@@ -749,12 +897,13 @@ impl StorageServer {
         StorageResponse::FindCausalChainOk { paths: path_msgs }
     }
     
-    fn handle_find_contradictions(&self, domain: String) -> StorageResponse {
+    fn handle_find_contradictions(&self, namespace: Option<String>, domain: String) -> StorageResponse {
+        let storage = self.get_storage(namespace);
         use crate::semantic::SemanticPathFinder;
         
         let domain_ctx = parse_domain_context(&domain).unwrap_or(DomainContext::General);
         let pathfinder = SemanticPathFinder::default();
-        let snapshot = self.storage.get_snapshot();
+        let snapshot = storage.get_snapshot();
         
         let contradictions = pathfinder.find_contradictions(snapshot, domain_ctx);
         
@@ -767,9 +916,11 @@ impl StorageServer {
     
     fn handle_query_by_semantic(
         &self,
+        namespace: Option<String>,
         filter_msg: SemanticFilterMsg,
         limit: Option<usize>,
     ) -> StorageResponse {
+        let storage = self.get_storage(namespace);
         use crate::semantic::{SemanticFilter, TemporalConstraint, CausalFilter};
         
         // Convert message filter to internal filter
@@ -806,7 +957,7 @@ impl StorageServer {
         }
         
         // Query concepts
-        let snapshot = self.storage.get_snapshot();
+        let snapshot = storage.get_snapshot();
         let mut concepts = Vec::new();
         
         for concept in snapshot.all_concepts() {
@@ -876,9 +1027,9 @@ fn parse_causal_type(s: &str) -> Option<CausalType> {
     }
 }
 
-/// Sharded Storage Server - wraps ShardedStorage with TCP protocol
+/// Sharded Storage Server - wraps NamespaceManager with TCP protocol
 pub struct ShardedStorageServer {
-    storage: Arc<ShardedStorage>,
+    namespaces: Arc<NamespaceManager>,
     start_time: std::time::Instant,
     pipeline: LearningPipeline,
 }
@@ -886,13 +1037,30 @@ pub struct ShardedStorageServer {
 impl ShardedStorageServer {
     /// Create new sharded storage server
     pub async fn new(storage: ShardedStorage) -> Self {
+        // Use first shard config as template for namespaces
+        let config = storage.get_shard_by_index(0).config().clone();
+        let base_path = config.storage_path.parent().unwrap_or(&std::path::Path::new(".")).to_path_buf();
+        
+        let manager = NamespaceManager::new(base_path, config.clone())
+            .expect("Failed to init NamespaceManager");
+        
+        // Note: For sharded server, the namespaces are actually individual ConcurrentMemory instances for now.
+        // Distributed sharding across namespaces is a future enhancement.
+        
         let pipeline = LearningPipeline::new().await
             .expect("Failed to init learning pipeline");
+            
         Self {
-            storage: Arc::new(storage),
+            namespaces: Arc::new(manager),
             start_time: std::time::Instant::now(),
             pipeline,
         }
+    }
+
+    /// Helper to get storage for a namespace
+    fn get_storage(&self, namespace: Option<String>) -> Arc<ConcurrentMemory> {
+        let ns = namespace.unwrap_or_else(|| "default".to_string());
+        self.namespaces.get_namespace(&ns)
     }
 
     /// Start TCP server (same interface as StorageServer)
@@ -922,8 +1090,8 @@ impl ShardedStorageServer {
                     }
                 }
                 _ = &mut shutdown => {
-                    eprintln!("Shutdown signal received, flushing sharded storage...");
-                    if let Err(e) = self.storage.flush() {
+                    eprintln!("Shutdown signal received, flushing all namespaces...");
+                    if let Err(e) = self.namespaces.flush_all() {
                         eprintln!("Flush error: {:?}", e);
                     }
                     break;
@@ -986,24 +1154,22 @@ impl ShardedStorageServer {
         use crate::types::{ConceptId, AssociationType};
 
         match request {
-            StorageRequest::LearnConceptV2 { content, options } => {
-                // Convert LearnOptionsMsg to LearnOptions
+            StorageRequest::LearnConceptV2 { namespace, content, options } => {
+                let storage = self.get_storage(namespace);
                 let learn_opts: LearnOptions = options.into();
                 
-                // Use learning pipeline (works with LearningStorage trait)
-                match self.pipeline.learn_concept(&self.storage, &content, &learn_opts).await {
+                match self.pipeline.learn_concept(&storage, &content, &learn_opts).await {
                     Ok(concept_id) => StorageResponse::LearnConceptV2Ok { concept_id },
                     Err(e) => StorageResponse::Error {
                         message: format!("Learning pipeline failed: {}", e),
                     },
                 }
             }
-            StorageRequest::LearnBatch { contents, options } => {
-                // Convert LearnOptionsMsg to LearnOptions
+            StorageRequest::LearnBatch { namespace, contents, options } => {
+                let storage = self.get_storage(namespace);
                 let learn_opts: LearnOptions = options.into();
                 
-                // Use learning pipeline batch method
-                match self.pipeline.learn_batch(&self.storage, &contents, &learn_opts).await {
+                match self.pipeline.learn_batch(&storage, &contents, &learn_opts).await {
                     Ok(concept_ids) => StorageResponse::LearnBatchOk { concept_ids },
                     Err(e) => StorageResponse::Error {
                         message: format!("Batch learning failed: {}", e),
@@ -1011,17 +1177,19 @@ impl ShardedStorageServer {
                 }
             }
             StorageRequest::LearnConcept {
+                namespace,
                 concept_id,
                 content,
                 embedding,
                 strength,
                 confidence,
             } => {
+                let storage = self.get_storage(namespace);
                 let id = ConceptId::from_string(&concept_id);
                 let content_bytes = content.into_bytes();
                 let vector = if embedding.is_empty() { None } else { Some(embedding) };
 
-                match self.storage.learn_concept(id, content_bytes, vector, strength, confidence) {
+                match storage.learn_concept(id, content_bytes, vector, strength, confidence, std::collections::HashMap::new()) {
                     Ok(sequence) => StorageResponse::LearnConceptOk { sequence },
                     Err(e) => StorageResponse::Error {
                         message: format!("Learn concept failed: {:?}", e),
@@ -1030,17 +1198,19 @@ impl ShardedStorageServer {
             }
 
             StorageRequest::LearnAssociation {
+                namespace,
                 source_id,
                 target_id,
                 assoc_type,
                 confidence,
             } => {
+                let storage = self.get_storage(namespace);
                 let source = ConceptId::from_string(&source_id);
                 let target = ConceptId::from_string(&target_id);
                 let atype = AssociationType::from_u8(assoc_type as u8)
                     .unwrap_or(AssociationType::Semantic);
 
-                match self.storage.create_association(source, target, atype, confidence) {
+                match storage.learn_association(source, target, atype, confidence) {
                     Ok(sequence) => StorageResponse::LearnAssociationOk { sequence },
                     Err(e) => StorageResponse::Error {
                         message: format!("Learn association failed: {:?}", e),
@@ -1048,16 +1218,18 @@ impl ShardedStorageServer {
                 }
             }
 
-            StorageRequest::QueryConcept { concept_id } => {
+            StorageRequest::QueryConcept { namespace, concept_id } => {
+                let storage = self.get_storage(namespace);
                 let id = ConceptId::from_string(&concept_id);
 
-                if let Some(node) = self.storage.get_concept(id) {
+                if let Some(node) = storage.query_concept(&id) {
                     StorageResponse::QueryConceptOk {
                         found: true,
                         concept_id: id.to_hex(),
                         content: String::from_utf8_lossy(&node.content).to_string(),
                         strength: node.strength,
                         confidence: node.confidence,
+                        attributes: node.attributes.clone(),
                     }
                 } else {
                     StorageResponse::QueryConceptOk {
@@ -1066,41 +1238,48 @@ impl ShardedStorageServer {
                         content: String::new(),
                         strength: 0.0,
                         confidence: 0.0,
+                        attributes: std::collections::HashMap::new(),
                     }
                 }
             }
 
-            StorageRequest::GetNeighbors { concept_id } => {
+            StorageRequest::GetNeighbors { namespace, concept_id } => {
+                let storage = self.get_storage(namespace);
                 let id = ConceptId::from_string(&concept_id);
-                let neighbors = self.storage.get_neighbors(id);
-                let neighbor_ids = neighbors.iter().map(|id| id.to_hex()).collect();
+                let neighbors = storage.query_neighbors(&id);
+                let neighbor_ids = neighbors.iter().map(|id: &ConceptId| id.to_hex()).collect();
 
                 StorageResponse::GetNeighborsOk { neighbor_ids }
             }
 
             StorageRequest::FindPath {
+                namespace,
                 start_id,
                 end_id,
                 max_depth,
             } => {
-                // Cross-shard path finding would require distributed BFS
-                // For now, return error with guidance
-                StorageResponse::Error {
-                    message: format!(
-                        "FindPath not yet implemented for sharded storage (start: {}, end: {}, depth: {}). \
-                         Cross-shard path finding requires distributed BFS.",
-                        start_id, end_id, max_depth
-                    ),
+                let storage = self.get_storage(namespace);
+                if let Some(path) = storage.find_path(ConceptId::from_string(&start_id), ConceptId::from_string(&end_id), max_depth as usize) {
+                    StorageResponse::FindPathOk {
+                        found: true,
+                        path: path.iter().map(|id: &ConceptId| id.to_hex()).collect(),
+                    }
+                } else {
+                    StorageResponse::FindPathOk {
+                        found: false,
+                        path: vec![],
+                    }
                 }
             }
 
             StorageRequest::VectorSearch {
+                namespace,
                 query_vector,
                 k,
-                ef_search: _,
+                ef_search,
             } => {
-                // Parallel semantic search across all shards
-                let results = self.storage.semantic_search(query_vector, k as usize);
+                let storage = self.get_storage(namespace);
+                let results = storage.vector_search(&query_vector, k as usize, ef_search as usize);
                 let results_vec = results
                     .into_iter()
                     .map(|(id, sim)| (id.to_hex(), sim))
@@ -1109,33 +1288,25 @@ impl ShardedStorageServer {
                 StorageResponse::VectorSearchOk { results: results_vec }
             }
 
-            StorageRequest::GetStats => {
-                let stats = self.storage.stats();
+            StorageRequest::GetStats { namespace } => {
+                let storage = self.get_storage(namespace);
+                let stats = storage.stats();
+                let hnsw_stats = storage.hnsw_stats();
                 let uptime = self.start_time.elapsed().as_secs();
 
-                // Aggregate metrics from all shards
-                let (total_dropped, total_pending, total_reconciliations) = stats.shard_stats.iter()
-                    .fold((0u64, 0usize, 0u64), |(dropped, pending, recon), shard| {
-                        (
-                            dropped + shard.write_log.dropped,
-                            pending + shard.write_log.pending,
-                            recon + shard.reconciler.reconciliations,
-                        )
-                    });
-
                 StorageResponse::StatsOk {
-                    concepts: stats.total_concepts as u64,
-                    edges: stats.total_edges as u64,
-                    vectors: stats.total_vectors as u64,
-                    written: stats.total_writes,
-                    dropped: total_dropped,
-                    pending: total_pending as u64,
-                    reconciliations: total_reconciliations,
+                    concepts: stats.snapshot.concept_count as u64,
+                    edges: stats.snapshot.edge_count as u64,
+                    vectors: hnsw_stats.indexed_vectors as u64,
+                    written: stats.write_log.written,
+                    dropped: stats.write_log.dropped,
+                    pending: stats.write_log.pending as u64,
+                    reconciliations: stats.reconciler.reconciliations,
                     uptime_seconds: uptime,
                 }
             }
 
-            StorageRequest::Flush => match self.storage.flush() {
+            StorageRequest::Flush => match self.namespaces.flush_all() {
                 Ok(_) => StorageResponse::FlushOk,
                 Err(e) => StorageResponse::Error {
                     message: format!("Flush failed: {:?}", e),
@@ -1144,15 +1315,66 @@ impl ShardedStorageServer {
 
             StorageRequest::HealthCheck => {
                 let uptime = self.start_time.elapsed().as_secs();
-                let stats = self.storage.stats();
                 StorageResponse::HealthCheckOk {
                     healthy: true,
-                    status: format!("sharded ({} shards, {} concepts)", stats.num_shards, stats.total_concepts),
+                    status: format!("sharded-namespaces ({} active)", self.namespaces.list_namespaces().len()),
                     uptime_seconds: uptime,
                 }
             }
-            
-            // Semantic query handlers (not yet implemented for sharded storage)
+
+            StorageRequest::DeleteConcept { namespace, id } => {
+                let storage = self.get_storage(Some(namespace));
+                let concept_id = ConceptId::from_string(&id);
+                match storage.delete_concept(concept_id) {
+                    Ok(_) => StorageResponse::DeleteConceptOk { id: id.to_string() },
+                    Err(e) => StorageResponse::Error { message: format!("Delete failed: {:?}", e) },
+                }
+            }
+
+            StorageRequest::ClearCollection { namespace } => {
+                let storage = self.get_storage(Some(namespace.clone()));
+                match storage.clear() {
+                    Ok(_) => StorageResponse::ClearCollectionOk { namespace: namespace.to_string() },
+                    Err(e) => StorageResponse::Error { message: format!("Clear failed: {:?}", e) },
+                }
+            }
+
+            StorageRequest::ListRecent { namespace, limit } => {
+                let storage = self.get_storage(Some(namespace));
+                let snapshot = storage.get_snapshot();
+                let mut items: Vec<RecentItemMsg> = snapshot.concepts.values().map(|node| {
+                    RecentItemMsg {
+                        id: node.id.to_hex(),
+                        content_preview: String::from_utf8_lossy(&node.content).chars().take(200).collect(),
+                        created: node.created,
+                        attributes: node.attributes.clone(),
+                    }
+                }).collect();
+                
+                items.sort_by(|a, b| b.created.cmp(&a.created));
+                items.truncate(limit as usize);
+                
+                StorageResponse::ListRecentOk { items }
+            }
+
+            StorageRequest::LearnWithEmbedding { id, namespace, content, embedding, metadata, timestamp: _ } => {
+                let storage = self.get_storage(Some(namespace));
+                let concept_id = id.map(|s| ConceptId::from_string(&s))
+                    .unwrap_or_else(|| ConceptId::from_string(&content));
+                
+                match storage.learn_concept(
+                    concept_id, 
+                    content.into_bytes(), 
+                    Some(embedding), 
+                    1.0, 1.0, 
+                    metadata
+                ) {
+                    Ok(_) => StorageResponse::LearnConceptV2Ok { concept_id: concept_id.to_hex() },
+                    Err(e) => StorageResponse::Error { message: format!("LearnWithEmbedding failed: {:?}", e) },
+                }
+            }
+
+            // Semantic query handlers (limited support in sharded mode)
             StorageRequest::FindPathSemantic { .. } => {
                 StorageResponse::Error {
                     message: "Semantic pathfinding not yet implemented for sharded storage. Use single-shard mode.".to_string(),
@@ -1182,8 +1404,9 @@ impl ShardedStorageServer {
                     message: "Semantic queries not yet implemented for sharded storage. Use single-shard mode.".to_string(),
                 }
             }
-            StorageRequest::TextSearch { query, limit } => {
-                match self.pipeline.search(&self.storage, &query, limit as usize).await {
+            StorageRequest::TextSearch { namespace, query, limit } => {
+                let storage = self.get_storage(namespace);
+                match self.pipeline.search(&storage, &query, limit as usize).await {
                     Ok(results) => StorageResponse::TextSearchOk { 
                         results: results.into_iter().map(|(id, score)| (id.to_hex(), score)).collect() 
                     },

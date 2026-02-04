@@ -282,6 +282,7 @@ impl SecureStorageServer {
         let operation = match request {
             StorageRequest::LearnConceptV2 { .. } |
             StorageRequest::LearnBatch { .. } |
+            StorageRequest::LearnWithEmbedding { .. } |
             StorageRequest::LearnConcept { .. } |
             StorageRequest::LearnAssociation { .. } => "write",
             
@@ -295,9 +296,12 @@ impl SecureStorageServer {
             StorageRequest::QueryBySemantic { .. } |
             StorageRequest::VectorSearch { .. } |
             StorageRequest::TextSearch { .. } |
-            StorageRequest::GetStats |
+            StorageRequest::ListRecent { .. } |
+            StorageRequest::GetStats { .. } |
             StorageRequest::HealthCheck => "read",
             
+            StorageRequest::DeleteConcept { .. } |
+            StorageRequest::ClearCollection { .. } |
             StorageRequest::Flush => "delete",
         };
         

@@ -1,4 +1,4 @@
-# Phase 5 Progress Log
+# Phase 6 Progress Log (Next Steps)
 
 ## Day 1-2: Segment Storage & Memory-Mapping ✅ COMPLETE
 
@@ -590,8 +590,44 @@ $ cargo build --lib
 - Target: 0 warnings
 
 **Future phases** (from original plan):
-- Phase 5-6: Advanced Indexing (if needed)
-- Phase 7-8: High Availability & Replication (if needed)
+## Day 5-6: Advanced Indexing ✅ COMPLETE
+- ✅ USearch HNSW (94× faster startup)
+- ✅ SIMD distance metrics
+- ✅ Incremental vector indexing
+- ✅ Stable MD5-based Concept IDs
+
+## Day 7-8: Namespaces & CRUD Operations ✅ COMPLETE
+**Date**: February 4, 2026
+**Status**: ✅ **COMPLETE**
+
+### Deliverables
+
+#### 1. Namespace Support (`src/namespace_manager.rs`)
+- ✅ Multi-tenant storage architecture
+- ✅ Dynamic namespace creation and retrieval
+- ✅ Isolated WAL and persistence per namespace
+- ✅ Unified management in `ShardedStorageServer`
+
+#### 2. CRUD Operations API (`src/tcp_server.rs`)
+- ✅ `DeleteConcept`: Full deletion across memory and vector index
+- ✅ `ClearCollection`: Instant reset of namespace data
+- ✅ `ListRecent`: Retrieval of latest learned concepts with metadata
+- ✅ `Flush`: Explicit checkpointing for safety
+
+#### 3. Client & protocol Improvements
+- ✅ Support for MessagePack unit variants (HealthCheck, Flush)
+- ✅ Robust async TypeScript client with stream handling
+- ✅ Big Endian length prefix for better compatibility
+
+#### 4. Stability & Security
+- ✅ Stable MD5 hashing for concept IDs (avoids non-determinism)
+- ✅ Updated `SecureStorageServer` with namespace-aware authorization
+- ✅ Multi-namespace health reporting
+
+### Test Results ✅
+- ✅ Multi-namespace isolation verified
+- ✅ Deletion consistency verified via `Flush`
+- ✅ TypeScript client E2E test passing
 
 ---
 

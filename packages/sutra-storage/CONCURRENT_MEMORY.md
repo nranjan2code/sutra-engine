@@ -152,7 +152,8 @@ memory.learn_concept(
     b"knowledge content".to_vec(), 
     None,  // optional vector
     1.0,   // strength
-    0.9    // confidence
+    0.9,   // confidence
+    std::collections::HashMap::new() // NEW: attributes metadata
 )?;
 
 // Reason (read) - never blocks
@@ -160,6 +161,10 @@ if let Some(concept) = memory.query_concept(&id) {
     println!("Content: {:?}", concept.content);
     println!("Neighbors: {:?}", concept.neighbors);
 }
+
+// CRUD Operations
+memory.delete_concept(id)?;
+memory.clear()?;
 
 // Find path (graph traversal)
 let path = memory.find_path(start_id, end_id, max_depth);

@@ -16,6 +16,7 @@ pub trait LearningStorage {
         vector: Option<Vec<f32>>,
         strength: f32,
         confidence: f32,
+        attributes: std::collections::HashMap<String, String>,
     ) -> Result<u64>;
     
     /// Store a concept with semantic metadata (🔥 NEW)
@@ -30,7 +31,7 @@ pub trait LearningStorage {
     ) -> Result<u64> {
         // Default implementation: ignore semantic for backward compat
         // Implementations should override this
-        self.learn_concept(id, content, vector, strength, confidence)
+        self.learn_concept(id, content, vector, strength, confidence, std::collections::HashMap::new())
     }
     
     /// Create an association between concepts
@@ -55,8 +56,9 @@ impl LearningStorage for crate::concurrent_memory::ConcurrentMemory {
         vector: Option<Vec<f32>>,
         strength: f32,
         confidence: f32,
+        attributes: std::collections::HashMap<String, String>,
     ) -> Result<u64> {
-        self.learn_concept(id, content, vector, strength, confidence)
+        self.learn_concept(id, content, vector, strength, confidence, attributes)
             .map_err(|e| anyhow::anyhow!("WriteLog error: {:?}", e))
     }
     
@@ -86,8 +88,9 @@ impl LearningStorage for crate::sharded_storage::ShardedStorage {
         vector: Option<Vec<f32>>,
         strength: f32,
         confidence: f32,
+        attributes: std::collections::HashMap<String, String>,
     ) -> Result<u64> {
-        self.learn_concept(id, content, vector, strength, confidence)
+        self.learn_concept(id, content, vector, strength, confidence, attributes)
     }
     
     fn learn_association(
@@ -115,8 +118,9 @@ impl<T: LearningStorage> LearningStorage for std::sync::Arc<T> {
         vector: Option<Vec<f32>>,
         strength: f32,
         confidence: f32,
+        attributes: std::collections::HashMap<String, String>,
     ) -> Result<u64> {
-        (**self).learn_concept(id, content, vector, strength, confidence)
+        (**self).learn_concept(id, content, vector, strength, confidence, attributes)
     }
     
     fn learn_association(

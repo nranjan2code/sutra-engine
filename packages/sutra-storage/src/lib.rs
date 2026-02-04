@@ -43,6 +43,7 @@ mod parallel_paths;
 // Scalability modules
 mod hnsw_container;
 mod sharded_storage;
+mod namespace_manager;
 mod storage_trait;
 mod transaction; // 🔥 NEW: 2PC transaction coordinator for cross-shard atomicity
 
@@ -84,6 +85,7 @@ pub use parallel_paths::{ParallelPathFinder, PathResult};
 // Scalability exports
 pub use hnsw_container::{HnswContainer, HnswConfig, HnswContainerStats};
 pub use sharded_storage::{ShardedStorage, ShardConfig, ShardMap, ShardStats, AggregatedStats};
+pub use namespace_manager::NamespaceManager;
 pub use storage_trait::LearningStorage;
 pub use transaction::{TransactionCoordinator, TxnOperation, TxnState, TxnError, Transaction, TxnCoordinatorStats}; // 🔥 NEW
 

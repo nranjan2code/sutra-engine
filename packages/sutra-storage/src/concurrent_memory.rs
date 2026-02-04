@@ -432,7 +432,8 @@ impl ConcurrentMemory {
                 access_count,
                 last_accessed: current_timestamp_us(),
                 created,
-                semantic: None, // Semantic metadata (for semantic-aware queries)
+                semantic: None,
+                attributes: std::collections::HashMap::new(), // Added missing field
                 neighbors: Vec::new(),
                 associations: Vec::new(),
             };
@@ -535,6 +536,7 @@ impl ConcurrentMemory {
         vector: Option<Vec<f32>>,
         strength: f32,
         confidence: f32,
+        attributes: std::collections::HashMap<String, String>,
     ) -> Result<u64, WriteLogError> {
         // CRITICAL: Write to WAL first for durability (before in-memory structures)
         {
@@ -549,7 +551,7 @@ impl ConcurrentMemory {
         }
         
         // Now safe to write to in-memory WriteLog (WAL guarantees durability)
-        let seq = self.write_log.append_concept(id, content, vector.clone(), strength, confidence)?;
+        let seq = self.write_log.append_concept(id, content, vector.clone(), strength, confidence, attributes)?;
         
         // Auto-index vector in HNSW if provided
         if let Some(vec) = vector {
@@ -612,6 +614,22 @@ impl ConcurrentMemory {
     pub fn record_access(&self, id: ConceptId) -> Result<u64, WriteLogError> {
         let timestamp = current_timestamp_us();
         self.write_log.append(crate::write_log::WriteEntry::RecordAccess { id, timestamp })
+    }
+
+    /// Delete a concept and all its associations
+    pub fn delete_concept(&self, id: ConceptId) -> Result<u64, WriteLogError> {
+        let timestamp = current_timestamp_us();
+        self.write_log.append(crate::write_log::WriteEntry::DeleteConcept { id, timestamp })
+    }
+
+    /// Clear all data in this memory instance
+    pub fn clear(&self) -> Result<u64, WriteLogError> {
+        // Clear HNSW index immediately (it's separate from WriteLog)
+        if let Err(e) = self.hnsw_container.clear() {
+            log::warn!("⚠️ Failed to clear HNSW container: {}", e);
+        }
+        
+        self.write_log.append(crate::write_log::WriteEntry::Clear)
     }
     
     // ========================
@@ -822,36 +840,6 @@ impl ConcurrentMemory {
             .collect()
     }
     
-    /// Delete a concept and all its associations
-    pub fn delete_concept(&self, concept_id: ConceptId) -> Result<u64, WriteLogError> {
-        let operation = Operation::DeleteConcept { concept_id };
-        let mut wal = self.wal.lock().unwrap();
-        let _wal_sequence = wal.append(operation).map_err(|e| {
-            WriteLogError::SystemError(format!("WAL append failed: {:?}", e))
-        })?;
-        drop(wal);
-        
-        // Apply to write log for immediate effect
-        use crate::write_log::WriteEntry;
-        let sequence_number = self.write_log.append(WriteEntry::DeleteConcept {
-            id: concept_id,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
-        })?;
-        
-        // Remove from vector storage if it exists
-        let mut vectors = self.vectors.write();
-        vectors.remove(&concept_id);
-        drop(vectors);
-        
-        // Remove from HNSW index
-        // Note: HnswContainer might not support removal, skip for now
-        // let _ = self.hnsw_container.remove_vector(concept_id);
-        
-        Ok(sequence_number)
-    }
     
     /// Get read snapshot for external use
     pub fn get_snapshot(&self) -> Arc<crate::read_view::GraphSnapshot> {

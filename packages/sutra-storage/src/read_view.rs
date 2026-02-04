@@ -24,6 +24,9 @@ pub struct ConceptNode {
     
     /// 🔥 NEW: Semantic metadata for domain understanding
     pub semantic: Option<SemanticMetadata>,
+
+    /// Extensible key-value metadata
+    pub attributes: std::collections::HashMap<String, String>,
     
     /// Co-located edges for cache-friendly traversal
     pub neighbors: Vec<ConceptId>,
@@ -49,6 +52,7 @@ impl ConceptNode {
             last_accessed: timestamp,
             access_count: 0,
             semantic: None, // Will be set during learning
+            attributes: std::collections::HashMap::new(),
             neighbors: Vec::new(),
             associations: Vec::new(),
         }
@@ -74,6 +78,7 @@ impl ConceptNode {
             last_accessed: timestamp,
             access_count: 0,
             semantic: Some(semantic),
+            attributes: std::collections::HashMap::new(),
             neighbors: Vec::new(),
             associations: Vec::new(),
         }

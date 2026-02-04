@@ -126,6 +126,11 @@ impl ShardedStorage {
         let shard_id = self.get_shard_id(concept_id);
         &self.shards[shard_id as usize]
     }
+
+    /// Get shard by index (internal)
+    pub fn get_shard_by_index(&self, index: usize) -> &Arc<ConcurrentMemory> {
+        &self.shards[index]
+    }
     
     /// Learn concept (automatically routed to correct shard)
     pub fn learn_concept(
@@ -135,10 +140,26 @@ impl ShardedStorage {
         vector: Option<Vec<f32>>,
         strength: f32,
         confidence: f32,
+        attributes: std::collections::HashMap<String, String>,
     ) -> Result<u64> {
         let shard = self.get_shard(id);
-        shard.learn_concept(id, content, vector, strength, confidence)
+        shard.learn_concept(id, content, vector, strength, confidence, attributes)
             .map_err(|e| anyhow::anyhow!("Shard write failed: {:?}", e))
+    }
+
+    /// Delete concept from correct shard
+    pub fn delete_concept(&self, id: ConceptId) -> Result<u64> {
+        let shard = self.get_shard(id);
+        shard.delete_concept(id)
+            .map_err(|e| anyhow::anyhow!("Shard delete failed: {:?}", e))
+    }
+
+    /// Clear all shards in parallel
+    pub fn clear(&self) -> Result<()> {
+        use rayon::prelude::*;
+        self.shards.par_iter().try_for_each(|shard| {
+            shard.clear().map(|_| ()).map_err(|e| anyhow::anyhow!("Shard clear failed: {:?}", e))
+        })
     }
     
     /// Create association with 2PC for cross-shard atomicity

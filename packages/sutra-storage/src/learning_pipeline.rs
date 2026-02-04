@@ -115,6 +115,7 @@ impl LearningPipeline {
                 embedding_opt.clone(),
                 options.strength,
                 options.confidence,
+                std::collections::HashMap::new(),
             )?
         };
         debug!("Stored concept seq={}", sequence);
@@ -202,6 +203,7 @@ impl LearningPipeline {
                     embedding_opt.clone(),
                     options.strength,
                     options.confidence,
+                    std::collections::HashMap::new(),
                 )?
             };
             debug!("Stored concept seq={}", sequence);
@@ -236,11 +238,8 @@ impl LearningPipeline {
     }
 
     fn generate_concept_id(&self, content: &str) -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut hasher = DefaultHasher::new();
-        content.hash(&mut hasher);
-        format!("{:016x}", hasher.finish())
+        let digest = md5::compute(content);
+        format!("{:x}", digest)
     }
 
     /// Search concepts by text using semantic similarity

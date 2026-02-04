@@ -157,12 +157,15 @@ pub struct ConcurrentMemory {
     pub fn new(config: ConcurrentConfig) -> Self;
     pub fn learn_concept(
         &self, id: ConceptId, content: Vec<u8>, 
-        embedding: Option<Vec<f32>>, strength: f32, confidence: f32
+        embedding: Option<Vec<f32>>, strength: f32, confidence: f32,
+        attributes: std::collections::HashMap<String, String>
     ) -> Result<u64, WriteLogError>;
     pub fn query_concept(&self, id: &ConceptId) -> Option<ConceptNode>;
     pub fn get_neighbors(&self, id: &ConceptId) -> Vec<(ConceptId, AssociationRecord)>;
     pub fn vector_search(&self, query: &[f32], k: usize, ef: usize) -> Vec<(ConceptId, f32)>;
     pub fn find_path(&self, start: ConceptId, end: ConceptId, max_depth: u8) -> Option<Vec<ConceptId>>;
+    pub fn delete_concept(&self, id: ConceptId) -> Result<u64, WriteLogError>;
+    pub fn clear(&self) -> Result<u64, WriteLogError>;
     pub fn flush(&self) -> Result<()>;
 }
 
@@ -202,6 +205,8 @@ pub struct ConcurrentMemory {
 - ✅ Circuit breaker with exponential backoff + jitter
 - ✅ Self-monitoring via Grid events
 - ✅ Security: TLS 1.3 + HMAC-SHA256 authentication
+- ✅ Multi-Tenancy: Isolated namespaces support
+- ✅ CRUD Support: Batch deletion and collection clearing
 
 ## Why This Architecture?
 

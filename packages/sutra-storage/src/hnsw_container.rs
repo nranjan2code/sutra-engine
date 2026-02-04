@@ -282,6 +282,35 @@ impl HnswContainer {
         Ok(())
     }
 
+    /// Clear the index and mappings
+    pub fn clear(&self) -> Result<()> {
+        let mut index_lock = self.index.write();
+        let mut id_mapping = self.id_mapping.write();
+        let mut reverse_mapping = self.reverse_mapping.write();
+        let mut next_id = self.next_id.write();
+        
+        // Reset USearch index
+        let new_index = Index::new(&IndexOptions {
+            dimensions: self.config.dimension,
+            metric: MetricKind::Cos,
+            quantization: ScalarKind::F32,
+            connectivity: self.config.max_neighbors,
+            expansion_add: self.config.ef_construction,
+            expansion_search: 40,
+            multi: false,
+        }).context("Failed to create new USearch index for clear")?;
+        
+        *index_lock = Some(new_index);
+        id_mapping.clear();
+        reverse_mapping.clear();
+        *next_id = 0;
+        
+        // Mark dirty so it gets saved to disk as empty
+        *self.dirty.write() = true;
+        
+        Ok(())
+    }
+
     /// Search k nearest neighbors (USearch)
     ///
     /// Performance: O(log N) with HNSW

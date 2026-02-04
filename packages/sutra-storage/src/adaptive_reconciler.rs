@@ -574,8 +574,9 @@ fn apply_entry(snapshot: &mut GraphSnapshot, entry: &WriteEntry) {
             strength,
             confidence,
             timestamp,
+            attributes,
         } => {
-            let node = ConceptNode::new(
+            let mut node = ConceptNode::new(
                 *id,
                 content.to_vec(),
                 vector.as_ref().map(|v| v.to_vec()),
@@ -583,6 +584,7 @@ fn apply_entry(snapshot: &mut GraphSnapshot, entry: &WriteEntry) {
                 *confidence,
                 *timestamp,
             );
+            node.attributes = attributes.clone();
             snapshot.concepts.insert(*id, node);
         }
         
@@ -630,6 +632,13 @@ fn apply_entry(snapshot: &mut GraphSnapshot, entry: &WriteEntry) {
                 }
                 snapshot.concepts = updated_concepts;
             }
+        }
+
+        WriteEntry::Clear => {
+            // Reset everything
+            snapshot.concepts.clear();
+            snapshot.concept_count = 0;
+            snapshot.edge_count = 0;
         }
         
         WriteEntry::BatchMarker { .. } => {
