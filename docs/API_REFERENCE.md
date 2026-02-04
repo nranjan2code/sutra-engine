@@ -1,15 +1,15 @@
 # API Reference: Sutra Binary Protocol
 
-Sutra Engine uses a custom binary protocol over TCP for maximum performance. This protocol uses a simple **Length-Prefix** framing followed by `bincode` serialization.
+Sutra Engine uses a custom binary protocol over TCP for maximum performance. This protocol uses a simple **Length-Prefix** framing followed by MessagePack serialization.
 
 ---
 
 ## 🛰 Protocol Overview
 
 ### Framing
-Each message (Request and Response) is prefixed with a 4-byte big-endian integer representing the length of the `bincode` payload.
+Each message (Request and Response) is prefixed with a 4-byte big-endian integer representing the length of the MessagePack payload.
 
-`[4 bytes: Length] [N bytes: bincode Payload]`
+`[4 bytes: Length] [N bytes: MessagePack Payload]`
 
 ### Port
 Default: `50051`
@@ -18,7 +18,7 @@ Default: `50051`
 
 ## 📥 Storage Requests
 
-Requests are sent as a `bincode`-serialized enum where the variant name is the tag. Most requests now support a `namespace` parameter for multi-tenant isolation.
+Requests are sent as a MessagePack map where the variant name is the tag. Most requests now support a `namespace` parameter for multi-tenant isolation.
 
 ### 1. `LearnConceptV2`
 High-level ingestion with automatic embedding and association extraction.

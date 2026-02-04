@@ -37,6 +37,8 @@ The protocol crate includes a tiny roundtrip example:
 cargo run -p sutra-protocol --example minimal_roundtrip
 ```
 
+For the storage server TCP API, requests use MessagePack. See `docs/API_REFERENCE.md`.
+
 ## 4. Docker (Optional)
 
 ```bash

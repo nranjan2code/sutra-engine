@@ -87,7 +87,7 @@ pub use transaction::{
 }; // 🔥 NEW
 
 /// Version of the storage format
-pub const STORAGE_VERSION: u32 = 1;
+pub const STORAGE_VERSION: u32 = 3;
 
 /// Magic bytes for segment files
 pub const MAGIC_BYTES: &[u8; 8] = b"SUTRASEG";
@@ -98,6 +98,6 @@ mod tests {
 
     #[test]
     fn test_version() {
-        assert_eq!(STORAGE_VERSION, 1);
+        assert_eq!(STORAGE_VERSION, 3);
     }
 }

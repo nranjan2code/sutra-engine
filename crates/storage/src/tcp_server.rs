@@ -360,6 +360,27 @@ impl StorageServer {
         }
     }
 
+    /// Create new storage server with a pre-built pipeline (for tests or custom providers)
+    pub fn new_with_pipeline(storage: ConcurrentMemory, pipeline: LearningPipeline) -> Self {
+        let config = storage.config().clone();
+        let base_path = config
+            .storage_path
+            .parent()
+            .unwrap_or(std::path::Path::new("."))
+            .to_path_buf();
+
+        let manager = NamespaceManager::new(base_path, config.clone())
+            .expect("Failed to init namespace manager");
+
+        manager.add_namespace("default", Arc::new(storage));
+
+        Self {
+            namespaces: Arc::new(manager),
+            start_time: std::time::Instant::now(),
+            pipeline,
+        }
+    }
+
     /// Get storage for a namespace (falls back to "default")
     fn get_storage(&self, ns: Option<String>) -> Arc<ConcurrentMemory> {
         self.namespaces
@@ -368,11 +389,24 @@ impl StorageServer {
 
     /// Start TCP server
     pub async fn serve(self: Arc<Self>, addr: SocketAddr) -> std::io::Result<()> {
+        self.serve_with_shutdown(addr, async {
+            let _ = signal::ctrl_c().await;
+        })
+        .await
+    }
+
+    /// Start TCP server with a custom shutdown signal (test-friendly)
+    pub async fn serve_with_shutdown<F>(
+        self: Arc<Self>,
+        addr: SocketAddr,
+        shutdown: F,
+    ) -> std::io::Result<()>
+    where
+        F: std::future::Future<Output = ()> + Send,
+    {
         let listener = TcpListener::bind(addr).await?;
         eprintln!("Storage server listening on {}", addr);
 
-        // Graceful shutdown handler
-        let shutdown = signal::ctrl_c();
         tokio::pin!(shutdown);
 
         loop {

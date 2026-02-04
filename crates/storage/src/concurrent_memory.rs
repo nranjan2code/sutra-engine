@@ -454,9 +454,9 @@ impl ConcurrentMemory {
             header_buffer[23],
         ]) as usize;
 
-        if version != 2 {
+        if version != 2 && version != 3 {
             anyhow::bail!(
-                "Unsupported storage version: {}. Expected version 2.",
+                "Unsupported storage version: {}. Expected version 2 or 3.",
                 version
             );
         }
@@ -642,6 +642,63 @@ impl ConcurrentMemory {
             );
         }
 
+        // Version 3: Parse metadata section (attributes + semantic)
+        if version >= 3 {
+            for i in 0..concept_count {
+                let mut id_bytes = [0u8; 16];
+                if reader.read_exact(&mut id_bytes).is_err() {
+                    log::warn!("Failed to read metadata concept id {}", i);
+                    break;
+                }
+                let concept_id = ConceptId(id_bytes);
+
+                let mut len_buf = [0u8; 4];
+                if reader.read_exact(&mut len_buf).is_err() {
+                    log::warn!("Failed to read attributes length for {}", i);
+                    break;
+                }
+                let attrs_len = u32::from_le_bytes(len_buf) as usize;
+                let mut attrs = std::collections::HashMap::new();
+                if attrs_len > 0 {
+                    let mut attrs_buf = vec![0u8; attrs_len];
+                    if reader.read_exact(&mut attrs_buf).is_err() {
+                        log::warn!("Failed to read attributes payload for {}", i);
+                        break;
+                    }
+                    if let Ok(parsed) = serde_json::from_slice::<
+                        std::collections::HashMap<String, String>,
+                    >(&attrs_buf)
+                    {
+                        attrs = parsed;
+                    }
+                }
+
+                if reader.read_exact(&mut len_buf).is_err() {
+                    log::warn!("Failed to read semantic length for {}", i);
+                    break;
+                }
+                let semantic_len = u32::from_le_bytes(len_buf) as usize;
+                let mut semantic: Option<crate::semantic::SemanticMetadata> = None;
+                if semantic_len > 0 {
+                    let mut semantic_buf = vec![0u8; semantic_len];
+                    if reader.read_exact(&mut semantic_buf).is_err() {
+                        log::warn!("Failed to read semantic payload for {}", i);
+                        break;
+                    }
+                    if let Ok(parsed) =
+                        serde_json::from_slice::<crate::semantic::SemanticMetadata>(&semantic_buf)
+                    {
+                        semantic = Some(parsed);
+                    }
+                }
+
+                if let Some(node) = concepts.get_mut(&concept_id) {
+                    node.attributes = attrs;
+                    node.semantic = semantic;
+                }
+            }
+        }
+
         Ok((concepts, edges))
     }
 
@@ -706,6 +763,50 @@ impl ConcurrentMemory {
             }
         } else {
             log::debug!("ℹ️  Concept {} stored without embedding", id.to_hex());
+        }
+
+        Ok(seq)
+    }
+
+    /// Learn a new concept with semantic metadata
+    pub fn learn_concept_with_semantic(
+        &self,
+        id: ConceptId,
+        content: Vec<u8>,
+        vector: Option<Vec<f32>>,
+        strength: f32,
+        confidence: f32,
+        semantic: crate::semantic::SemanticMetadata,
+    ) -> Result<u64, WriteLogError> {
+        // Write to WAL first
+        {
+            let mut wal = self.wal.lock().unwrap();
+            wal.append(Operation::WriteConcept {
+                concept_id: id,
+                content_len: content.len() as u32,
+                vector_len: vector.as_ref().map(|v| v.len() as u32).unwrap_or(0),
+                created: current_timestamp_us(),
+                modified: current_timestamp_us(),
+            })
+            .map_err(|_| WriteLogError::Disconnected)?;
+        }
+
+        let seq = self.write_log.append_concept_with_semantic(
+            id,
+            content,
+            vector.clone(),
+            strength,
+            confidence,
+            semantic,
+        )?;
+
+        if let Some(vec) = vector {
+            if vec.len() == self.config.vector_dimension {
+                let _ = self.index_vector(id, vec.clone());
+                if let Err(e) = self.hnsw_container.insert(id, vec) {
+                    log::warn!("⚠️ Failed to insert into HNSW container: {}", e);
+                }
+            }
         }
 
         Ok(seq)
@@ -1125,8 +1226,8 @@ impl ConcurrentMemory {
         // Magic bytes (8 bytes)
         header[0..8].copy_from_slice(b"SUTRADAT");
 
-        // Version (4 bytes) - using version 2
-        header[8..12].copy_from_slice(&2u32.to_le_bytes());
+        // Version (4 bytes) - using version 3 (adds metadata section)
+        header[8..12].copy_from_slice(&3u32.to_le_bytes());
 
         // Counts (4 bytes each)
         header[12..16].copy_from_slice(&(concept_count as u32).to_le_bytes());
@@ -1213,6 +1314,29 @@ impl ConcurrentMemory {
                 for component in vector {
                     writer.write_all(&component.to_le_bytes())?;
                 }
+            }
+        }
+
+        // Write metadata section (attributes + semantic)
+        for concept in &all_concepts {
+            // Concept ID (16 bytes)
+            writer.write_all(&concept.id.0)?;
+
+            let attrs_bytes = serde_json::to_vec(&concept.attributes)?;
+            let attrs_len = attrs_bytes.len() as u32;
+            writer.write_all(&attrs_len.to_le_bytes())?;
+            if attrs_len > 0 {
+                writer.write_all(&attrs_bytes)?;
+            }
+
+            let semantic_bytes = match &concept.semantic {
+                Some(meta) => serde_json::to_vec(meta)?,
+                None => Vec::new(),
+            };
+            let semantic_len = semantic_bytes.len() as u32;
+            writer.write_all(&semantic_len.to_le_bytes())?;
+            if semantic_len > 0 {
+                writer.write_all(&semantic_bytes)?;
             }
         }
 

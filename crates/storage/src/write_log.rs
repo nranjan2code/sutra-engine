@@ -8,6 +8,7 @@
 /// - Bounded capacity with backpressure (drop old on overflow)
 /// - Batch drain for reconciliation
 /// - Zero-copy where possible
+use crate::semantic::SemanticMetadata;
 use crate::types::{AssociationRecord, ConceptId};
 use crossbeam::channel::{bounded, Receiver, Sender, TrySendError};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -28,6 +29,7 @@ pub enum WriteEntry {
         confidence: f32,
         timestamp: u64,
         attributes: std::collections::HashMap<String, String>,
+        semantic: Option<SemanticMetadata>,
     },
 
     /// Add an association between concepts
@@ -128,7 +130,7 @@ impl WriteLog {
         vector: Option<Vec<f32>>,
         strength: f32,
         confidence: f32,
-        attributes: std::collections::HashMap<String, String>, // Added
+        attributes: std::collections::HashMap<String, String>,
     ) -> Result<u64, WriteLogError> {
         let timestamp = current_timestamp_us();
 
@@ -140,6 +142,31 @@ impl WriteLog {
             confidence,
             timestamp,
             attributes,
+            semantic: None,
+        })
+    }
+
+    /// Append concept with semantic metadata (convenience)
+    pub fn append_concept_with_semantic(
+        &self,
+        id: ConceptId,
+        content: Vec<u8>,
+        vector: Option<Vec<f32>>,
+        strength: f32,
+        confidence: f32,
+        semantic: SemanticMetadata,
+    ) -> Result<u64, WriteLogError> {
+        let timestamp = current_timestamp_us();
+
+        self.append(WriteEntry::AddConcept {
+            id,
+            content: content.into_boxed_slice(),
+            vector: vector.map(|v| v.into_boxed_slice()),
+            strength,
+            confidence,
+            timestamp,
+            attributes: std::collections::HashMap::new(),
+            semantic: Some(semantic),
         })
     }
 

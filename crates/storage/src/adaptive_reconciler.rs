@@ -607,15 +607,28 @@ fn apply_entry(snapshot: &mut GraphSnapshot, entry: &WriteEntry) {
             confidence,
             timestamp,
             attributes,
+            semantic,
         } => {
-            let mut node = ConceptNode::new(
-                *id,
-                content.to_vec(),
-                vector.as_ref().map(|v| v.to_vec()),
-                *strength,
-                *confidence,
-                *timestamp,
-            );
+            let mut node = if let Some(semantic_meta) = semantic.clone() {
+                ConceptNode::with_semantic(
+                    *id,
+                    content.to_vec(),
+                    vector.as_ref().map(|v| v.to_vec()),
+                    *strength,
+                    *confidence,
+                    *timestamp,
+                    semantic_meta,
+                )
+            } else {
+                ConceptNode::new(
+                    *id,
+                    content.to_vec(),
+                    vector.as_ref().map(|v| v.to_vec()),
+                    *strength,
+                    *confidence,
+                    *timestamp,
+                )
+            };
             node.attributes = attributes.clone();
             snapshot.concepts.insert(*id, node);
         }

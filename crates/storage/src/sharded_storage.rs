@@ -126,7 +126,7 @@ impl ShardedStorage {
     }
 
     /// Get shard storage
-    fn get_shard(&self, concept_id: ConceptId) -> &Arc<ConcurrentMemory> {
+    pub(crate) fn get_shard(&self, concept_id: ConceptId) -> &Arc<ConcurrentMemory> {
         let shard_id = self.get_shard_id(concept_id);
         &self.shards[shard_id as usize]
     }
@@ -149,6 +149,22 @@ impl ShardedStorage {
         let shard = self.get_shard(id);
         shard
             .learn_concept(id, content, vector, strength, confidence, attributes)
+            .map_err(|e| anyhow::anyhow!("Shard write failed: {:?}", e))
+    }
+
+    /// Learn concept with semantic metadata (routed to correct shard)
+    pub fn learn_concept_with_semantic(
+        &self,
+        id: ConceptId,
+        content: Vec<u8>,
+        vector: Option<Vec<f32>>,
+        strength: f32,
+        confidence: f32,
+        semantic: crate::semantic::SemanticMetadata,
+    ) -> Result<u64> {
+        let shard = self.get_shard(id);
+        shard
+            .learn_concept_with_semantic(id, content, vector, strength, confidence, semantic)
             .map_err(|e| anyhow::anyhow!("Shard write failed: {:?}", e))
     }
 

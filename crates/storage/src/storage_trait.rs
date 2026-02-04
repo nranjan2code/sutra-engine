@@ -80,6 +80,19 @@ impl LearningStorage for crate::concurrent_memory::ConcurrentMemory {
             .map_err(|e| anyhow::anyhow!("WriteLog error: {:?}", e))
     }
 
+    fn learn_concept_with_semantic(
+        &self,
+        id: ConceptId,
+        content: Vec<u8>,
+        vector: Option<Vec<f32>>,
+        strength: f32,
+        confidence: f32,
+        semantic: SemanticMetadata,
+    ) -> Result<u64> {
+        self.learn_concept_with_semantic(id, content, vector, strength, confidence, semantic)
+            .map_err(|e| anyhow::anyhow!("WriteLog error: {:?}", e))
+    }
+
     fn vector_search(&self, vector: &[f32], k: usize, ef_search: usize) -> Vec<(ConceptId, f32)> {
         // Disambiguate call to inherent method to avoid recursion
         crate::concurrent_memory::ConcurrentMemory::vector_search(self, vector, k, ef_search)
@@ -108,6 +121,26 @@ impl LearningStorage for crate::sharded_storage::ShardedStorage {
         confidence: f32,
     ) -> Result<u64> {
         self.learn_association(source, target, assoc_type, confidence)
+    }
+
+    fn learn_concept_with_semantic(
+        &self,
+        id: ConceptId,
+        content: Vec<u8>,
+        vector: Option<Vec<f32>>,
+        strength: f32,
+        confidence: f32,
+        semantic: SemanticMetadata,
+    ) -> Result<u64> {
+        crate::sharded_storage::ShardedStorage::learn_concept_with_semantic(
+            self,
+            id,
+            content,
+            vector,
+            strength,
+            confidence,
+            semantic,
+        )
     }
 
     fn vector_search(&self, vector: &[f32], k: usize, _ef_search: usize) -> Vec<(ConceptId, f32)> {
