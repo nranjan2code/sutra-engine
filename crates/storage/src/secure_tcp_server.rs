@@ -51,6 +51,21 @@ impl SecureStorageServer {
 
     /// Start secure TCP server
     pub async fn serve(self: Arc<Self>, addr: SocketAddr) -> std::io::Result<()> {
+        self.serve_with_shutdown(addr, async {
+            let _ = signal::ctrl_c().await;
+        })
+        .await
+    }
+
+    /// Start secure TCP server with a custom shutdown signal (test-friendly)
+    pub async fn serve_with_shutdown<F>(
+        self: Arc<Self>,
+        addr: SocketAddr,
+        shutdown: F,
+    ) -> std::io::Result<()>
+    where
+        F: std::future::Future<Output = ()> + Send,
+    {
         let listener = TcpListener::bind(addr).await?;
 
         info!("🚀 Secure storage server listening on {}", addr);
@@ -65,8 +80,6 @@ impl SecureStorageServer {
             warn!("   ⚠️  TLS Encryption: DISABLED");
         }
 
-        // Graceful shutdown handler
-        let shutdown = signal::ctrl_c();
         tokio::pin!(shutdown);
 
         loop {

@@ -251,8 +251,14 @@ impl WriteAheadLog {
 
             // Read entry data
             let mut entry_buf = vec![0u8; len];
-            file.read_exact(&mut entry_buf)
-                .context("Failed to read entry data")?;
+            match file.read_exact(&mut entry_buf) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    // Truncated tail entry: stop gracefully
+                    break;
+                }
+                Err(e) => return Err(e).context("Failed to read entry data"),
+            }
 
             // Deserialize from MessagePack
             let entry: LogEntry =

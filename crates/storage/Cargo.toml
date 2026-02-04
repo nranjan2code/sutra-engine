@@ -63,6 +63,7 @@ rustls-pemfile = "1.0"             # PEM certificate parsing
 criterion = "0.5"                  # Benchmarking
 proptest = "1.4"                   # Property-based testing
 tempfile = "3.8"                   # Temporary directories for testing
+rcgen = "0.12"                     # Test certificates for TLS scenarios
 
 # TCP Server binary
 [[bin]]
