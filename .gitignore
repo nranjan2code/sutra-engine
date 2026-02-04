@@ -662,3 +662,7 @@ config.local.*
 *.7z
 *.dmg
 *.iso
+
+# Local debug and test artifacts
+debug_msgpack.py
+packages/sutra-storage/engine_test_v2/
