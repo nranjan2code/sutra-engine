@@ -1,6 +1,6 @@
 # Test Results
 
-## 2026-02-04 11:13:58 IST
+## 2026-02-04 11:16:52 IST
 
 **Command**
 ```bash
@@ -18,6 +18,7 @@ cargo test --workspace
 - TCP protocol end-to-end (MessagePack framing + LearnWithEmbedding + QueryConcept)
 - HMAC auth (plaintext) + TLS auth handshake
 - WAL truncation handling (partial entry recovery)
+- Storage format compatibility (v2 snapshot loads under v3 engine)
 - Configurable load test via env vars
 
 **Notes**
