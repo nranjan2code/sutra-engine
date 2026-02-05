@@ -59,6 +59,20 @@ If a client exceeds these limits, the engine will return a specialized `Error` r
 
 ---
 
+## 🤖 Autonomy Request Authorization
+
+When running in secure mode, autonomy-related requests are categorized as follows:
+
+| Category | Requests |
+|----------|----------|
+| **Read** | `ListSubscriptions`, `ListGoals`, `GetAutonomyStats` |
+| **Write** | `Subscribe`, `Unsubscribe`, `CreateGoal`, `ProvideFeedback` |
+| **Delete** | `CancelGoal` |
+
+Clients must have the appropriate claim level to perform these operations.
+
+---
+
 ## 🛡 Network Hardening
 
 1. **Private Network**: Always run Sutra in a private subnet.

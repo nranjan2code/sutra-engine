@@ -777,7 +777,14 @@ mod tests {
         for i in 0..100 {
             let id = ConceptId([i; 16]);
             write_log
-                .append_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
+                .append_concept(
+                    id,
+                    vec![i],
+                    None,
+                    1.0,
+                    0.9,
+                    std::collections::HashMap::new(),
+                )
                 .unwrap();
         }
 

@@ -59,7 +59,9 @@ Three crates in a Cargo workspace (resolver v2):
 
 **Vector persistence:** USearch HNSW with mmap for 94x faster startup vs in-memory rebuild.
 
-**Semantic types (9):** Entity, Event, Rule, Temporal, Negation, Condition, Causal, Quantitative, Definitional. Rules are configured in `semantics.toml`.
+**Semantic types (10):** Entity, Event, Rule, Temporal, Negation, Condition, Causal, Quantitative, Definitional, Goal. Rules are configured in `semantics.toml`.
+
+**Autonomy Engine:** 7 self-directed features running as background threads: knowledge decay, self-monitoring, background reasoning, goal system, subscriptions, gap detection, and feedback integration. All features interact with `ConcurrentMemory` exclusively through its public API. Controlled by the `SUTRA_AUTONOMY` env var (default `true`).
 
 **Protocol:** Custom TCP binary (not gRPC). Format: `[4 bytes u32 length][bincode payload]`. All data ingestion routes through the TCP `learn_concept()` path — never bypass this.
 
@@ -78,6 +80,14 @@ Three crates in a Cargo workspace (resolver v2):
 - `src/nl_parser.rs` — Natural language command parser ("Remember that...", "Search for...")
 - `src/auth.rs` — HMAC-SHA256 auth, TLS 1.3
 - `src/learning_pipeline.rs` — End-to-end concept learning orchestration
+- `src/autonomy/mod.rs` — Autonomy engine manager (decay, reasoning, goals, subscriptions, gap detection, feedback, self-monitoring)
+- `src/autonomy/decay.rs` — Exponential knowledge decay with reinforcement
+- `src/autonomy/reasoning.rs` — Background association discovery + contradiction detection
+- `src/autonomy/goals.rs` — Goal system with conditions/actions
+- `src/autonomy/subscriptions.rs` — Push notifications on concept changes
+- `src/autonomy/gap_detector.rs` — Isolated concept and near-miss detection
+- `src/autonomy/feedback.rs` — Accept/reject feedback to adjust strengths
+- `src/autonomy/self_monitor.rs` — Engine health stored as concepts
 
 ## Environment Variables
 
@@ -92,6 +102,7 @@ Three crates in a Cargo workspace (resolver v2):
 | `SUTRA_SECURE_MODE` | `false` | Enable TLS 1.3 + HMAC auth |
 | `RECONCILE_BASE_INTERVAL_MS` | `10` | Adaptive reconciler base interval |
 | `MEMORY_THRESHOLD` | `50000` | Write count before forced reconciliation |
+| `SUTRA_AUTONOMY` | `true` | Enable/disable the autonomy engine (decay, reasoning, goals, etc.) |
 
 ## Testing
 

@@ -35,6 +35,9 @@ pub enum SemanticType {
 
     /// Definitions and classifications (is a, type of, defined as)
     Definitional = 8,
+
+    /// Goals and objectives (track, achieve, monitor)
+    Goal = 9,
 }
 
 impl SemanticType {
@@ -49,6 +52,7 @@ impl SemanticType {
             6 => Some(Self::Causal),
             7 => Some(Self::Quantitative),
             8 => Some(Self::Definitional),
+            9 => Some(Self::Goal),
             _ => None,
         }
     }
@@ -64,6 +68,7 @@ impl SemanticType {
             Self::Causal => "causal",
             Self::Quantitative => "quantitative",
             Self::Definitional => "definitional",
+            Self::Goal => "goal",
         }
     }
 }

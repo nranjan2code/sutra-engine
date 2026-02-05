@@ -25,6 +25,7 @@ Outcome: the engine now runs as a focused, self‑contained service with explici
 - **Security**: HMAC authentication, TLS 1.3 support, role‑based access.
 - **Scalability**: sharded storage support and multi‑namespace isolation.
 - **Ops**: telemetry/health checks, config via env, recoverable startup.
+- **Autonomy Engine**: 7 self-directed background features — knowledge decay, self-monitoring, background reasoning, goal system, subscriptions, gap detection, and feedback integration. Controlled via `SUTRA_AUTONOMY` env var.
 
 ---
 

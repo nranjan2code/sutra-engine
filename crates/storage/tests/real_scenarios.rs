@@ -57,11 +57,7 @@ impl EmbeddingProvider for MockEmbeddingProvider {
     }
 }
 
-async fn wait_for_concept(
-    storage: &ConcurrentMemory,
-    id: &ConceptId,
-    should_exist: bool,
-) {
+async fn wait_for_concept(storage: &ConcurrentMemory, id: &ConceptId, should_exist: bool) {
     let timeout = std::time::Duration::from_secs(1);
     let start = std::time::Instant::now();
     loop {
@@ -99,7 +95,10 @@ async fn test_natural_language_semantic_pipeline() {
     options.analyze_semantics = true;
 
     let text = "High blood pressure causes cardiovascular disease.";
-    let concept_hex = pipeline.learn_concept(&storage, text, &options).await.unwrap();
+    let concept_hex = pipeline
+        .learn_concept(&storage, text, &options)
+        .await
+        .unwrap();
     let concept_id = ConceptId::from_string(&concept_hex);
 
     wait_for_concept(&storage, &concept_id, true).await;
@@ -128,7 +127,14 @@ async fn test_persistence_recovery_roundtrip() {
     attributes.insert("domain".to_string(), "finance".to_string());
 
     storage
-        .learn_concept(id, b"Inflation impacts pricing.".to_vec(), None, 1.0, 0.9, attributes)
+        .learn_concept(
+            id,
+            b"Inflation impacts pricing.".to_vec(),
+            None,
+            1.0,
+            0.9,
+            attributes,
+        )
         .unwrap();
 
     wait_for_concept(&storage, &id, true).await;
@@ -161,14 +167,7 @@ async fn test_concurrent_read_write_realistic() {
                 let id = ConceptId::from_string(&format!("nl-{}", i));
                 let content = format!("Scenario {}: market volatility rises.", i).into_bytes();
                 storage
-                    .learn_concept(
-                        id,
-                        content,
-                        None,
-                        1.0,
-                        0.9,
-                        HashMap::new(),
-                    )
+                    .learn_concept(id, content, None, 1.0, 0.9, HashMap::new())
                     .unwrap();
             }
         })

@@ -23,8 +23,9 @@ Unlike general LLMs, Sutra starts empty and learns from YOUR proprietary data wi
 **Key Capabilities:**
 - ✅ **Temporal Reasoning** (before/after/during relationships)
 - ✅ **Causal Understanding** (X causes Y, multi-hop chains, root cause analysis)
-- ✅ **Semantic Classification** (9 types: Entity, Event, Rule, Temporal, Negation, Condition, Causal, Quantitative, Definitional)
+- ✅ **Semantic Classification** (10 types: Entity, Event, Rule, Temporal, Negation, Condition, Causal, Quantitative, Definitional, Goal)
 - ✅ **Self-Monitoring** (monitors itself via Grid events - revolutionary "eat your own dogfood")
+- ✅ **Autonomy Engine** (7 self-directed features: knowledge decay, reasoning, goals, subscriptions, gap detection, feedback, self-monitoring)
 - ✅ **Complete Explainability** (MPPA reasoning paths with confidence scores)
 - ✅ **Real-Time Learning** (<10ms concept ingestion, no retraining)
 
@@ -96,6 +97,7 @@ cd desktop && ./scripts/build-macos.sh
 - Binary TCP protocol for low-latency communication
 - USearch HNSW vector indexing with persistent mmap (94x faster startup)
 - Cross-shard 2PC transactions, adaptive reconciliation
+- **Autonomy Engine** - 7 background features (decay, reasoning, goals, subscriptions, gap detection, feedback, self-monitoring) via `AutonomyManager`
 - **`text_search()` method** - Keyword-based search with stop word filtering (shared by Desktop & Enterprise)
 
 **Local AI Layer (Rust - Vendored):**
@@ -351,7 +353,7 @@ ShardSplit, ShardMerge
 - **Build script:** `./sutra-optimize.sh` (backend build orchestration, called by ./sutra)
 - **Version control:** `VERSION` (single source of truth, currently 3.3.0)
 - **Compose file:** `.sutra/compose/production.yml` (unified, profile-based)
-- **Storage engine:** `packages/sutra-storage/src/` (14K+ LOC Rust)
+- **Storage engine:** `packages/sutra-storage/src/` (14K+ LOC Rust, includes autonomy engine at `src/autonomy/`)
 - **Reasoning core:** `packages/sutra-core/sutra_core/` (42 Python modules)
 - **Storage adapter:** `packages/sutra-core/sutra_core/storage/tcp_adapter.py` (ONLY adapter - TCP binary protocol)
 

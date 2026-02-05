@@ -153,7 +153,12 @@ async fn test_tcp_learn_query_roundtrip() {
     };
 
     match response {
-        StorageResponse::QueryConceptOk { found, content, attributes, .. } => {
+        StorageResponse::QueryConceptOk {
+            found,
+            content,
+            attributes,
+            ..
+        } => {
             assert!(found);
             assert!(content.contains("Natural language systems"));
             assert_eq!(attributes.get("source").unwrap(), "tcp_test");

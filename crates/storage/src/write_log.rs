@@ -277,7 +277,14 @@ mod tests {
         let content = b"test concept".to_vec();
 
         let seq = log
-            .append_concept(id, content, None, 1.0, 0.9, std::collections::HashMap::new())
+            .append_concept(
+                id,
+                content,
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
         assert_eq!(seq, 0);
 
@@ -293,8 +300,15 @@ mod tests {
         // Write 10 entries
         for i in 0..10 {
             let id = ConceptId([i; 16]);
-            log.append_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
-                .unwrap();
+            log.append_concept(
+                id,
+                vec![i],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
+            .unwrap();
         }
 
         // Drain 5
@@ -319,7 +333,7 @@ mod tests {
                 0.9,
                 std::collections::HashMap::new(),
             )
-                .unwrap();
+            .unwrap();
         }
 
         let all = log.drain_all();
@@ -334,13 +348,34 @@ mod tests {
         let id = ConceptId([1; 16]);
 
         let seq1 = log
-            .append_concept(id, vec![1], None, 1.0, 0.9, std::collections::HashMap::new())
+            .append_concept(
+                id,
+                vec![1],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
         let seq2 = log
-            .append_concept(id, vec![2], None, 1.0, 0.9, std::collections::HashMap::new())
+            .append_concept(
+                id,
+                vec![2],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
         let seq3 = log
-            .append_concept(id, vec![3], None, 1.0, 0.9, std::collections::HashMap::new())
+            .append_concept(
+                id,
+                vec![3],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
 
         assert_eq!(seq1, 0);
@@ -390,7 +425,7 @@ mod tests {
                 0.9,
                 std::collections::HashMap::new(),
             )
-                .unwrap();
+            .unwrap();
         }
 
         let stats_before = log.stats();

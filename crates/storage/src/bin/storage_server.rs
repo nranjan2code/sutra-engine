@@ -15,7 +15,8 @@ use sutra_storage::auth::AuthManager;
 use sutra_storage::secure_tcp_server::SecureStorageServer;
 use sutra_storage::tcp_server::{ShardedStorageServer, StorageServer};
 use sutra_storage::{
-    AdaptiveReconcilerConfig, ConcurrentConfig, ConcurrentMemory, ShardConfig, ShardedStorage,
+    AdaptiveReconcilerConfig, AutonomyConfig, ConcurrentConfig, ConcurrentMemory, ShardConfig,
+    ShardedStorage,
 };
 use tracing::{error, info, warn};
 
@@ -70,6 +71,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse::<u32>()
         .unwrap_or(16);
 
+    // Autonomy engine configuration
+    let autonomy_enabled = env::var("SUTRA_AUTONOMY")
+        .unwrap_or_else(|_| "true".to_string())
+        .to_lowercase()
+        == "true";
+
+    let autonomy_config = if autonomy_enabled {
+        AutonomyConfig::default()
+    } else {
+        AutonomyConfig::disabled()
+    };
+
     info!("Configuration:");
     info!(
         "  Security mode: {}",
@@ -80,6 +93,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     );
     info!("  Storage mode: {}", storage_mode);
+    info!(
+        "  Autonomy engine: {}",
+        if autonomy_enabled {
+            "ENABLED"
+        } else {
+            "DISABLED"
+        }
+    );
     info!("  Storage path: {}", storage_path);
     info!("  Listen address: {}:{}", host, port);
     info!(
@@ -208,7 +229,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Create server (secure or insecure based on mode)
             if secure_mode {
                 // Wrap with secure server
-                let insecure_server = StorageServer::new(storage).await;
+                let insecure_server =
+                    StorageServer::new_with_autonomy(storage, autonomy_config).await;
                 let secure_server = SecureStorageServer::new(insecure_server, auth_manager)
                     .await
                     .map_err(|e| format!("Failed to create secure server: {}", e))?;
@@ -223,7 +245,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             } else {
                 // Use insecure server directly
-                let server = Arc::new(StorageServer::new(storage).await);
+                let server =
+                    Arc::new(StorageServer::new_with_autonomy(storage, autonomy_config).await);
 
                 info!(
                     "🚀 Starting SINGLE TCP server on {} (DEVELOPMENT MODE - NO SECURITY)",

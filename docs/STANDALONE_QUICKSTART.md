@@ -27,6 +27,7 @@ export STORAGE_PATH=./data
 export STORAGE_PORT=50051
 export VECTOR_DIMENSION=768
 export SUTRA_STORAGE_MODE=single
+export SUTRA_AUTONOMY=true          # Enable autonomy engine (default)
 ```
 
 ## 3. Minimal Client Check

@@ -43,6 +43,9 @@ mod sharded_storage;
 mod storage_trait;
 mod transaction; // 🔥 NEW: 2PC transaction coordinator for cross-shard atomicity
 
+// Autonomy engine
+pub mod autonomy;
+
 // Security and authentication
 pub mod auth;
 mod rate_limiter;
@@ -87,6 +90,9 @@ pub use storage_trait::LearningStorage;
 pub use transaction::{
     Transaction, TransactionCoordinator, TxnCoordinatorStats, TxnError, TxnOperation, TxnState,
 }; // 🔥 NEW
+
+// Autonomy exports
+pub use autonomy::{AutonomyConfig, AutonomyManager};
 
 /// Version of the storage format
 pub const STORAGE_VERSION: u32 = 3;

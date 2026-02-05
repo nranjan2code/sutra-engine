@@ -81,6 +81,24 @@ Now, all clients must provide a valid HMAC signature to interact with the engine
 
 ---
 
+## 🤖 Autonomy Engine
+
+Sutra includes a self-directed Autonomy Engine (enabled by default). Try these NL commands:
+
+```bash
+echo "status" | nc localhost 9000              # View autonomy stats
+echo "set goal: track new concepts" | nc localhost 9000  # Create a goal
+echo "list goals" | nc localhost 9000           # List all goals
+echo "subscribe to Rust" | nc localhost 9000    # Subscribe to matching concepts
+```
+
+To disable autonomy (e.g., for benchmarking):
+```bash
+export SUTRA_AUTONOMY=false
+```
+
+---
+
 ## 🚀 Next Steps
 - Explore the [**API Reference**](API_REFERENCE.md) for advanced queries.
-- Read the [**Operations Guide**](OPERATIONS.md) for scaling and backups.
+- Read the [**Operations Guide**](OPERATIONS.md) for scaling, autonomy tuning, and backups.

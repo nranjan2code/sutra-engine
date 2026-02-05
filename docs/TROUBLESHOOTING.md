@@ -52,6 +52,24 @@ chmod +w ./data
 
 ---
 
+## 🤖 Autonomy Issues
+
+### `Autonomy engine disabled` in logs
+**Cause**: `SUTRA_AUTONOMY` env var is set to `false`.
+**Fix**: Set `SUTRA_AUTONOMY=true` or remove the variable (defaults to enabled).
+
+### High CPU usage from background loops
+**Cause**: Autonomy background threads (decay, reasoning, gap detection) are running at default intervals on a large graph.
+**Fix**:
+- Disable features you don't need: set `SUTRA_AUTONOMY=false` to disable all, or configure individual features programmatically via `AutonomyConfig`.
+- Background reasoning and gap detection are the most CPU-intensive. Their intervals can be increased for large graphs.
+
+### `Goal triggered` log messages
+**Cause**: A goal's condition was met and its action was executed. This is normal behavior.
+**Info**: Check `echo "list goals" | nc localhost 9000` to see goal statuses.
+
+---
+
 ## 📝 Log Analysis
 
 Sutra uses the standard `tracing` crate. To see detailed debug logs:
@@ -64,6 +82,9 @@ export RUST_LOG=debug
 - `🆕 No existing storage found`: First run initialized properly.
 - `🔄 Replaying WAL`: Engine recovered from a previous shutdown.
 - `🚀 Adaptive reconciler started`: Background tasks are running.
+- `Starting autonomy engine...`: Autonomy background loops initializing.
+- `Autonomy engine started`: All enabled autonomy features are running.
+- `Reasoning cycle: N new associations, N contradictions, N strengthened`: Normal reasoning activity.
 - `❌ Serialization error`: Client-server protocol mismatch.
 
 ---

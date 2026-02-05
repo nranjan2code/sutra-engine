@@ -3,6 +3,7 @@
 //! Replaces gRPC server while maintaining distributed architecture.
 //! Runs as standalone service - API/Hybrid connect over network.
 
+use crate::autonomy::{AutonomyConfig, AutonomyManager};
 use crate::concurrent_memory::ConcurrentMemory;
 use crate::learning_pipeline::{LearnOptions, LearningPipeline};
 use crate::namespace_manager::NamespaceManager;
@@ -218,6 +219,40 @@ pub enum StorageRequest {
     },
     Flush,
     HealthCheck,
+    // Autonomy: Subscriptions
+    Subscribe {
+        filter: SemanticFilterMsg,
+        callback_addr: String,
+    },
+    Unsubscribe {
+        subscription_id: String,
+    },
+    ListSubscriptions,
+    // Autonomy: Goals
+    CreateGoal {
+        namespace: Option<String>,
+        description: String,
+        condition: String,
+        action: String,
+        priority: u8,
+    },
+    ListGoals {
+        namespace: Option<String>,
+    },
+    CancelGoal {
+        namespace: Option<String>,
+        goal_id: String,
+    },
+    // Autonomy: Feedback
+    ProvideFeedback {
+        namespace: Option<String>,
+        query_id: String,
+        result_concept_ids: Vec<String>,
+        accepted: Vec<bool>,
+        ranking: Option<Vec<u32>>,
+    },
+    // Autonomy: Stats
+    GetAutonomyStats,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -314,9 +349,47 @@ pub enum StorageResponse {
         status: String,
         uptime_seconds: u64,
     },
+    // Autonomy responses
+    SubscribeOk {
+        subscription_id: String,
+    },
+    UnsubscribeOk,
+    ListSubscriptionsOk {
+        subscriptions: Vec<SubscriptionInfoMsg>,
+    },
+    CreateGoalOk {
+        goal_id: String,
+    },
+    ListGoalsOk {
+        goals: Vec<GoalSummaryMsg>,
+    },
+    CancelGoalOk,
+    ProvideFeedbackOk {
+        adjustments: usize,
+    },
+    AutonomyStatsOk {
+        stats: String,
+    },
     Error {
         message: String,
     },
+}
+
+/// Subscription info for protocol messages
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscriptionInfoMsg {
+    pub id: String,
+    pub filter: SemanticFilterMsg,
+    pub callback_addr: String,
+}
+
+/// Goal summary for protocol messages
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoalSummaryMsg {
+    pub goal_id: String,
+    pub description: String,
+    pub status: String,
+    pub priority: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -332,11 +405,20 @@ pub struct StorageServer {
     namespaces: Arc<NamespaceManager>,
     start_time: std::time::Instant,
     pipeline: LearningPipeline,
+    autonomy: Arc<parking_lot::RwLock<AutonomyManager>>,
 }
 
 impl StorageServer {
     /// Create new storage server
     pub async fn new(storage: ConcurrentMemory) -> Self {
+        Self::new_with_autonomy(storage, AutonomyConfig::default()).await
+    }
+
+    /// Create new storage server with autonomy configuration
+    pub async fn new_with_autonomy(
+        storage: ConcurrentMemory,
+        autonomy_config: AutonomyConfig,
+    ) -> Self {
         let config = storage.config().clone();
         let base_path = config
             .storage_path
@@ -348,17 +430,22 @@ impl StorageServer {
         let manager = NamespaceManager::new(base_path, config.clone())
             .expect("Failed to init namespace manager");
 
+        let storage = Arc::new(storage);
         // Wrap existing storage into "default" namespace
-        manager.add_namespace("default", Arc::new(storage));
+        manager.add_namespace("default", Arc::clone(&storage));
 
         let pipeline = LearningPipeline::new()
             .await
             .expect("Failed to init learning pipeline");
 
+        let mut autonomy_manager = AutonomyManager::new(autonomy_config, Arc::clone(&storage));
+        autonomy_manager.start();
+
         Self {
             namespaces: Arc::new(manager),
             start_time: std::time::Instant::now(),
             pipeline,
+            autonomy: Arc::new(parking_lot::RwLock::new(autonomy_manager)),
         }
     }
 
@@ -374,12 +461,18 @@ impl StorageServer {
         let manager = NamespaceManager::new(base_path, config.clone())
             .expect("Failed to init namespace manager");
 
-        manager.add_namespace("default", Arc::new(storage));
+        let storage = Arc::new(storage);
+        manager.add_namespace("default", Arc::clone(&storage));
+
+        let mut autonomy_manager =
+            AutonomyManager::new(AutonomyConfig::disabled(), Arc::clone(&storage));
+        autonomy_manager.start();
 
         Self {
             namespaces: Arc::new(manager),
             start_time: std::time::Instant::now(),
             pipeline,
+            autonomy: Arc::new(parking_lot::RwLock::new(autonomy_manager)),
         }
     }
 
@@ -442,11 +535,7 @@ impl StorageServer {
     }
 
     /// Handle single client connection
-    async fn handle_client(
-        &self,
-        stream: TcpStream,
-        peer_addr: SocketAddr,
-    ) -> std::io::Result<()> {
+    async fn handle_client(&self, stream: TcpStream, peer_addr: SocketAddr) -> std::io::Result<()> {
         eprintln!("Client connected: {}", peer_addr);
 
         // Configure for low latency and better throughput
@@ -464,11 +553,11 @@ impl StorageServer {
             let start_byte = match reader.fill_buf().await {
                 Ok(buf) => {
                     if buf.is_empty() {
-                         // Client disconnected
-                         if request_count > 0 {
-                             eprintln!("Client {} disconnected", peer_addr);
-                         }
-                         break;
+                        // Client disconnected
+                        if request_count > 0 {
+                            eprintln!("Client {} disconnected", peer_addr);
+                        }
+                        break;
                     }
                     buf[0]
                 }
@@ -479,8 +568,8 @@ impl StorageServer {
                 // BINARY PROTOCOL (Length Prefixed)
                 // First byte is 0, so likely a u32 length < 16MB (00 xx xx xx)
                 let len = match reader.read_u32().await {
-                   Ok(l) => l,
-                   Err(_) => break,
+                    Ok(l) => l,
+                    Err(_) => break,
                 };
 
                 if len as usize > MAX_MESSAGE_SIZE {
@@ -500,18 +589,17 @@ impl StorageServer {
                 let request: StorageRequest = match rmp_serde::from_slice(&buf) {
                     Ok(req) => req,
                     Err(e) => {
-                         eprintln!("Deserialization error: {}", e);
-                         continue;
+                        eprintln!("Deserialization error: {}", e);
+                        continue;
                     }
                 };
 
                 let response = self.handle_request(request).await;
-                
+
                 let response_bytes = rmp_serde::to_vec_named(&response).unwrap();
                 reader.write_u32(response_bytes.len() as u32).await?;
                 reader.write_all(&response_bytes).await?;
                 reader.flush().await?;
-
             } else {
                 // TEXT PROTOCOL (Natural Language)
                 // First byte is NOT 0, assume it is ASCII text command
@@ -524,9 +612,10 @@ impl StorageServer {
                             info!("🗣️ NL Command: '{}'", line);
                             if let Some(req) = NlParser::parse(line) {
                                 let response = self.handle_request(req).await;
-                                
+
                                 // Serialize response as JSON/Text for the human
-                                let json = serde_json::to_string_pretty(&response).unwrap_or_default();
+                                let json =
+                                    serde_json::to_string_pretty(&response).unwrap_or_default();
                                 reader.write_all(json.as_bytes()).await?;
                                 reader.write_all(b"\n").await?;
                                 reader.flush().await?;
@@ -539,7 +628,7 @@ impl StorageServer {
                     Err(e) => return Err(e),
                 }
             }
-            
+
             request_count += 1;
         }
 
@@ -971,6 +1060,125 @@ impl StorageServer {
                     Err(e) => StorageResponse::Error {
                         message: format!("TextSearch failed: {}", e),
                     },
+                }
+            }
+
+            // Autonomy: Subscriptions
+            StorageRequest::Subscribe {
+                filter,
+                callback_addr,
+            } => {
+                let autonomy = self.autonomy.read();
+                let sub_id = autonomy
+                    .subscription_manager()
+                    .subscribe(filter, callback_addr);
+                StorageResponse::SubscribeOk {
+                    subscription_id: sub_id,
+                }
+            }
+
+            StorageRequest::Unsubscribe { subscription_id } => {
+                let autonomy = self.autonomy.read();
+                if autonomy
+                    .subscription_manager()
+                    .unsubscribe(&subscription_id)
+                {
+                    StorageResponse::UnsubscribeOk
+                } else {
+                    StorageResponse::Error {
+                        message: format!("Subscription not found: {}", subscription_id),
+                    }
+                }
+            }
+
+            StorageRequest::ListSubscriptions => {
+                let autonomy = self.autonomy.read();
+                let subs = autonomy.subscription_manager().list();
+                StorageResponse::ListSubscriptionsOk {
+                    subscriptions: subs
+                        .into_iter()
+                        .map(|s| SubscriptionInfoMsg {
+                            id: s.id,
+                            filter: s.filter,
+                            callback_addr: s.callback_addr,
+                        })
+                        .collect(),
+                }
+            }
+
+            // Autonomy: Goals
+            StorageRequest::CreateGoal {
+                namespace,
+                description,
+                condition,
+                action,
+                priority,
+            } => {
+                let autonomy = self.autonomy.read();
+                match crate::autonomy::goals::create_goal(
+                    autonomy.storage(),
+                    namespace.as_deref(),
+                    &description,
+                    &condition,
+                    &action,
+                    priority,
+                ) {
+                    Ok(goal_id) => StorageResponse::CreateGoalOk { goal_id },
+                    Err(e) => StorageResponse::Error { message: e },
+                }
+            }
+
+            StorageRequest::ListGoals { namespace } => {
+                let autonomy = self.autonomy.read();
+                let goals =
+                    crate::autonomy::goals::list_goals(autonomy.storage(), namespace.as_deref());
+                StorageResponse::ListGoalsOk {
+                    goals: goals
+                        .into_iter()
+                        .map(|g| GoalSummaryMsg {
+                            goal_id: g.goal_id,
+                            description: g.description,
+                            status: g.status,
+                            priority: g.priority,
+                        })
+                        .collect(),
+                }
+            }
+
+            StorageRequest::CancelGoal {
+                namespace: _,
+                goal_id,
+            } => {
+                let autonomy = self.autonomy.read();
+                match crate::autonomy::goals::cancel_goal(autonomy.storage(), &goal_id) {
+                    Ok(()) => StorageResponse::CancelGoalOk,
+                    Err(e) => StorageResponse::Error { message: e },
+                }
+            }
+
+            // Autonomy: Feedback
+            StorageRequest::ProvideFeedback {
+                namespace: _,
+                query_id: _,
+                result_concept_ids,
+                accepted,
+                ranking,
+            } => {
+                let autonomy = self.autonomy.read();
+                let adjustments = autonomy.feedback_processor().process(
+                    autonomy.storage(),
+                    &result_concept_ids,
+                    &accepted,
+                    ranking.as_deref(),
+                );
+                StorageResponse::ProvideFeedbackOk { adjustments }
+            }
+
+            // Autonomy: Stats
+            StorageRequest::GetAutonomyStats => {
+                let autonomy = self.autonomy.read();
+                StorageResponse::AutonomyStatsOk {
+                    stats: autonomy.stats(),
                 }
             }
         }
@@ -1661,6 +1869,20 @@ impl ShardedStorageServer {
                         results: results.into_iter().map(|(id, score)| (id.to_hex(), score)).collect()
                     },
                     Err(e) => StorageResponse::Error { message: format!("Sharded TextSearch failed: {}", e) },
+                }
+            }
+
+            // Autonomy features not supported in sharded mode
+            StorageRequest::Subscribe { .. }
+            | StorageRequest::Unsubscribe { .. }
+            | StorageRequest::ListSubscriptions
+            | StorageRequest::CreateGoal { .. }
+            | StorageRequest::ListGoals { .. }
+            | StorageRequest::CancelGoal { .. }
+            | StorageRequest::ProvideFeedback { .. }
+            | StorageRequest::GetAutonomyStats => {
+                StorageResponse::Error {
+                    message: "Autonomy features not yet implemented for sharded storage. Use single-shard mode.".to_string(),
                 }
             }
         }

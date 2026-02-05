@@ -25,6 +25,7 @@ Sutra Storage is a custom storage engine built specifically for temporal, contin
 - **🌐 Distributed**: TCP binary protocol (10-50× lower latency than gRPC) + Text Protocol.
 - **🏢 Multi-Tenant**: Native support for namespaces/independent collections.
 - **⚙️ Dynamic Config**: Hot-reloadable semantic rules via `semantics.toml`.
+- **🤖 Autonomy Engine**: 7 self-directed background features — knowledge decay, self-monitoring, reasoning, goals, subscriptions, gap detection, and feedback.
 
 ### Architecture at a Glance
 
@@ -181,13 +182,26 @@ MessagePack binary format for durability:
 | `semantic_extractor.rs` | - | NLP-based association extraction |
 | `learning_pipeline.rs` | - | Orchestrates embedding + extraction + storage |
 
+### Autonomy Engine (8 modules)
+
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `autonomy/mod.rs` | 260+ | AutonomyManager, AutonomyConfig, lifecycle management |
+| `autonomy/decay.rs` | 150+ | Exponential strength decay with access-count reinforcement |
+| `autonomy/self_monitor.rs` | 160+ | Health stats stored as concepts, bounded history |
+| `autonomy/reasoning.rs` | 240+ | Association discovery, contradiction detection, strengthening |
+| `autonomy/goals.rs` | 430+ | Goal system with conditions/actions, background evaluator |
+| `autonomy/subscriptions.rs` | 300+ | Push notifications on concept changes, filter matching |
+| `autonomy/gap_detector.rs` | 250+ | Isolated concepts, near-misses, incomplete causal chains |
+| `autonomy/feedback.rs` | 150+ | Accept/reject feedback to adjust strengths |
+
 ### Network (1 module)
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
 | `tcp_server.rs` | 400+ | Dual-Protocol Server (Binary + Text) |
 
-**Total**: 36 modules, 18,000+ LOC
+**Total**: 44 modules, 20,000+ LOC
 
 **Recent Cleanup (2025-11-05)**:
 - ✅ Removed deprecated `reconciler.rs` (replaced by `adaptive_reconciler.rs`)
@@ -534,6 +548,10 @@ nc localhost 9000
 - `Search for <query>` / `Find <query>`: Semantic search.
   - Example: `Search for sky color`
 - `ls` / `list`: List recent memories.
+- `status` / `engine status`: Get autonomy engine stats.
+- `set goal: <description>`: Create a new goal.
+- `list goals` / `goals`: List all goals.
+- `subscribe to <term>` / `watch for <term>`: Subscribe to concept changes.
 
 ---
 
@@ -561,6 +579,7 @@ nc localhost 9000
 | `SUTRA_STORAGE_MODE` | `single` | `single` or `sharded` |
 | `SUTRA_NUM_SHARDS` | `4` | Number of shards (4-16 recommended) |
 | `RUST_LOG` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
+| `SUTRA_AUTONOMY` | `true` | Enable/disable the autonomy engine |
 
 ---
 

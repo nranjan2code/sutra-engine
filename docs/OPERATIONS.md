@@ -58,6 +58,49 @@ In sharded mode, concepts are distributed across independent shards using consis
 
 ---
 
+## 🤖 Autonomy Engine
+
+Sutra includes a self-directed **Autonomy Engine** with 7 background features. It is enabled by default and controlled via the `SUTRA_AUTONOMY` environment variable.
+
+```bash
+# Disable autonomy (e.g. for benchmarking)
+export SUTRA_AUTONOMY=false
+
+# Enable (default)
+export SUTRA_AUTONOMY=true
+```
+
+### Features
+
+| Feature | Default Interval | Tuning Notes |
+|---------|-----------------|--------------|
+| Knowledge Decay | 5s | Adjusts concept strengths based on access patterns. Prunes concepts below 0.01 strength. |
+| Self-Monitoring | 10s | Stores health snapshots as concepts. Keeps last 1000 snapshots. |
+| Background Reasoning | 10s | Discovers associations, detects contradictions. Samples 20 concepts per cycle. |
+| Goal Evaluator | 5s | Evaluates goal conditions and triggers actions. |
+| Subscriptions | 500ms | Polls ReadView for changes. Push notifications via TCP or log-only. |
+| Gap Detector | 30s | Finds isolated concepts and near-miss pairs. |
+| Feedback | Synchronous | Processes accept/reject signals from the `ProvideFeedback` API. |
+
+### Monitoring Autonomy
+
+Use `GetAutonomyStats` (or `echo "status" | nc localhost 9000`) to view:
+- Active subscriptions and goals count
+- Per-feature enabled/disabled status
+- Concept/edge/vector counts
+- Reconciler health and pending writes
+
+### NL Commands
+
+```bash
+echo "status" | nc localhost 9000              # Autonomy stats
+echo "set goal: track new concepts" | nc localhost 9000  # Create a goal
+echo "list goals" | nc localhost 9000           # List goals
+echo "subscribe to Rust" | nc localhost 9000    # Subscribe to filter
+```
+
+---
+
 ## 🖥 Monitoring
 
 Use the `GetStats` request to monitor engine health.

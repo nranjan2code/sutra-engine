@@ -224,13 +224,8 @@ async fn test_tls_auth_handshake() {
         .generate_token("tls-client", vec![Role::Reader])
         .unwrap();
 
-    let (addr, shutdown_tx, handle, _temp_dir) = start_secure_server(
-        Some(auth),
-        true,
-        cert_path.to_str(),
-        key_path.to_str(),
-    )
-    .await;
+    let (addr, shutdown_tx, handle, _temp_dir) =
+        start_secure_server(Some(auth), true, cert_path.to_str(), key_path.to_str()).await;
 
     // Build rustls client config trusting the generated cert
     let cert_der = cert.serialize_der().unwrap();

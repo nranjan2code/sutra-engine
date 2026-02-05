@@ -24,6 +24,7 @@ It is built in Rust to provide elite-level performance, supporting over **50,000
 - 🛡️ **Production Ready**: Native TLS 1.3, HMAC-SHA256 authentication, and rate limiting.
 - 📈 **Horizontal Scaling**: Support for consistent-hashing sharding beyond 10M+ concepts.
 - 💾 **Durability**: Write-Ahead Logging (WAL) and mmap-backed persistence for crash recovery.
+- 🤖 **Autonomy Engine**: Self-directed background loops for knowledge decay, reasoning, goal evaluation, gap detection, subscriptions, and feedback integration.
 
 ---
 
@@ -62,6 +63,9 @@ Start at the index for the full map:
 - [**Standalone Quickstart**](docs/STANDALONE_QUICKSTART.md): Minimal run path.
 - [**Getting Started**](docs/GETTING_STARTED.md): Installation and basic workflow.
 - [**Project Architecture**](docs/ARCHITECTURE.md): Dual‑plane design and core layout.
+
+### 🤖 Autonomy
+- [**Autonomy Engine**](docs/ARCHITECTURE.md#autonomy-engine): Self-directed reasoning, decay, goals, subscriptions, gap detection, and feedback.
 
 ### 🛠 Developers
 - [**API Reference**](docs/API_REFERENCE.md): Full TCP + MessagePack protocol spec.

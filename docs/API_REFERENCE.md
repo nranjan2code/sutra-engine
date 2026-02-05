@@ -111,6 +111,101 @@ Get engine health and performance metrics.
 ### 7. `Flush` & `HealthCheck`
 Unit variants sent as simple strings: `"Flush"` and `"HealthCheck"`.
 
+### 8. `Subscribe`
+Subscribe to push notifications when concepts matching a filter are created.
+
+**Payload:**
+```json
+{
+  "Subscribe": {
+    "filter": {
+      "semantic_type": "Option<String>",
+      "temporal_after": "Option<i64>",
+      "temporal_before": "Option<i64>",
+      "has_causal_relation": "Boolean",
+      "min_confidence": "Float",
+      "required_terms": ["String"]
+    },
+    "callback_addr": "String (host:port or empty for log-only)"
+  }
+}
+```
+
+### 9. `Unsubscribe`
+Remove a subscription by ID.
+
+**Payload:**
+```json
+{
+  "Unsubscribe": {
+    "subscription_id": "String"
+  }
+}
+```
+
+### 10. `ListSubscriptions`
+List all active subscriptions. Unit variant: `"ListSubscriptions"`.
+
+### 11. `CreateGoal`
+Create a goal with a condition and action.
+
+**Payload:**
+```json
+{
+  "CreateGoal": {
+    "namespace": "Option<String>",
+    "description": "String",
+    "condition": "String (e.g. 'count above 100', 'associations above 50', or content match)",
+    "action": "String (e.g. 'notify: message', 'learn: content')",
+    "priority": "Integer (0-255)"
+  }
+}
+```
+
+### 12. `ListGoals`
+List all goals, optionally filtered by namespace.
+
+**Payload:**
+```json
+{
+  "ListGoals": {
+    "namespace": "Option<String>"
+  }
+}
+```
+
+### 13. `CancelGoal`
+Cancel (delete) a goal by ID.
+
+**Payload:**
+```json
+{
+  "CancelGoal": {
+    "namespace": "Option<String>",
+    "goal_id": "String"
+  }
+}
+```
+
+### 14. `ProvideFeedback`
+Submit accept/reject feedback for search results to adjust concept strengths.
+
+**Payload:**
+```json
+{
+  "ProvideFeedback": {
+    "namespace": "Option<String>",
+    "query_id": "String",
+    "result_concept_ids": ["String (Hex)"],
+    "accepted": ["Boolean"],
+    "ranking": "Option<[Integer]>"
+  }
+}
+```
+
+### 15. `GetAutonomyStats`
+Get autonomy engine status and statistics. Unit variant: `"GetAutonomyStats"`.
+
 ---
 
 ## 📤 Storage Responses
@@ -142,6 +237,74 @@ Unit variants sent as simple strings: `"Flush"` and `"HealthCheck"`.
 "FlushOk" or { "FlushOk": true }
 ```
 
+### 4. `SubscribeOk`
+```json
+{
+  "SubscribeOk": {
+    "subscription_id": "String"
+  }
+}
+```
+
+### 5. `UnsubscribeOk`
+```json
+"UnsubscribeOk"
+```
+
+### 6. `ListSubscriptionsOk`
+```json
+{
+  "ListSubscriptionsOk": {
+    "subscriptions": [
+      { "id": "String", "filter": { ... }, "callback_addr": "String" }
+    ]
+  }
+}
+```
+
+### 7. `CreateGoalOk`
+```json
+{
+  "CreateGoalOk": {
+    "goal_id": "String (Hex)"
+  }
+}
+```
+
+### 8. `ListGoalsOk`
+```json
+{
+  "ListGoalsOk": {
+    "goals": [
+      { "goal_id": "String", "description": "String", "status": "String", "priority": "Integer" }
+    ]
+  }
+}
+```
+
+### 9. `CancelGoalOk`
+```json
+"CancelGoalOk"
+```
+
+### 10. `ProvideFeedbackOk`
+```json
+{
+  "ProvideFeedbackOk": {
+    "adjustments": "Integer"
+  }
+}
+```
+
+### 11. `AutonomyStatsOk`
+```json
+{
+  "AutonomyStatsOk": {
+    "stats": "String (JSON)"
+  }
+}
+```
+
 ---
 
 ## ⚙️ Standard Object Types
@@ -151,3 +314,16 @@ A 32-character Hex string (e.g., `dcbf7561e84be97e383322b99bb343e2`), representi
 
 ### `SimilarityScore`
 A floating point value between `0.0` and `1.0`. Higher is more similar.
+
+---
+
+## 🗣️ Natural Language Commands (Autonomy)
+
+The following NL commands are available when autonomy is enabled:
+
+| Command | Example | Maps To |
+|---------|---------|---------|
+| `status` / `engine status` | `echo "status" \| nc localhost 9000` | `GetAutonomyStats` |
+| `set goal: <desc>` / `goal: <desc>` | `echo "set goal: track new concepts" \| nc localhost 9000` | `CreateGoal` |
+| `list goals` / `goals` | `echo "list goals" \| nc localhost 9000` | `ListGoals` |
+| `subscribe to <term>` / `watch for <term>` | `echo "subscribe to Rust" \| nc localhost 9000` | `Subscribe` |

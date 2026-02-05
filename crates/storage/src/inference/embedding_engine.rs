@@ -29,7 +29,7 @@ impl LocalEmbeddingEngine {
         let device = Device::new_metal(0)
             .or_else(|_| Device::new_cuda(0))
             .unwrap_or(Device::Cpu);
-        
+
         info!("Using device: {:?}", device);
 
         // Download model from HF Hub
@@ -40,8 +40,12 @@ impl LocalEmbeddingEngine {
         ));
 
         let config_filename = repo.get("config.json").context("Failed to get config")?;
-        let tokenizer_filename = repo.get("tokenizer.json").context("Failed to get tokenizer")?;
-        let weights_filename = repo.get("model.safetensors").context("Failed to get weights")?;
+        let tokenizer_filename = repo
+            .get("tokenizer.json")
+            .context("Failed to get tokenizer")?;
+        let weights_filename = repo
+            .get("model.safetensors")
+            .context("Failed to get weights")?;
 
         // Load config
         let config_str = std::fs::read_to_string(config_filename)?;
@@ -53,7 +57,11 @@ impl LocalEmbeddingEngine {
 
         // Load weights
         let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[weights_filename], ::candle_core::DType::F32, &device)?
+            VarBuilder::from_mmaped_safetensors(
+                &[weights_filename],
+                ::candle_core::DType::F32,
+                &device,
+            )?
         };
 
         // Build model
@@ -76,7 +84,7 @@ impl LocalEmbeddingEngine {
         let tokens = tokenizer
             .encode(text, true)
             .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
-        
+
         let token_ids = Tensor::new(tokens.get_ids(), device)?.unsqueeze(0)?;
         let token_type_ids = Tensor::new(tokens.get_type_ids(), device)?.unsqueeze(0)?;
 
@@ -88,7 +96,7 @@ impl LocalEmbeddingEngine {
         let (_b_size, _, _hidden_size) = embeddings.dims3()?;
         let mean_pool = embeddings.mean(1)?;
         let vector = mean_pool.flatten_all()?;
-        
+
         Ok(vector.to_vec1()?)
     }
 }
@@ -101,9 +109,7 @@ impl EmbeddingProvider for LocalEmbeddingEngine {
         let engine = self.clone(); // Clone Arc/handles
         let text = text.to_string();
 
-        let vector = tokio::task::spawn_blocking(move || {
-            engine.run_inference(&text)
-        }).await??;
+        let vector = tokio::task::spawn_blocking(move || engine.run_inference(&text)).await??;
 
         if normalize {
             let norm: f32 = vector.iter().map(|x| x * x).sum::<f32>().sqrt();
@@ -119,7 +125,7 @@ impl EmbeddingProvider for LocalEmbeddingEngine {
         // TODO: Implement true batching in Candle for performance
         // For now, simple loop is okay for MVP
         let mut results = Vec::with_capacity(texts.len());
-        
+
         for text in texts {
             match self.generate(text, normalize).await {
                 Ok(vec) => results.push(Some(vec)),
@@ -129,7 +135,7 @@ impl EmbeddingProvider for LocalEmbeddingEngine {
                 }
             }
         }
-        
+
         results
     }
 }

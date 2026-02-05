@@ -133,13 +133,7 @@ impl LearningStorage for crate::sharded_storage::ShardedStorage {
         semantic: SemanticMetadata,
     ) -> Result<u64> {
         crate::sharded_storage::ShardedStorage::learn_concept_with_semantic(
-            self,
-            id,
-            content,
-            vector,
-            strength,
-            confidence,
-            semantic,
+            self, id, content, vector, strength, confidence, semantic,
         )
     }
 

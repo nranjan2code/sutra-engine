@@ -22,11 +22,17 @@ fn embed(text: &str, dim: usize) -> Vec<f32> {
 }
 
 fn env_usize(key: &str, default: usize) -> usize {
-    std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(key)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 fn env_u64(key: &str, default: u64) -> u64 {
-    std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(key)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -113,7 +119,7 @@ async fn soak_multi_hour_stability() {
     // handles is already consumed by the loop above, so we don't drop it.
     drop(analyzer);
     drop(counter);
-    
+
     // Attempt to unwrap. If this fails, it means there are lingering references (which is a bug in the test cleanup)
     if let Ok(storage_inner) = Arc::try_unwrap(storage) {
         storage_inner.shutdown();

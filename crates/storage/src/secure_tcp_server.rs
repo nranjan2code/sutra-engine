@@ -300,11 +300,20 @@ impl SecureStorageServer {
             | StorageRequest::TextSearch { .. }
             | StorageRequest::ListRecent { .. }
             | StorageRequest::GetStats { .. }
-            | StorageRequest::HealthCheck => "read",
+            | StorageRequest::HealthCheck
+            | StorageRequest::ListSubscriptions
+            | StorageRequest::ListGoals { .. }
+            | StorageRequest::GetAutonomyStats => "read",
 
             StorageRequest::DeleteConcept { .. }
             | StorageRequest::ClearCollection { .. }
-            | StorageRequest::Flush => "delete",
+            | StorageRequest::Flush
+            | StorageRequest::CancelGoal { .. } => "delete",
+
+            StorageRequest::Subscribe { .. }
+            | StorageRequest::Unsubscribe { .. }
+            | StorageRequest::CreateGoal { .. }
+            | StorageRequest::ProvideFeedback { .. } => "write",
         };
 
         if !claims.can_perform(operation) {

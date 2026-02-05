@@ -1457,10 +1457,24 @@ mod tests {
 
         // Learn concepts
         memory
-            .learn_concept(id1, vec![1], None, 1.0, 0.9, std::collections::HashMap::new())
+            .learn_concept(
+                id1,
+                vec![1],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
         memory
-            .learn_concept(id2, vec![2], None, 1.0, 0.9, std::collections::HashMap::new())
+            .learn_concept(
+                id2,
+                vec![2],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
 
         // Learn association
@@ -1502,13 +1516,34 @@ mod tests {
 
         // Build chain: 1 -> 2 -> 3
         memory
-            .learn_concept(id1, vec![1], None, 1.0, 0.9, std::collections::HashMap::new())
+            .learn_concept(
+                id1,
+                vec![1],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
         memory
-            .learn_concept(id2, vec![2], None, 1.0, 0.9, std::collections::HashMap::new())
+            .learn_concept(
+                id2,
+                vec![2],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
         memory
-            .learn_concept(id3, vec![3], None, 1.0, 0.9, std::collections::HashMap::new())
+            .learn_concept(
+                id3,
+                vec![3],
+                None,
+                1.0,
+                0.9,
+                std::collections::HashMap::new(),
+            )
             .unwrap();
 
         memory
@@ -1606,7 +1641,14 @@ mod tests {
             for i in 0..100 {
                 let id = ConceptId([i; 16]);
                 memory_writer
-                    .learn_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
+                    .learn_concept(
+                        id,
+                        vec![i],
+                        None,
+                        1.0,
+                        0.9,
+                        std::collections::HashMap::new(),
+                    )
                     .ok();
                 thread::sleep(Duration::from_millis(1));
             }
@@ -1653,7 +1695,14 @@ mod tests {
         for i in 0..10 {
             let id = ConceptId([i; 16]);
             memory
-                .learn_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
+                .learn_concept(
+                    id,
+                    vec![i],
+                    None,
+                    1.0,
+                    0.9,
+                    std::collections::HashMap::new(),
+                )
                 .unwrap();
         }
 
@@ -1790,7 +1839,14 @@ mod tests {
         for i in 0..10 {
             let id = ConceptId([i; 16]);
             memory
-                .learn_concept(id, vec![i], None, 1.0, 0.9, std::collections::HashMap::new())
+                .learn_concept(
+                    id,
+                    vec![i],
+                    None,
+                    1.0,
+                    0.9,
+                    std::collections::HashMap::new(),
+                )
                 .unwrap();
         }
 
