@@ -58,9 +58,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(50000);
 
     let vector_dimension = env::var("VECTOR_DIMENSION")
-        .unwrap_or_else(|_| "768".to_string())
+        .unwrap_or_else(|_| "384".to_string())
         .parse::<usize>()
-        .unwrap_or(768);
+        .unwrap_or(384);
 
     // Sharding configuration
     let storage_mode = env::var("SUTRA_STORAGE_MODE").unwrap_or_else(|_| "single".to_string());

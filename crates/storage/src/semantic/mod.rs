@@ -1,4 +1,5 @@
 pub mod analyzer;
+pub mod config;
 pub mod pathfinding;
 pub mod query;
 /// Semantic Understanding Module

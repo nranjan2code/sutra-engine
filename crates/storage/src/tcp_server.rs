@@ -6,13 +6,15 @@
 use crate::concurrent_memory::ConcurrentMemory;
 use crate::learning_pipeline::{LearnOptions, LearningPipeline};
 use crate::namespace_manager::NamespaceManager;
+use crate::nl_parser::NlParser; // 🔥 NEW
 use crate::semantic::{CausalType, DomainContext, SemanticType};
 use crate::sharded_storage::ShardedStorage;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}; // BufRead for lines
 use tokio::net::{TcpListener, TcpStream};
 use tokio::signal;
+use tracing::info;
 
 // Import protocol from sutra-protocol crate
 // Note: In production, add sutra-protocol as dependency in Cargo.toml
@@ -442,7 +444,7 @@ impl StorageServer {
     /// Handle single client connection
     async fn handle_client(
         &self,
-        mut stream: TcpStream,
+        stream: TcpStream,
         peer_addr: SocketAddr,
     ) -> std::io::Result<()> {
         eprintln!("Client connected: {}", peer_addr);
@@ -452,71 +454,93 @@ impl StorageServer {
 
         let mut request_count = 0u64;
 
-        loop {
-            let request_start = std::time::Instant::now();
+        // Wrap stream in BufReader for line-based reading support
+        let mut reader = BufReader::new(stream);
 
-            // Read message length (4 bytes)
-            let len = match stream.read_u32().await {
-                Ok(len) => len,
-                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    // Client disconnected
-                    eprintln!(
-                        "Client {} disconnected after {} requests",
-                        peer_addr, request_count
-                    );
-                    break;
+        loop {
+            let _request_start = std::time::Instant::now();
+
+            // Peek first byte to sniff protocol
+            let start_byte = match reader.fill_buf().await {
+                Ok(buf) => {
+                    if buf.is_empty() {
+                         // Client disconnected
+                         if request_count > 0 {
+                             eprintln!("Client {} disconnected", peer_addr);
+                         }
+                         break;
+                    }
+                    buf[0]
                 }
                 Err(e) => return Err(e),
             };
 
-            // ✅ PRODUCTION: Validate message size before allocating
-            if len as usize > MAX_MESSAGE_SIZE {
-                let error = StorageResponse::Error {
-                    message: format!(
-                        "Message too large: {} bytes (max: {})",
-                        len, MAX_MESSAGE_SIZE
-                    ),
+            if start_byte == 0 {
+                // BINARY PROTOCOL (Length Prefixed)
+                // First byte is 0, so likely a u32 length < 16MB (00 xx xx xx)
+                let len = match reader.read_u32().await {
+                   Ok(l) => l,
+                   Err(_) => break,
                 };
-                let response_bytes = rmp_serde::to_vec_named(&error)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-                stream.write_u32(response_bytes.len() as u32).await?;
-                stream.write_all(&response_bytes).await?;
-                stream.flush().await?;
-                continue; // Skip this message but keep connection open
+
+                if len as usize > MAX_MESSAGE_SIZE {
+                    let error = StorageResponse::Error {
+                        message: format!("Message too large: {}", len),
+                    };
+                    let response_bytes = rmp_serde::to_vec_named(&error).unwrap();
+                    reader.write_u32(response_bytes.len() as u32).await?;
+                    reader.write_all(&response_bytes).await?;
+                    reader.flush().await?;
+                    continue;
+                }
+
+                let mut buf = vec![0u8; len as usize];
+                reader.read_exact(&mut buf).await?;
+
+                let request: StorageRequest = match rmp_serde::from_slice(&buf) {
+                    Ok(req) => req,
+                    Err(e) => {
+                         eprintln!("Deserialization error: {}", e);
+                         continue;
+                    }
+                };
+
+                let response = self.handle_request(request).await;
+                
+                let response_bytes = rmp_serde::to_vec_named(&response).unwrap();
+                reader.write_u32(response_bytes.len() as u32).await?;
+                reader.write_all(&response_bytes).await?;
+                reader.flush().await?;
+
+            } else {
+                // TEXT PROTOCOL (Natural Language)
+                // First byte is NOT 0, assume it is ASCII text command
+                let mut line = String::new();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => break, // EOF
+                    Ok(_) => {
+                        let line = line.trim();
+                        if !line.is_empty() {
+                            info!("🗣️ NL Command: '{}'", line);
+                            if let Some(req) = NlParser::parse(line) {
+                                let response = self.handle_request(req).await;
+                                
+                                // Serialize response as JSON/Text for the human
+                                let json = serde_json::to_string_pretty(&response).unwrap_or_default();
+                                reader.write_all(json.as_bytes()).await?;
+                                reader.write_all(b"\n").await?;
+                                reader.flush().await?;
+                            } else {
+                                reader.write_all(b"Error: Command not understood. Try 'Remember that X', 'Find Y', or 'List'.\n").await?;
+                                reader.flush().await?;
+                            }
+                        }
+                    }
+                    Err(e) => return Err(e),
+                }
             }
-
-            // Read message payload
-            let mut buf = vec![0u8; len as usize];
-            stream.read_exact(&mut buf).await?;
-
-            // Deserialize request (msgpack for Python clients)
-            let request: StorageRequest = rmp_serde::from_slice(&buf)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-
-            // Handle request (already async and non-blocking)
-            let response = self.handle_request(request).await;
-
-            // Serialize response (msgpack for Python clients)
-            let response_bytes = rmp_serde::to_vec_named(&response)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-
-            // Write response
-            stream.write_u32(response_bytes.len() as u32).await?;
-            stream.write_all(&response_bytes).await?;
-            stream.flush().await?;
-
+            
             request_count += 1;
-            let request_duration = request_start.elapsed();
-
-            // Log slow requests (> 1s)
-            if request_duration.as_millis() > 1000 {
-                eprintln!(
-                    "⚠️  Slow request from {}: {}ms (total: {})",
-                    peer_addr,
-                    request_duration.as_millis(),
-                    request_count
-                );
-            }
         }
 
         eprintln!("Client disconnected: {}", peer_addr);

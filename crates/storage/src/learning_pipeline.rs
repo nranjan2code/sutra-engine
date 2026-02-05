@@ -7,6 +7,7 @@ use tracing::{debug, info, warn};
 
 use crate::embedding_client::HttpEmbeddingClient;
 use crate::embedding_provider::EmbeddingProvider;
+use crate::inference::embedding_engine::LocalEmbeddingEngine; // 🔥 NEW
 use crate::semantic::{SemanticAnalyzer, SemanticMetadata};
 use crate::semantic_extractor::SemanticExtractor;
 use crate::storage_trait::LearningStorage;
@@ -53,8 +54,20 @@ pub struct LearningPipeline {
 
 impl LearningPipeline {
     pub async fn new() -> Result<Self> {
-        let embedding_client = Arc::new(HttpEmbeddingClient::with_defaults()?);
-        Self::new_with_provider(embedding_client).await
+        // Try to initialize local engine first (The Brain)
+        let provider: Arc<dyn EmbeddingProvider> = match LocalEmbeddingEngine::new() {
+            Ok(engine) => {
+                info!("✅ Local Embedding Engine loaded successfully");
+                Arc::new(engine)
+            }
+            Err(e) => {
+                warn!("⚠️  Failed to load local embedding engine: {}", e);
+                info!("Falling back to HTTP Embedding Client...");
+                Arc::new(HttpEmbeddingClient::with_defaults()?)
+            }
+        };
+
+        Self::new_with_provider(provider).await
     }
 
     pub async fn new_with_provider(embedding_client: Arc<dyn EmbeddingProvider>) -> Result<Self> {

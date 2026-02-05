@@ -22,7 +22,8 @@ Sutra Engine is built using Rust.
 
 3. **Run the engine**:
    ```bash
-   ./target/release/storage-server
+   # Defaults to port 50051. Use 9000 for NL examples.
+   STORAGE_PORT=9000 cargo run --release --bin storage-server
    ```
 
 By default, the engine will create a `./data` directory (as configured in your environment or defaults) to store its Persistent Knowledge Graph and HNSW indices.
@@ -43,14 +44,21 @@ Sutra operates on two planes:
 
 ## 🛠 Your First Operation
 
-The engine uses a custom binary protocol. You can interact with it using any TCP client that supports MessagePack serialization.
+### Option A: Natural Language (Simplest)
+1. Ensure server is running on port 9000 (`STORAGE_PORT=9000`).
+2. Use `netcat` to talk to it:
+   ```bash
+   echo "Remember that the sky is blue" | nc localhost 9000
+   echo "Search for sky" | nc localhost 9000
+   ```
 
-### Basic Request Flow:
+### Option B: Binary Protocol (High Performance)
 1. Open a TCP connection to `localhost:50051`.
 2. Send a 4-byte big-endian length prefix.
 3. Send the MessagePack-encoded request body.
+4. Receive highly compact binary response.
 
-See the [**API Reference**](API_REFERENCE.md) for the full list of available commands and response formats.
+See the [**API Reference**](API_REFERENCE.md) for full details.
 
 
 ---

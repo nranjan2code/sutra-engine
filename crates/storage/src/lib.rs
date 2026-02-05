@@ -23,7 +23,9 @@ pub mod semantic;
 // Unified learning pipeline modules
 pub mod embedding_client;
 pub mod embedding_provider;
+pub mod inference; // 🔥 NEW: Local inference module
 pub mod learning_pipeline;
+pub mod nl_parser; // 🔥 NEW: NL Command Parser
 pub mod semantic_extractor;
 
 // New concurrent memory modules

@@ -14,15 +14,17 @@ Sutra Storage is a custom storage engine built specifically for temporal, contin
 
 ### Key Features
 
-- **🚀 Performance**: Optimized for high-throughput writes and low-latency reads
-- **🔒 Durability**: Write-Ahead Log (WAL) with MessagePack binary format - zero data loss
-- **📈 Scalability**: Horizontal sharding (4-16 shards) for 10M+ concepts
-- **⚡ Concurrency**: Lock-free writes, immutable read snapshots, adaptive reconciliation
-- **🎯 Vector Search**: USearch HNSW with 94× faster startup (true mmap persistence)
-- **🔄 ACID Transactions**: 2PC coordinator for cross-shard atomicity
-- **🧠 AI-Native**: Self-optimizing adaptive reconciler with EMA trend analysis
-- **🌐 Distributed**: TCP binary protocol (10-50× lower latency than gRPC)
-- **🏢 Multi-Tenant**: Native support for namespaces/independent collections
+- **🧠 Self-Contained AI**: Internal "Brain" runs local inference (Candle/Bert) on Metal/CPU. No external dependencies.
+- **🗣️ Natural Language Native**: "Babelfish" interface accepts raw text commands on port 9000.
+- **🚀 Performance**: Optimized for high-throughput writes and low-latency reads.
+- **🔒 Durability**: Write-Ahead Log (WAL) with MessagePack binary format - zero data loss.
+- **📈 Scalability**: Horizontal sharding (4-16 shards) for 10M+ concepts.
+- **⚡ Concurrency**: Lock-free writes, immutable read snapshots, adaptive reconciliation.
+- **🎯 Vector Search**: USearch HNSW with 94× faster startup (true mmap persistence).
+- **🔄 ACID Transactions**: 2PC coordinator for cross-shard atomicity.
+- **🌐 Distributed**: TCP binary protocol (10-50× lower latency than gRPC) + Text Protocol.
+- **🏢 Multi-Tenant**: Native support for namespaces/independent collections.
+- **⚙️ Dynamic Config**: Hot-reloadable semantic rules via `semantics.toml`.
 
 ### Architecture at a Glance
 
@@ -169,11 +171,13 @@ MessagePack binary format for durability:
 | `storage_trait.rs` | - | LearningStorage trait for polymorphism |
 | `transaction.rs` | 500+ | 2PC coordinator for cross-shard atomicity |
 
-### Unified Learning Pipeline (3 modules)
+### Unified Learning Pipeline (5 modules)
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
-| `embedding_client.rs` | 320+ | HTTP client with circuit breaker (exp backoff + jitter) |
+| `embedding_client.rs` | 320+ | HTTP client (Fallback) |
+| `inference/` | - | **Local Inference Engine** (Candle/Bert) |
+| `nl_parser.rs` | - | **Natural Language Command Parser** |
 | `semantic_extractor.rs` | - | NLP-based association extraction |
 | `learning_pipeline.rs` | - | Orchestrates embedding + extraction + storage |
 
@@ -181,9 +185,9 @@ MessagePack binary format for durability:
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
-| `tcp_server.rs` | 400+ | Production TCP server (custom binary protocol) |
+| `tcp_server.rs` | 400+ | Dual-Protocol Server (Binary + Text) |
 
-**Total**: 34 modules, 16,000+ LOC
+**Total**: 36 modules, 18,000+ LOC
 
 **Recent Cleanup (2025-11-05)**:
 - ✅ Removed deprecated `reconciler.rs` (replaced by `adaptive_reconciler.rs`)
@@ -515,11 +519,36 @@ See [TCP Protocol Specification](../../docs/storage/TCP_BINARY_PROTOCOL.md) for 
 - **Python**: (Coming Soon)
 - **Rust**: [src/tcp_server.rs](./src/tcp_server.rs) (See `SutraStorageClient` in tests)
 
+### 4. Natural Language Interface ("Babelfish")
+
+Interact with the server directly using raw text over TCP.
+
+**Usage:**
+```bash
+nc localhost 9000
+```
+
+**Commands:**
+- `Remember that <fact>`: Learns a new concept.
+  - Example: `Remember that the sky is blue`
+- `Search for <query>` / `Find <query>`: Semantic search.
+  - Example: `Search for sky color`
+- `ls` / `list`: List recent memories.
+
 ---
 
 ## Configuration
 
 ### Environment Variables
+
+#### Unified Learning Pipeline
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SUTRA_EMBEDDING_SERVICE_URL` | - | **OPTIONAL**: External embedding service. If unset, uses internal local inference. |
+| `SUTRA_EMBEDDING_TIMEOUT_SEC` | `30` | HTTP timeout (if using external service) |
+| `SUTRA_MIN_ASSOCIATION_CONFIDENCE` | `0.5` | Minimum confidence for extracted associations |
+| `SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT` | `10` | Max associations to extract per concept |
 
 #### Storage Server
 
@@ -527,20 +556,11 @@ See [TCP Protocol Specification](../../docs/storage/TCP_BINARY_PROTOCOL.md) for 
 |----------|---------|-------------|
 | `STORAGE_PATH` | `./storage` | Base directory for storage files |
 | `STORAGE_HOST` | `0.0.0.0` | Server bind address |
-| `STORAGE_PORT` | `50051` | Server port |
-| `VECTOR_DIMENSION` | `768` | Embedding dimension (**MUST match embedding service**) |
+| `STORAGE_PORT` | `50051` | Server port (9000 suggested for NL) |
+| `VECTOR_DIMENSION` | `384` | Embedding dimension (Default: 384 for internal model) |
 | `SUTRA_STORAGE_MODE` | `single` | `single` or `sharded` |
 | `SUTRA_NUM_SHARDS` | `4` | Number of shards (4-16 recommended) |
 | `RUST_LOG` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
-
-#### Unified Learning Pipeline
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SUTRA_EMBEDDING_SERVICE_URL` | - | **REQUIRED**: Embedding service endpoint |
-| `SUTRA_EMBEDDING_TIMEOUT_SEC` | `30` | HTTP timeout for embedding requests |
-| `SUTRA_MIN_ASSOCIATION_CONFIDENCE` | `0.5` | Minimum confidence for extracted associations |
-| `SUTRA_MAX_ASSOCIATIONS_PER_CONCEPT` | `10` | Max associations to extract per concept |
 
 ---
 

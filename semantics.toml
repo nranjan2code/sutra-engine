@@ -1,0 +1,50 @@
+[rules]
+modal = ["must", "shall", "should", "ought to", "required", "mandatory", "obligatory"]
+conditional = ["if\\s+\\w+\\s+then", "when\\s+\\w+\\s+must"]
+imperative = ["^(do not|never|always|ensure|verify|confirm|check)\\s+\\w+"]
+
+[temporal]
+after = ["after", "following", "subsequent to", "later than", "post"]
+before = ["before", "prior to", "preceding", "earlier than", "pre"]
+during = ["during", "throughout", "while", "in the course of"]
+between = ["between"]
+at = [
+    "at|on|in\\s+\\d{4}",
+    "january|february|march|april|may|june|july|august|september|october|november|december"
+]
+
+[negation]
+explicit = ["not", "no", "never", "none", "nothing", "neither", "nor"]
+exception = ["except", "unless", "excluding", "other than", "but not", "save for"]
+
+[causal]
+direct = ["causes?", "leads? to", "results? in", "triggers?", "produces?", "brings about"]
+enabling = ["enables?", "allows?", "permits?", "facilitates?", "makes? possible"]
+preventing = ["prevents?", "stops?", "blocks?", "inhibits?", "prohibits?"]
+
+[conditions]
+if_clause = ["if", "provided that", "given that", "assuming"]
+when_clause = ["when", "whenever", "once", "as soon as"]
+unless_clause = ["unless", "except if", "only if"]
+
+[quantitative]
+number = ["\\b\\d+(\\.\\d+)?\\s*(million|billion|thousand|hundred|dozen)?\\b"]
+percentage = ["\\b\\d+(\\.\\d+)?%|\\bpercent\\b"]
+measurement = ["\\b\\d+(\\.\\d+)?\\s*(kg|lb|meter|mile|liter|gallon|USD|EUR|GBP)\\b"]
+
+[definitional]
+is_a = ["is a", "are", "represents?", "means?", "refers? to"]
+defined_as = ["defined as", "definition of", "classified as", "categorized as"]
+
+[events]
+past = ["occurred", "happened", "took place", "was", "were"]
+future = ["will occur", "will happen", "scheduled", "planned"]
+ongoing = ["is occurring", "is happening", "ongoing", "in progress"]
+
+[domains]
+medical = ["patient", "diagnosis", "treatment", "symptom", "disease", "medical", "clinical", "hospital", "doctor", "nurse", "therapy", "medication", "surgical"]
+legal = ["law", "legal", "court", "statute", "regulation", "compliance", "contract", "liability", "plaintiff", "defendant", "attorney", "judge"]
+financial = ["financial", "investment", "revenue", "profit", "cost", "budget", "portfolio", "asset", "liability", "equity", "dividend", "interest rate"]
+technical = ["system", "software", "hardware", "algorithm", "API", "database", "server", "network", "protocol", "architecture", "deployment"]
+scientific = ["experiment", "hypothesis", "research", "study", "analysis", "data", "measurement", "observation", "theory", "methodology"]
+business = ["business", "company", "organization", "management", "strategy", "operations", "marketing", "sales", "customer", "stakeholder"]

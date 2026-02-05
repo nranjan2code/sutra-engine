@@ -18,7 +18,8 @@
 It is built in Rust to provide elite-level performance, supporting over **50,000 writes per second** and **sub-millisecond search latency** on standard hardware.
 
 ### Key Features
-- 🧠 **Dual-Plane Memory**: Combines HNSW-based vector search with an explainable knowledge graph.
+- 🧠 **Self-Contained AI**: Embedded "Internal Brain" (Candle) runs local inference on Metal/CPU.
+- 🗣️ **Natural Language Native**: Native TCP interface for raw text commands ("Remember that...").
 - ⚡ **Ultra-Low Latency**: Custom binary protocol replaces gRPC for 10-50x better performance.
 - 🛡️ **Production Ready**: Native TLS 1.3, HMAC-SHA256 authentication, and rate limiting.
 - 📈 **Horizontal Scaling**: Support for consistent-hashing sharding beyond 10M+ concepts.
@@ -28,21 +29,25 @@ It is built in Rust to provide elite-level performance, supporting over **50,000
 
 ## 🚀 Quick Start
 
-### 1. Build from Source
+### 1. Build and Run
 Ensure you have the Rust toolchain installed.
 
 ```bash
-# Build the storage server
-cargo build --release --bin storage-server
-
-# Run the engine
-./target/release/storage-server
+# Build and run the storage server (defaults to port 50051 for binary, can use 9000 for NL)
+STORAGE_PORT=9000 cargo run --release --bin storage-server
 ```
 
-### 2. Connect
-You can connect to the engine using any TCP client that supports the Sutra custom binary protocol.
+### 2. Connect via Natural Language ("Babelfish")
+You can talk to the engine directly using `netcat`:
 
-### 3. Standalone Quickstart
+```bash
+echo "Remember that Sutra is fast" | nc localhost 9000
+```
+
+### 3. Connect via Binary Protocol
+For high-performance applications, use the binary protocol (SDKs available).
+
+### 4. Standalone Quickstart
 For a minimal, clean setup path, see:
 - `docs/STANDALONE_QUICKSTART.md`
 

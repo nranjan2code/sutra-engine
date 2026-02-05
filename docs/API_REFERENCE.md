@@ -6,13 +6,18 @@ Sutra Engine uses a custom binary protocol over TCP for maximum performance. Thi
 
 ## 🛰 Protocol Overview
 
-### Framing
-Each message (Request and Response) is prefixed with a 4-byte big-endian integer representing the length of the MessagePack payload.
+Sutra Storage now supports a **Dual-Protocol Interface** on the same port, using protocol sniffing.
 
-`[4 bytes: Length] [N bytes: MessagePack Payload]`
+### 1. Binary Protocol (Machine-to-Machine)
+- **Format**: 4-byte Big-Endian Length + MessagePack Payload.
+- **Trigger**: First byte is `0x00` (length < 255) in most cases, or strictly formatted.
+- **Port**: Default `50051`.
 
-### Port
-Default: `50051`
+### 2. Natural Language Protocol ("Babelfish")
+- **Format**: Raw text strings terminated by newline (`\n`).
+- **Trigger**: First byte is != `0x00`.
+- **Usage**: `nc localhost 9000`
+- **Port**: Default `50051` (or `9000` convention).
 
 ---
 
