@@ -59,9 +59,9 @@ If a client exceeds these limits, the engine will return a specialized `Error` r
 
 ---
 
-## 🤖 Autonomy Request Authorization
+## 🔧 Background Job Authorization
 
-When running in secure mode, autonomy-related requests are categorized as follows:
+When running in secure mode, background job-related requests are categorized as follows:
 
 | Category | Requests |
 |----------|----------|

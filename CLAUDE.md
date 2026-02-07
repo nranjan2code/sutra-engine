@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sutra Engine is a high-performance memory/knowledge graph storage engine written in Rust. It combines dense vector search with semantic graph relationships for AI agent reasoning. The engine supports sub-millisecond search, 50K+ writes/sec, and local ML inference without external API calls.
+Sutra Engine is a high-performance hybrid storage engine written in Rust. It combines dense vector search with graph relationships for applications requiring both semantic similarity and relational data. The engine supports sub-millisecond search, 50K+ writes/sec, and local ML inference without external API calls.
 
 ## Build & Development Commands
 
@@ -45,7 +45,7 @@ cargo clippy -- -D warnings
 
 Three crates in a Cargo workspace (resolver v2):
 
-- **`crates/storage`** — Core storage engine (~14K LOC). Contains the TCP server binary (`storage-server`), concurrent memory store, WAL, HNSW vector index, semantic analyzer, local inference (Candle), sharding, auth, and rate limiting.
+- **`crates/storage`** — Core storage engine (~14K LOC). Contains the TCP server binary (`storage-server`), concurrent store, WAL, HNSW vector index, semantic analyzer, local inference (Candle), sharding, auth, and rate limiting.
 - **`crates/protocol`** — Custom binary TCP protocol (~940 LOC). Length-prefixed bincode serialization with 16MB max message size. Defines `StorageMessage`/`StorageResponse` enums and wire format helpers.
 - **`crates/bulk-ingester`** — HTTP-based bulk data ingestion service. Axum web server with pluggable adapters. Optional Python plugin support via PyO3 (`python-plugins` feature; default is `embedded-only`).
 
@@ -53,15 +53,15 @@ Three crates in a Cargo workspace (resolver v2):
 
 **Dual-plane design:** Write plane (lock-free append via `ConcurrentMemory`) and Read plane (immutable snapshots via `ReadView`). An `AdaptiveReconciler` batches writes into read snapshots with bounded latency (1-100ms adaptive interval).
 
-**Key data flow:** Raw text → TCP server → optional local embedding (Candle/all-MiniLM-L6-v2, 384D vectors) → semantic analysis (9 types) → association extraction → atomic storage (2PC for cross-shard) → WAL persistence → HNSW index update.
+**Key data flow:** Raw text → TCP server → optional local embedding (Candle/all-MiniLM-L6-v2, 384D vectors) → semantic analysis (10 types) → association extraction → atomic storage (2PC for cross-shard) → WAL persistence → HNSW index update.
 
 **Sharding:** Consistent hashing across configurable shards (default 16). `TransactionCoordinator` handles 2PC for atomic cross-shard writes.
 
 **Vector persistence:** USearch HNSW with mmap for 94x faster startup vs in-memory rebuild.
 
-**Semantic types (10):** Entity, Event, Rule, Temporal, Negation, Condition, Causal, Quantitative, Definitional, Goal. Rules are configured in `semantics.toml`.
+**Record types (10):** Entity, Event, Rule, Temporal, Negation, Condition, Causal, Quantitative, Definitional, Goal. Rules are configured in `semantics.toml`.
 
-**Autonomy Engine:** 7 self-directed features running as background threads: knowledge decay, self-monitoring, background reasoning, goal system, subscriptions, gap detection, and feedback integration. All features interact with `ConcurrentMemory` exclusively through its public API. Controlled by the `SUTRA_AUTONOMY` env var (default `true`).
+**Background Maintenance:** 7 configurable background jobs managed by `AutonomyManager`: strength decay, health metrics, auto-association discovery, trigger system, subscriptions, graph analysis, and feedback processing. All jobs interact with `ConcurrentMemory` through its public API. Controlled by the `SUTRA_AUTONOMY` env var (default `true`).
 
 **Protocol:** Custom TCP binary (not gRPC). Format: `[4 bytes u32 length][bincode payload]`. All data ingestion routes through the TCP `learn_concept()` path — never bypass this.
 
@@ -75,19 +75,19 @@ Three crates in a Cargo workspace (resolver v2):
 - `src/sharded_storage.rs` — Sharding with consistent hashing
 - `src/transaction.rs` — 2PC cross-shard transactions
 - `src/hnsw_container.rs` — USearch HNSW vector index wrapper
-- `src/semantic/analyzer.rs` — Semantic classification engine
+- `src/semantic/analyzer.rs` — Record classification engine
 - `src/inference/embedding_engine.rs` — Local Candle-based BERT inference
-- `src/nl_parser.rs` — Natural language command parser ("Remember that...", "Search for...")
+- `src/nl_parser.rs` — Natural language command parser ("Insert...", "Search for...")
 - `src/auth.rs` — HMAC-SHA256 auth, TLS 1.3
-- `src/learning_pipeline.rs` — End-to-end concept learning orchestration
-- `src/autonomy/mod.rs` — Autonomy engine manager (decay, reasoning, goals, subscriptions, gap detection, feedback, self-monitoring)
-- `src/autonomy/decay.rs` — Exponential knowledge decay with reinforcement
-- `src/autonomy/reasoning.rs` — Background association discovery + contradiction detection
-- `src/autonomy/goals.rs` — Goal system with conditions/actions
-- `src/autonomy/subscriptions.rs` — Push notifications on concept changes
-- `src/autonomy/gap_detector.rs` — Isolated concept and near-miss detection
+- `src/learning_pipeline.rs` — End-to-end record ingestion orchestration
+- `src/autonomy/mod.rs` — Background jobs manager (decay, auto-association, triggers, subscriptions, graph analysis, feedback, health metrics)
+- `src/autonomy/decay.rs` — Strength decay with access reinforcement
+- `src/autonomy/reasoning.rs` — Auto-association discovery + contradiction detection
+- `src/autonomy/goals.rs` — Trigger system with conditions/actions
+- `src/autonomy/subscriptions.rs` — Push notifications on record changes
+- `src/autonomy/gap_detector.rs` — Isolated record and near-miss detection
 - `src/autonomy/feedback.rs` — Accept/reject feedback to adjust strengths
-- `src/autonomy/self_monitor.rs` — Engine health stored as concepts
+- `src/autonomy/self_monitor.rs` — Engine health metrics stored as records
 
 ## Environment Variables
 
@@ -102,7 +102,7 @@ Three crates in a Cargo workspace (resolver v2):
 | `SUTRA_SECURE_MODE` | `false` | Enable TLS 1.3 + HMAC auth |
 | `RECONCILE_BASE_INTERVAL_MS` | `10` | Adaptive reconciler base interval |
 | `MEMORY_THRESHOLD` | `50000` | Write count before forced reconciliation |
-| `SUTRA_AUTONOMY` | `true` | Enable/disable the autonomy engine (decay, reasoning, goals, etc.) |
+| `SUTRA_AUTONOMY` | `true` | Enable/disable background maintenance jobs |
 
 ## Testing
 
@@ -121,7 +121,7 @@ Unit tests are embedded in source files as `#[cfg(test)]` modules.
 
 ## Anti-Patterns
 
-- **Never bypass unified learning:** All ingestion must go through storage server TCP protocol (`learn_concept()`)
+- **Never bypass unified ingestion:** All data must go through storage server TCP protocol (`learn_concept()`)
 - **No SQL/Cypher/GraphQL:** Architectural policy — only the custom binary TCP protocol
 - **Don't assume security:** Default mode has no authentication (development only)
-- **Don't add external observability:** Self-monitoring via Grid events is an intentional design choice (no Prometheus/Grafana/Datadog)
+- **Don't add external observability:** Health metrics via internal records is an intentional design choice

@@ -6,14 +6,14 @@ Sutra Engine uses a custom binary protocol over TCP for maximum performance. Thi
 
 ## 🛰 Protocol Overview
 
-Sutra Storage now supports a **Dual-Protocol Interface** on the same port, using protocol sniffing.
+Sutra Storage supports a **Dual-Protocol Interface** on the same port, using protocol sniffing.
 
 ### 1. Binary Protocol (Machine-to-Machine)
 - **Format**: 4-byte Big-Endian Length + MessagePack Payload.
 - **Trigger**: First byte is `0x00` (length < 255) in most cases, or strictly formatted.
 - **Port**: Default `50051`.
 
-### 2. Natural Language Protocol ("Babelfish")
+### 2. Natural Language Protocol
 - **Format**: Raw text strings terminated by newline (`\n`).
 - **Trigger**: First byte is != `0x00`.
 - **Usage**: `nc localhost 9000`
@@ -23,7 +23,7 @@ Sutra Storage now supports a **Dual-Protocol Interface** on the same port, using
 
 ## 📥 Storage Requests
 
-Requests are sent as a MessagePack map where the variant name is the tag. Most requests now support a `namespace` parameter for multi-tenant isolation.
+Requests are sent as a MessagePack map where the variant name is the tag. Most requests support a `namespace` parameter for multi-tenant isolation.
 
 ### 1. `LearnConceptV2`
 High-level ingestion with automatic embedding and association extraction.
@@ -48,7 +48,7 @@ High-level ingestion with automatic embedding and association extraction.
 ```
 
 ### 2. `QueryConcept`
-Semantic search and metadata retrieval for a specific concept.
+Retrieve a specific record by ID.
 
 **Payload:**
 ```json
@@ -61,7 +61,7 @@ Semantic search and metadata retrieval for a specific concept.
 ```
 
 ### 3. `DeleteConcept`
-Permanently remove a concept and its associations from a namespace.
+Permanently remove a record and its edges from a namespace.
 
 **Payload:**
 ```json
@@ -74,7 +74,7 @@ Permanently remove a concept and its associations from a namespace.
 ```
 
 ### 4. `ListRecent`
-Retrieve the most recently learned concepts in a namespace.
+Retrieve the most recently ingested records in a namespace.
 
 **Payload:**
 ```json
@@ -87,7 +87,7 @@ Retrieve the most recently learned concepts in a namespace.
 ```
 
 ### 5. `ClearCollection`
-Reset an entire namespace, deleting all concepts and vectors.
+Reset an entire namespace, deleting all records and vectors.
 
 **Payload:**
 ```json
@@ -112,7 +112,7 @@ Get engine health and performance metrics.
 Unit variants sent as simple strings: `"Flush"` and `"HealthCheck"`.
 
 ### 8. `Subscribe`
-Subscribe to push notifications when concepts matching a filter are created.
+Subscribe to push notifications when records matching a filter are created.
 
 **Payload:**
 ```json
@@ -147,7 +147,7 @@ Remove a subscription by ID.
 List all active subscriptions. Unit variant: `"ListSubscriptions"`.
 
 ### 11. `CreateGoal`
-Create a goal with a condition and action.
+Create a trigger with a condition and action.
 
 **Payload:**
 ```json
@@ -163,7 +163,7 @@ Create a goal with a condition and action.
 ```
 
 ### 12. `ListGoals`
-List all goals, optionally filtered by namespace.
+List all triggers, optionally filtered by namespace.
 
 **Payload:**
 ```json
@@ -175,7 +175,7 @@ List all goals, optionally filtered by namespace.
 ```
 
 ### 13. `CancelGoal`
-Cancel (delete) a goal by ID.
+Cancel (delete) a trigger by ID.
 
 **Payload:**
 ```json
@@ -188,7 +188,7 @@ Cancel (delete) a goal by ID.
 ```
 
 ### 14. `ProvideFeedback`
-Submit accept/reject feedback for search results to adjust concept strengths.
+Submit accept/reject feedback for search results to adjust record strengths.
 
 **Payload:**
 ```json
@@ -204,7 +204,7 @@ Submit accept/reject feedback for search results to adjust concept strengths.
 ```
 
 ### 15. `GetAutonomyStats`
-Get autonomy engine status and statistics. Unit variant: `"GetAutonomyStats"`.
+Get background job status and statistics. Unit variant: `"GetAutonomyStats"`.
 
 ---
 
@@ -310,20 +310,20 @@ Get autonomy engine status and statistics. Unit variant: `"GetAutonomyStats"`.
 ## ⚙️ Standard Object Types
 
 ### `ConceptID`
-A 32-character Hex string (e.g., `dcbf7561e84be97e383322b99bb343e2`), representing a 1128-bit (16-byte) MD5 hash.
+A 32-character Hex string (e.g., `dcbf7561e84be97e383322b99bb343e2`), representing a 128-bit (16-byte) MD5 hash.
 
 ### `SimilarityScore`
 A floating point value between `0.0` and `1.0`. Higher is more similar.
 
 ---
 
-## 🗣️ Natural Language Commands (Autonomy)
+## 🗣️ Natural Language Commands
 
-The following NL commands are available when autonomy is enabled:
+The following NL commands are available:
 
 | Command | Example | Maps To |
 |---------|---------|---------|
 | `status` / `engine status` | `echo "status" \| nc localhost 9000` | `GetAutonomyStats` |
-| `set goal: <desc>` / `goal: <desc>` | `echo "set goal: track new concepts" \| nc localhost 9000` | `CreateGoal` |
+| `set goal: <desc>` / `goal: <desc>` | `echo "set goal: track new records" \| nc localhost 9000` | `CreateGoal` |
 | `list goals` / `goals` | `echo "list goals" \| nc localhost 9000` | `ListGoals` |
 | `subscribe to <term>` / `watch for <term>` | `echo "subscribe to Rust" \| nc localhost 9000` | `Subscribe` |

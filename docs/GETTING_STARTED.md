@@ -1,6 +1,6 @@
 # Getting Started with Sutra Engine
 
-This guide walks you through setting up Sutra Engine and making your first semantic search.
+This guide walks you through setting up Sutra Engine and making your first vector search.
 If you want the shortest path, use `docs/STANDALONE_QUICKSTART.md`.
 
 ---
@@ -26,19 +26,19 @@ Sutra Engine is built using Rust.
    STORAGE_PORT=9000 cargo run --release --bin storage-server
    ```
 
-By default, the engine will create a `./data` directory (as configured in your environment or defaults) to store its Persistent Knowledge Graph and HNSW indices.
+By default, the engine will create a `./data` directory to store its graph index and HNSW vector indices.
 
 ---
 
 ## 💡 Core Concepts
 
-### 1. Concepts
-Every piece of information in Sutra is stored as a **Concept**. A concept has content (text), an optional vector embedding, and metadata.
+### 1. Records
+Every piece of information in Sutra is stored as a **Record**. A record has content (text), an optional vector embedding, and metadata.
 
-### 2. Dual-Plane Memory
+### 2. Dual-Plane Storage
 Sutra operates on two planes:
-- **Vector Plane**: For fast, fuzzy semantic similarity.
-- **Graph Plane**: For exact, explainable relationships (links between concepts).
+- **Vector Plane**: For fast, fuzzy semantic similarity search.
+- **Graph Plane**: For exact, traversable relationships (edges between records).
 
 ---
 
@@ -48,8 +48,8 @@ Sutra operates on two planes:
 1. Ensure server is running on port 9000 (`STORAGE_PORT=9000`).
 2. Use `netcat` to talk to it:
    ```bash
-   echo "Remember that the sky is blue" | nc localhost 9000
-   echo "Search for sky" | nc localhost 9000
+   echo "Insert: the sky is blue" | nc localhost 9000
+   echo "Search for: sky" | nc localhost 9000
    ```
 
 ### Option B: Binary Protocol (High Performance)
@@ -81,18 +81,18 @@ Now, all clients must provide a valid HMAC signature to interact with the engine
 
 ---
 
-## 🤖 Autonomy Engine
+## 🔧 Background Maintenance
 
-Sutra includes a self-directed Autonomy Engine (enabled by default). Try these NL commands:
+Sutra includes configurable background jobs (enabled by default). Try these NL commands:
 
 ```bash
-echo "status" | nc localhost 9000              # View autonomy stats
-echo "set goal: track new concepts" | nc localhost 9000  # Create a goal
-echo "list goals" | nc localhost 9000           # List all goals
-echo "subscribe to Rust" | nc localhost 9000    # Subscribe to matching concepts
+echo "status" | nc localhost 9000              # View engine stats
+echo "set goal: track new records" | nc localhost 9000  # Create a trigger
+echo "list goals" | nc localhost 9000           # List all triggers
+echo "subscribe to Rust" | nc localhost 9000    # Subscribe to matching records
 ```
 
-To disable autonomy (e.g., for benchmarking):
+To disable background jobs (e.g., for benchmarking):
 ```bash
 export SUTRA_AUTONOMY=false
 ```
@@ -101,4 +101,4 @@ export SUTRA_AUTONOMY=false
 
 ## 🚀 Next Steps
 - Explore the [**API Reference**](API_REFERENCE.md) for advanced queries.
-- Read the [**Operations Guide**](OPERATIONS.md) for scaling, autonomy tuning, and backups.
+- Read the [**Operations Guide**](OPERATIONS.md) for scaling, tuning, and backups.

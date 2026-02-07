@@ -21,13 +21,13 @@ cargo test --workspace
 - Storage format compatibility (v2 snapshot loads under v3 engine)
 - Configurable load test via env vars
 
-**Autonomy Engine**
+**Background Maintenance**
 - `SemanticType::Goal` (variant 9) added and integrated.
 - 8 new modules under `crates/storage/src/autonomy/`.
-- 8 new `StorageRequest` and 8 new `StorageResponse` variants for autonomy features.
+- 8 new `StorageRequest` and 8 new `StorageResponse` variants for background job features.
 - NL parser extended with `status`, `set goal`, `list goals`, `subscribe to` commands.
 - Secure TCP server updated with auth categorization for all new request types.
 
 **Notes**
 - Storage snapshot format updated to version 3 to persist attributes + semantic metadata.
-- Autonomy engine enabled by default (`SUTRA_AUTONOMY=true`).
+- Background maintenance enabled by default (`SUTRA_AUTONOMY=true`).

@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/logo.png" alt="Sutra Engine Logo" width="300"/>
   <h1>Sutra Engine</h1>
-  <p><b>High-Performance Explainable Memory Engine for Reasoning Agents</b></p>
+  <p><b>Embedded Vector-Graph Database with Built-in Embeddings</b></p>
 
   [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)]()
   [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
@@ -13,18 +13,18 @@
 
 ## 🌟 Overview
 
-**Sutra Engine** is a state-of-the-art, standalone memory engine designed for the next generation of AI agents. Unlike traditional vector databases, Sutra combines **dense vector search** with **semantic graph relationships** in a unified, high-performance reasoning core.
+**Sutra Engine** is a high-performance hybrid storage engine that combines **dense vector search** with **graph relationships** in a unified architecture. Built in Rust, it delivers production-grade performance with embedded ML inference—no external API calls required.
 
-It is built in Rust to provide elite-level performance, supporting over **50,000 writes per second** and **sub-millisecond search latency** on standard hardware.
+Designed for applications requiring both semantic similarity and relational knowledge, Sutra handles **50,000+ writes per second** with **sub-millisecond search latency**.
 
 ### Key Features
-- 🧠 **Self-Contained AI**: Embedded "Internal Brain" (Candle) runs local inference on Metal/CPU.
-- 🗣️ **Natural Language Native**: Native TCP interface for raw text commands ("Remember that...").
-- ⚡ **Ultra-Low Latency**: Custom binary protocol replaces gRPC for 10-50x better performance.
+- 🔌 **Zero Dependencies**: Embedded inference (Candle/BERT) runs locally on Metal/CPU—no API keys needed.
+- 🗣️ **Natural Language Interface**: Native TCP interface for text commands ("Insert...", "Search for...").
+- ⚡ **Ultra-Low Latency**: Custom binary protocol for 10-50x better performance than gRPC.
 - 🛡️ **Production Ready**: Native TLS 1.3, HMAC-SHA256 authentication, and rate limiting.
-- 📈 **Horizontal Scaling**: Support for consistent-hashing sharding beyond 10M+ concepts.
+- 📈 **Horizontal Scaling**: Consistent-hashing sharding for 10M+ records.
 - 💾 **Durability**: Write-Ahead Logging (WAL) and mmap-backed persistence for crash recovery.
-- 🤖 **Autonomy Engine**: Self-directed background loops for knowledge decay, reasoning, goal evaluation, gap detection, subscriptions, and feedback integration.
+- 🔧 **Background Maintenance**: Configurable jobs for strength decay, auto-association, health metrics, triggers, and subscriptions.
 
 ---
 
@@ -34,15 +34,16 @@ It is built in Rust to provide elite-level performance, supporting over **50,000
 Ensure you have the Rust toolchain installed.
 
 ```bash
-# Build and run the storage server (defaults to port 50051 for binary, can use 9000 for NL)
+# Build and run the storage server (defaults to port 50051 for binary, or 9000 for NL)
 STORAGE_PORT=9000 cargo run --release --bin storage-server
 ```
 
-### 2. Connect via Natural Language ("Babelfish")
+### 2. Connect via Natural Language
 You can talk to the engine directly using `netcat`:
 
 ```bash
-echo "Remember that Sutra is fast" | nc localhost 9000
+echo "Insert: Sutra is fast" | nc localhost 9000
+echo "Search for: fast database" | nc localhost 9000
 ```
 
 ### 3. Connect via Binary Protocol
@@ -62,10 +63,10 @@ Start at the index for the full map:
 ### 🏁 Foundations
 - [**Standalone Quickstart**](docs/STANDALONE_QUICKSTART.md): Minimal run path.
 - [**Getting Started**](docs/GETTING_STARTED.md): Installation and basic workflow.
-- [**Project Architecture**](docs/ARCHITECTURE.md): Dual‑plane design and core layout.
+- [**Project Architecture**](docs/ARCHITECTURE.md): Dual-plane design and core layout.
 
-### 🤖 Autonomy
-- [**Autonomy Engine**](docs/ARCHITECTURE.md#autonomy-engine): Self-directed reasoning, decay, goals, subscriptions, gap detection, and feedback.
+### 🔧 Background Maintenance
+- [**Background Jobs**](docs/ARCHITECTURE.md#background-maintenance): Strength decay, auto-association, triggers, subscriptions, graph analysis, and health metrics.
 
 ### 🛠 Developers
 - [**API Reference**](docs/API_REFERENCE.md): Full TCP + MessagePack protocol spec.

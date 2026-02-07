@@ -3,7 +3,7 @@
 Date: 2026-02-04
 
 This report summarizes the standalone cleanup, core capabilities, validation coverage, and remaining risk notes.
-Sutra Engine is a **natural‑language memory system** (semantic + vector + graph), not a SQL database.
+Sutra Engine is a **hybrid vector-graph storage engine** (semantic + vector + graph), not a SQL database.
 
 ---
 
@@ -17,15 +17,15 @@ Outcome: the engine now runs as a focused, self‑contained service with explici
 
 ## Core Capabilities (What We Have)
 
-- **Dual‑Plane Memory**: fast vector similarity + explainable graph traversal.
-- **Natural‑Language Learning**: semantic classification + metadata extraction preserved across persistence.
+- **Dual‑Plane Storage**: fast vector similarity + traversable graph edges.
+- **Natural‑Language Interface**: semantic classification + metadata extraction preserved across persistence.
 - **Durability**: WAL + binary snapshots (v3) with recovery on startup.
 - **Vector Search**: HNSW index with on‑disk persistence and reload.
 - **Protocol**: TCP + MessagePack with length‑prefix framing.
 - **Security**: HMAC authentication, TLS 1.3 support, role‑based access.
 - **Scalability**: sharded storage support and multi‑namespace isolation.
 - **Ops**: telemetry/health checks, config via env, recoverable startup.
-- **Autonomy Engine**: 7 self-directed background features — knowledge decay, self-monitoring, background reasoning, goal system, subscriptions, gap detection, and feedback integration. Controlled via `SUTRA_AUTONOMY` env var.
+- **Background Maintenance**: 7 configurable background jobs — strength decay, health metrics, auto-association discovery, trigger system, subscriptions, graph analysis, and feedback processing. Controlled via `SUTRA_AUTONOMY` env var.
 
 ---
 
@@ -91,4 +91,4 @@ See `docs/TEST_RESULTS.md` for the latest run timestamp and coverage summary.
 ## Final Position
 
 All known issues uncovered during cleanup and scenario testing have been fixed.
-The engine now operates as a **standalone, production‑ready natural‑language memory system** with strong test coverage and a clear operational story.
+The engine now operates as a **standalone, production‑ready hybrid storage engine** with strong test coverage and a clear operational story.

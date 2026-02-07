@@ -46,7 +46,7 @@ The engine uses HNSW for vector search. You can tune search quality vs. speed vi
 
 ## 🏗 Sharding & Scaling
 
-For knowledge graphs exceeding 10 million concepts, we recommend **Sharded Mode**.
+For databases exceeding 10 million records, we recommend **Sharded Mode**.
 
 ```bash
 export SUTRA_STORAGE_MODE=sharded
@@ -54,16 +54,16 @@ export SUTRA_NUM_SHARDS=16
 ./start-engine.sh
 ```
 
-In sharded mode, concepts are distributed across independent shards using consistent hashing on the `ConceptID`. This allows for massive parallelization of both search and ingestion.
+In sharded mode, records are distributed across independent shards using consistent hashing on the record ID. This allows for massive parallelization of both search and ingestion.
 
 ---
 
-## 🤖 Autonomy Engine
+## 🔧 Background Maintenance
 
-Sutra includes a self-directed **Autonomy Engine** with 7 background features. It is enabled by default and controlled via the `SUTRA_AUTONOMY` environment variable.
+Sutra includes a **Background Maintenance** system with 7 configurable jobs. It is enabled by default and controlled via the `SUTRA_AUTONOMY` environment variable.
 
 ```bash
-# Disable autonomy (e.g. for benchmarking)
+# Disable background jobs (e.g. for benchmarking)
 export SUTRA_AUTONOMY=false
 
 # Enable (default)
@@ -72,30 +72,30 @@ export SUTRA_AUTONOMY=true
 
 ### Features
 
-| Feature | Default Interval | Tuning Notes |
-|---------|-----------------|--------------|
-| Knowledge Decay | 5s | Adjusts concept strengths based on access patterns. Prunes concepts below 0.01 strength. |
-| Self-Monitoring | 10s | Stores health snapshots as concepts. Keeps last 1000 snapshots. |
-| Background Reasoning | 10s | Discovers associations, detects contradictions. Samples 20 concepts per cycle. |
-| Goal Evaluator | 5s | Evaluates goal conditions and triggers actions. |
+| Feature | Default Interval | Description |
+|---------|-----------------|-------------|
+| Strength Decay | 5s | Adjusts record strengths based on access patterns. Prunes records below 0.01 strength. |
+| Health Metrics | 10s | Stores engine health snapshots internally. Keeps last 1000 snapshots. |
+| Auto-Association | 10s | Discovers edges via vector similarity, detects contradictions. Samples 20 records per cycle. |
+| Trigger Evaluator | 5s | Evaluates trigger conditions and executes actions. |
 | Subscriptions | 500ms | Polls ReadView for changes. Push notifications via TCP or log-only. |
-| Gap Detector | 30s | Finds isolated concepts and near-miss pairs. |
+| Graph Analysis | 30s | Finds isolated records and near-miss pairs. |
 | Feedback | Synchronous | Processes accept/reject signals from the `ProvideFeedback` API. |
 
-### Monitoring Autonomy
+### Monitoring
 
 Use `GetAutonomyStats` (or `echo "status" | nc localhost 9000`) to view:
-- Active subscriptions and goals count
+- Active subscriptions and trigger count
 - Per-feature enabled/disabled status
-- Concept/edge/vector counts
+- Record/edge/vector counts
 - Reconciler health and pending writes
 
 ### NL Commands
 
 ```bash
-echo "status" | nc localhost 9000              # Autonomy stats
-echo "set goal: track new concepts" | nc localhost 9000  # Create a goal
-echo "list goals" | nc localhost 9000           # List goals
+echo "status" | nc localhost 9000              # Engine stats
+echo "set goal: track new records" | nc localhost 9000  # Create a trigger
+echo "list goals" | nc localhost 9000           # List triggers
 echo "subscribe to Rust" | nc localhost 9000    # Subscribe to filter
 ```
 

@@ -11,4 +11,4 @@ Use this page as the canonical map of the current documentation set.
 - `docs/TROUBLESHOOTING.md`: Common failures and recovery.
 - `docs/TEST_RESULTS.md`: Latest test run summary.
 - `docs/FINAL_REPORT.md`: Final cleanup + validation report.
-- `docs/ARCHITECTURE.md#autonomy-engine`: Autonomy engine design (decay, reasoning, goals, subscriptions, gap detection, feedback).
+- `docs/ARCHITECTURE.md#background-maintenance`: Background jobs (strength decay, auto-association, triggers, subscriptions, graph analysis, feedback).
